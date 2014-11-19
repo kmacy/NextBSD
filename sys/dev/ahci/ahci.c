@@ -217,7 +217,7 @@ ahci_attach(device_t dev)
 	ctlr->emloc = ATA_INL(ctlr->r_mem, AHCI_EM_LOC);
 
 	/* Create controller-wide DMA tag. */
-	if (bus_dma_tag_create(bus_get_dma_tag(dev), 0, 0,
+	if (bus_dma_tag_create(bus_get_dma_tag(dev), 1, 0,
 	    (ctlr->caps & AHCI_CAP_64BIT) ? BUS_SPACE_MAXADDR :
 	    BUS_SPACE_MAXADDR_32BIT, BUS_SPACE_MAXADDR, NULL, NULL,
 	    BUS_SPACE_MAXSIZE, BUS_SPACE_UNRESTRICTED, BUS_SPACE_MAXSIZE,
@@ -360,7 +360,7 @@ ahci_setup_interrupt(device_t dev)
 	for (i = 0; i < ctlr->numirqs; i++) {
 		ctlr->irqs[i].ctlr = ctlr;
 		ctlr->irqs[i].r_irq_rid = i + (ctlr->msi ? 1 : 0);
-		if (ctlr->channels == 1 && !ctlr->ccc)
+		if (ctlr->channels == 1 && !ctlr->ccc && ctlr->msi)
 			ctlr->irqs[i].mode = AHCI_IRQ_MODE_ONE;
 		else if (ctlr->numirqs == 1 || i >= ctlr->channels ||
 		    (ctlr->ccc && i == ctlr->cccv))

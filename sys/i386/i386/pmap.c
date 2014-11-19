@@ -133,6 +133,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_extern.h>
 #include <vm/vm_pageout.h>
 #include <vm/vm_pager.h>
+#include <vm/vm_phys.h>
 #include <vm/vm_radix.h>
 #include <vm/vm_reserv.h>
 #include <vm/uma.h>
@@ -372,6 +373,15 @@ pmap_bootstrap(vm_paddr_t firstaddr)
 	pt_entry_t *pte, *unused;
 	struct sysmaps *sysmaps;
 	int i;
+
+	/*
+	 * Add a physical memory segment (vm_phys_seg) corresponding to the
+	 * preallocated kernel page table pages so that vm_page structures
+	 * representing these pages will be created.  The vm_page structures
+	 * are required for promotion of the corresponding kernel virtual
+	 * addresses to superpage mappings.
+	 */
+	vm_phys_add_seg(KPTphys, KPTphys + ptoa(nkpt));
 
 	/*
 	 * Initialize the first available kernel virtual address.  However,
@@ -778,9 +788,10 @@ pmap_init(void)
 
 	/*
 	 * Calculate the size of the pv head table for superpages.
+	 * Handle the possibility that "vm_phys_segs[...].end" is zero.
 	 */
-	for (i = 0; phys_avail[i + 1]; i += 2);
-	pv_npg = round_4mpage(phys_avail[(i - 2) + 1]) / NBPDR;
+	pv_npg = trunc_4mpage(vm_phys_segs[vm_phys_nsegs - 1].end -
+	    PAGE_SIZE) / NBPDR + 1;
 
 	/*
 	 * Allocate memory for the pv head table for superpages.
@@ -1172,16 +1183,20 @@ pmap_update_pde(pmap_t pmap, vm_offset_t va, pd_entry_t *pde, pd_entry_t newpde)
 #define	PMAP_CLFLUSH_THRESHOLD	(2 * 1024 * 1024)
 
 void
-pmap_invalidate_cache_range(vm_offset_t sva, vm_offset_t eva)
+pmap_invalidate_cache_range(vm_offset_t sva, vm_offset_t eva, boolean_t force)
 {
 
-	KASSERT((sva & PAGE_MASK) == 0,
-	    ("pmap_invalidate_cache_range: sva not page-aligned"));
-	KASSERT((eva & PAGE_MASK) == 0,
-	    ("pmap_invalidate_cache_range: eva not page-aligned"));
+	if (force) {
+		sva &= ~(vm_offset_t)cpu_clflush_line_size;
+	} else {
+		KASSERT((sva & PAGE_MASK) == 0,
+		    ("pmap_invalidate_cache_range: sva not page-aligned"));
+		KASSERT((eva & PAGE_MASK) == 0,
+		    ("pmap_invalidate_cache_range: eva not page-aligned"));
+	}
 
-	if (cpu_feature & CPUID_SS)
-		; /* If "Self Snoop" is supported, do nothing. */
+	if ((cpu_feature & CPUID_SS) != 0 && !force)
+		; /* If "Self Snoop" is supported and allowed, do nothing. */
 	else if ((cpu_feature & CPUID_CLFSH) != 0 &&
 	    eva - sva < PMAP_CLFLUSH_THRESHOLD) {
 
@@ -5164,7 +5179,7 @@ pmap_mapdev_attr(vm_paddr_t pa, vm_size_t size, int mode)
 	for (tmpsize = 0; tmpsize < size; tmpsize += PAGE_SIZE)
 		pmap_kenter_attr(va + tmpsize, pa + tmpsize, mode);
 	pmap_invalidate_range(kernel_pmap, va, va + tmpsize);
-	pmap_invalidate_cache_range(va, va + size);
+	pmap_invalidate_cache_range(va, va + size, FALSE);
 	return ((void *)(va + offset));
 }
 
@@ -5370,7 +5385,7 @@ pmap_change_attr(vm_offset_t va, vm_size_t size, int mode)
 	 */
 	if (changed) {
 		pmap_invalidate_range(kernel_pmap, base, tmpva);
-		pmap_invalidate_cache_range(base, tmpva);
+		pmap_invalidate_cache_range(base, tmpva, FALSE);
 	}
 	return (0);
 }

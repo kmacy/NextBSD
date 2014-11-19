@@ -81,6 +81,8 @@ __FBSDID("$FreeBSD$");
 
 #define	PROCBASED_CTLS_ONE_SETTING 					\
 	(PROCBASED_SECONDARY_CONTROLS	|				\
+	 PROCBASED_MWAIT_EXITING	|				\
+	 PROCBASED_MONITOR_EXITING	|				\
 	 PROCBASED_IO_EXITING		|				\
 	 PROCBASED_MSR_BITMAPS		|				\
 	 PROCBASED_CTLS_WINDOW_SETTING	|				\
@@ -1744,8 +1746,6 @@ inout_str_seginfo(struct vmx *vmx, int vcpuid, uint32_t inst_info, int in,
 
 	error = vmx_getdesc(vmx, vcpuid, vis->seg_name, &vis->seg_desc);
 	KASSERT(error == 0, ("%s: vmx_getdesc error %d", __func__, error));
-
-	/* XXX modify svm.c to update bit 16 of seg_desc.access (unusable) */
 }
 
 static void
@@ -1779,6 +1779,7 @@ vmexit_inst_emul(struct vm_exit *vmexit, uint64_t gpa, uint64_t gla)
 		vmexit->u.inst_emul.cs_d = 0;
 		break;
 	}
+	vie_init(&vmexit->u.inst_emul.vie, NULL, 0);
 }
 
 static int
@@ -2372,6 +2373,12 @@ vmx_exit_process(struct vmx *vmx, int vcpu, struct vm_exit *vmexit)
 		break;
 	case EXIT_REASON_XSETBV:
 		handled = vmx_emulate_xsetbv(vmx, vcpu, vmexit);
+		break;
+	case EXIT_REASON_MONITOR:
+		vmexit->exitcode = VM_EXITCODE_MONITOR;
+		break;
+	case EXIT_REASON_MWAIT:
+		vmexit->exitcode = VM_EXITCODE_MWAIT;
 		break;
 	default:
 		vmm_stat_incr(vmx->vm, vcpu, VMEXIT_UNKNOWN, 1);

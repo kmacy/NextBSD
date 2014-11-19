@@ -114,7 +114,7 @@ __FBSDID("$FreeBSD$");
  * cause problems (especially for NFS data blocks).
  */
 VNET_DEFINE(int, udp_cksum) = 1;
-SYSCTL_VNET_INT(_net_inet_udp, UDPCTL_CHECKSUM, checksum, CTLFLAG_RW,
+SYSCTL_INT(_net_inet_udp, UDPCTL_CHECKSUM, checksum, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(udp_cksum), 0, "compute udp checksum");
 
 int	udp_log_in_vain = 0;
@@ -122,7 +122,7 @@ SYSCTL_INT(_net_inet_udp, OID_AUTO, log_in_vain, CTLFLAG_RW,
     &udp_log_in_vain, 0, "Log all incoming UDP packets");
 
 VNET_DEFINE(int, udp_blackhole) = 0;
-SYSCTL_VNET_INT(_net_inet_udp, OID_AUTO, blackhole, CTLFLAG_RW,
+SYSCTL_INT(_net_inet_udp, OID_AUTO, blackhole, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(udp_blackhole), 0,
     "Do not send port unreachables for refused connects");
 
@@ -312,12 +312,10 @@ udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
 	 */
 	up = intoudpcb(inp);
 	if (up->u_tun_func != NULL) {
-		(*up->u_tun_func)(n, off, inp);
+		(*up->u_tun_func)(n, off, inp, (struct sockaddr *)udp_in,
+		    up->u_tun_ctx);
 		return;
 	}
-
-	if (n == NULL)
-		return;
 
 	off += sizeof(struct udphdr);
 
@@ -578,8 +576,12 @@ udp_input(struct mbuf **mp, int *offp, int proto)
 			if (last != NULL) {
 				struct mbuf *n;
 
-				n = m_copy(m, 0, M_COPYALL);
-				udp_append(last, ip, n, iphlen, &udp_in);
+				if ((n = m_copy(m, 0, M_COPYALL)) != NULL) {
+					UDP_PROBE(receive, NULL, last, ip,
+					    last, uh);
+					udp_append(last, ip, n, iphlen,
+					    &udp_in);
+				}
 				INP_RUNLOCK(last);
 			}
 			last = inp;
@@ -608,6 +610,7 @@ udp_input(struct mbuf **mp, int *offp, int proto)
 			INP_INFO_RUNLOCK(pcbinfo);
 			goto badunlocked;
 		}
+		UDP_PROBE(receive, NULL, last, ip, last, uh);
 		udp_append(last, ip, m, iphlen, &udp_in);
 		INP_RUNLOCK(last);
 		INP_INFO_RUNLOCK(pcbinfo);
@@ -1715,7 +1718,7 @@ udp_attach(struct socket *so, int proto, struct thread *td)
 #endif /* INET */
 
 int
-udp_set_kernel_tunneling(struct socket *so, udp_tun_func_t f)
+udp_set_kernel_tunneling(struct socket *so, udp_tun_func_t f, void *ctx)
 {
 	struct inpcb *inp;
 	struct udpcb *up;
@@ -1731,6 +1734,7 @@ udp_set_kernel_tunneling(struct socket *so, udp_tun_func_t f)
 		return (EBUSY);
 	}
 	up->u_tun_func = f;
+	up->u_tun_ctx = ctx;
 	INP_WUNLOCK(inp);
 	return (0);
 }
