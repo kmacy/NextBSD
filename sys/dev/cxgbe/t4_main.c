@@ -594,6 +594,8 @@ t4_attach(device_t dev)
 		v = pci_read_config(dev, i + PCIER_DEVICE_CTL, 2);
 		v |= PCIEM_CTL_RELAXED_ORD_ENABLE;
 		pci_write_config(dev, i + PCIER_DEVICE_CTL, v, 2);
+
+		sc->params.pci.mps = 128 << ((v & PCIEM_CTL_MAX_PAYLOAD) >> 5);
 	}
 
 	sc->traceq = -1;
@@ -1438,7 +1440,8 @@ cxgbe_transmit(struct ifnet *ifp, struct mbuf *m)
 		return (ENETDOWN);
 	}
 
-	if (m->m_flags & M_FLOWID)
+	/* check if flowid is set */
+	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE)
 		txq += ((m->m_pkthdr.flowid % (pi->ntxq - pi->rsrv_noflowq))
 		    + pi->rsrv_noflowq);
 	br = txq->br;

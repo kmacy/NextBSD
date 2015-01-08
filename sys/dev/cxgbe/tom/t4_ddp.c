@@ -231,7 +231,7 @@ insert_ddp_data(struct toepcb *toep, uint32_t n)
 #ifdef USE_DDP_RX_FLOW_CONTROL
 	toep->rx_credits -= n;	/* adjust for F_RX_FC_DDP */
 #endif
-	sbappendstream_locked(sb, m);
+	sbappendstream_locked(sb, m, 0);
 	toep->sb_cc = sbused(sb);
 }
 
@@ -466,7 +466,7 @@ handle_ddp_data(struct toepcb *toep, __be32 ddp_report, __be32 rcv_nxt, int len)
 #ifdef USE_DDP_RX_FLOW_CONTROL
 	toep->rx_credits -= len;	/* adjust for F_RX_FC_DDP */
 #endif
-	sbappendstream_locked(sb, m);
+	sbappendstream_locked(sb, m, 0);
 	toep->sb_cc = sbused(sb);
 wakeup:
 	KASSERT(toep->ddp_flags & db_flag,
@@ -971,8 +971,9 @@ handle_ddp(struct socket *so, struct uio *uio, int flags, int error)
 	 */
 	rc = sbwait(sb);
 	while (toep->ddp_flags & buf_flag) {
+		/* XXXGL: shouldn't here be sbwait() call? */
 		sb->sb_flags |= SB_WAIT;
-		msleep(&sb->sb_cc, &sb->sb_mtx, PSOCK , "sbwait", 0);
+		msleep(&sb->sb_acc, &sb->sb_mtx, PSOCK , "sbwait", 0);
 	}
 	unwire_ddp_buffer(db);
 	return (rc);
@@ -1172,7 +1173,7 @@ restart:
 
 	/* Socket buffer got some data that we shall deliver now. */
 	if (sbused(sb) && !(flags & MSG_WAITALL) &&
-	    ((sb->sb_flags & SS_NBIO) ||
+	    ((so->so_state & SS_NBIO) ||
 	     (flags & (MSG_DONTWAIT|MSG_NBIO)) ||
 	     sbused(sb) >= sb->sb_lowat ||
 	     sbused(sb) >= uio->uio_resid ||

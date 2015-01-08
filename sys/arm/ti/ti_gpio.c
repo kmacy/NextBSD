@@ -69,10 +69,13 @@ __FBSDID("$FreeBSD$");
 #include "gpio_if.h"
 #include "ti_gpio_if.h"
 
+#if !defined(SOC_OMAP4) && !defined(SOC_TI_AM335X)
+#error "Unknown SoC"
+#endif
+
 /* Register definitions */
 #define	TI_GPIO_REVISION		0x0000
 #define	TI_GPIO_SYSCONFIG		0x0010
-#if defined(SOC_OMAP4) || defined(SOC_TI_AM335X)
 #define	TI_GPIO_IRQSTATUS_RAW_0		0x0024
 #define	TI_GPIO_IRQSTATUS_RAW_1		0x0028
 #define	TI_GPIO_IRQSTATUS_0		0x002C
@@ -103,9 +106,6 @@ __FBSDID("$FreeBSD$");
 #define	TI_GPIO_SETWKUENA		0x0184
 #define	TI_GPIO_CLEARDATAOUT		0x0190
 #define	TI_GPIO_SETDATAOUT		0x0194
-#else
-#error "Unknown SoC"
-#endif
 
 /* Other SoC Specific definitions */
 #define	OMAP4_MAX_GPIO_BANKS		6
@@ -273,13 +273,8 @@ ti_gpio_intr_clr(struct ti_gpio_softc *sc, unsigned int bank, uint32_t mask)
 {
 
 	/* We clear both set of registers. */
-#if defined(SOC_OMAP4) || defined(SOC_TI_AM335X)
 	ti_gpio_write_4(sc, bank, TI_GPIO_IRQSTATUS_CLR_0, mask);
 	ti_gpio_write_4(sc, bank, TI_GPIO_IRQSTATUS_CLR_1, mask);
-#else
-	ti_gpio_write_4(sc, bank, TI_GPIO_CLEARIRQENABLE1, mask);
-	ti_gpio_write_4(sc, bank, TI_GPIO_CLEARIRQENABLE2, mask);
-#endif
 }
 
 /**
@@ -290,7 +285,7 @@ ti_gpio_intr_clr(struct ti_gpio_softc *sc, unsigned int bank, uint32_t mask)
  *
  *
  *	LOCKING:
- *	Internally locks the context
+ *	No locking required, returns static data.
  *
  *	RETURNS:
  *	Returns 0 on success otherwise an error code
@@ -302,8 +297,6 @@ ti_gpio_pin_max(device_t dev, int *maxpin)
 	unsigned int i;
 	unsigned int banks = 0;
 
-	TI_GPIO_LOCK(sc);
-
 	/* Calculate how many valid banks we have and then multiply that by 32 to
 	 * give use the total number of pins.
 	 */
@@ -313,8 +306,6 @@ ti_gpio_pin_max(device_t dev, int *maxpin)
 	}
 
 	*maxpin = (banks * PINS_PER_BANK) - 1;
-
-	TI_GPIO_UNLOCK(sc);
 
 	return (0);
 }
@@ -332,7 +323,7 @@ ti_gpio_pin_max(device_t dev, int *maxpin)
  *	  - GPIO_PIN_PULLDOWN
  *
  *	LOCKING:
- *	Internally locks the context
+ *	No locking required, returns static data.
  *
  *	RETURNS:
  *	Returns 0 on success otherwise an error code
@@ -343,18 +334,12 @@ ti_gpio_pin_getcaps(device_t dev, uint32_t pin, uint32_t *caps)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 
-	TI_GPIO_LOCK(sc);
-
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
-	*caps = (GPIO_PIN_INPUT | GPIO_PIN_OUTPUT |GPIO_PIN_PULLUP |
+	*caps = (GPIO_PIN_INPUT | GPIO_PIN_OUTPUT | GPIO_PIN_PULLUP |
 	    GPIO_PIN_PULLDOWN);
-
-	TI_GPIO_UNLOCK(sc);
 
 	return (0);
 }
@@ -381,17 +366,13 @@ ti_gpio_pin_getflags(device_t dev, uint32_t pin, uint32_t *flags)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 
-	TI_GPIO_LOCK(sc);
-
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
 	/* Get the current pin state */
+	TI_GPIO_LOCK(sc);
 	TI_GPIO_GET_FLAGS(dev, pin, flags);
-
 	TI_GPIO_UNLOCK(sc);
 
 	return (0);
@@ -407,7 +388,7 @@ ti_gpio_pin_getflags(device_t dev, uint32_t pin, uint32_t *flags)
  *	of the pin.
  *
  *	LOCKING:
- *	Internally locks the context
+ *	No locking required, returns static data.
  *
  *	RETURNS:
  *	Returns 0 on success otherwise an error code
@@ -418,19 +399,13 @@ ti_gpio_pin_getname(device_t dev, uint32_t pin, char *name)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 
-	TI_GPIO_LOCK(sc);
-
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
 	/* Set a very simple name */
 	snprintf(name, GPIOMAXNAME, "gpio_%u", pin);
 	name[GPIOMAXNAME - 1] = '\0';
-
-	TI_GPIO_UNLOCK(sc);
 
 	return (0);
 }
@@ -460,30 +435,26 @@ ti_gpio_pin_setflags(device_t dev, uint32_t pin, uint32_t flags)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 	uint32_t mask = (1UL << (pin % PINS_PER_BANK));
-	uint32_t reg_val;
-
-	TI_GPIO_LOCK(sc);
+	uint32_t oe;
 
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
 	/* Set the GPIO mode and state */
+	TI_GPIO_LOCK(sc);
 	if (TI_GPIO_SET_FLAGS(dev, pin, flags) != 0) {
 		TI_GPIO_UNLOCK(sc);
 		return (EINVAL);
 	}
 
 	/* If configuring as an output set the "output enable" bit */
-	reg_val = ti_gpio_read_4(sc, bank, TI_GPIO_OE);
+	oe = ti_gpio_read_4(sc, bank, TI_GPIO_OE);
 	if (flags & GPIO_PIN_INPUT)
-		reg_val |= mask;
+		oe |= mask;
 	else
-		reg_val &= ~mask;
-	ti_gpio_write_4(sc, bank, TI_GPIO_OE, reg_val);
-
+		oe &= ~mask;
+	ti_gpio_write_4(sc, bank, TI_GPIO_OE, oe);
 	TI_GPIO_UNLOCK(sc);
 	
 	return (0);
@@ -509,18 +480,18 @@ ti_gpio_pin_set(device_t dev, uint32_t pin, unsigned int value)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 	uint32_t mask = (1UL << (pin % PINS_PER_BANK));
-
-	TI_GPIO_LOCK(sc);
+	uint32_t reg;
 
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
-	ti_gpio_write_4(sc, bank, (value == GPIO_PIN_LOW) ? TI_GPIO_CLEARDATAOUT
-	    : TI_GPIO_SETDATAOUT, mask);
-
+	TI_GPIO_LOCK(sc);
+	if (value == GPIO_PIN_LOW)
+		reg = TI_GPIO_CLEARDATAOUT;
+	else
+		reg = TI_GPIO_SETDATAOUT;
+	ti_gpio_write_4(sc, bank, reg, mask);
 	TI_GPIO_UNLOCK(sc);
 
 	return (0);
@@ -547,25 +518,23 @@ ti_gpio_pin_get(device_t dev, uint32_t pin, unsigned int *value)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 	uint32_t mask = (1UL << (pin % PINS_PER_BANK));
-	uint32_t val = 0;
-
-	TI_GPIO_LOCK(sc);
+	uint32_t oe, reg;
 
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
-	/* Sanity check the pin is not configured as an output */
-	val = ti_gpio_read_4(sc, bank, TI_GPIO_OE);
-
-	/* Read the value on the pin */
-	if (val & mask)
-		*value = (ti_gpio_read_4(sc, bank, TI_GPIO_DATAIN) & mask) ? 1 : 0;
+	/*
+	 * Return data from output latch when set as output and from the 
+	 * input register otherwise.
+	 */
+	TI_GPIO_LOCK(sc);
+	oe = ti_gpio_read_4(sc, bank, TI_GPIO_OE);
+	if (oe & mask)
+		reg = TI_GPIO_DATAIN;
 	else
-		*value = (ti_gpio_read_4(sc, bank, TI_GPIO_DATAOUT) & mask) ? 1 : 0;
-
+		reg = TI_GPIO_DATAOUT;
+	*value = (ti_gpio_read_4(sc, bank, reg) & mask) ? 1 : 0;
 	TI_GPIO_UNLOCK(sc);
 
 	return (0);
@@ -589,23 +558,20 @@ ti_gpio_pin_toggle(device_t dev, uint32_t pin)
 	struct ti_gpio_softc *sc = device_get_softc(dev);
 	uint32_t bank = (pin / PINS_PER_BANK);
 	uint32_t mask = (1UL << (pin % PINS_PER_BANK));
-	uint32_t val;
-
-	TI_GPIO_LOCK(sc);
+	uint32_t reg, val;
 
 	/* Sanity check the pin number is valid */
-	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL)) {
-		TI_GPIO_UNLOCK(sc);
+	if ((bank >= ti_max_gpio_banks()) || (sc->sc_mem_res[bank] == NULL))
 		return (EINVAL);
-	}
 
 	/* Toggle the pin */
+	TI_GPIO_LOCK(sc);
 	val = ti_gpio_read_4(sc, bank, TI_GPIO_DATAOUT);
 	if (val & mask)
-		ti_gpio_write_4(sc, bank, TI_GPIO_CLEARDATAOUT, mask);
+		reg = TI_GPIO_CLEARDATAOUT;
 	else
-		ti_gpio_write_4(sc, bank, TI_GPIO_SETDATAOUT, mask);
-
+		reg = TI_GPIO_SETDATAOUT;
+	ti_gpio_write_4(sc, bank, reg, mask);
 	TI_GPIO_UNLOCK(sc);
 
 	return (0);

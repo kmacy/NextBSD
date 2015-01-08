@@ -1313,8 +1313,11 @@ restart:
 			} else {
 				/*
 				 * Copy the data from userland into a mbuf
-				 * chain.  If no data is to be copied in,
-				 * a single empty mbuf is returned.
+				 * chain.  If resid is 0, which can happen
+				 * only if we have control to send, then
+				 * a single empty mbuf is returned.  This
+				 * is a workaround to prevent protocol send
+				 * methods to panic.
 				 */
 				top = m_uiotombuf(uio, M_WAITOK, space,
 				    (atomic ? max_hdr : 0),
@@ -1706,7 +1709,8 @@ dontblock:
 	 */
 	moff = 0;
 	offset = 0;
-	while (m != NULL && uio->uio_resid > 0 && error == 0) {
+	while (m != NULL && !(m->m_flags & M_NOTAVAIL) && uio->uio_resid > 0
+	    && error == 0) {
 		/*
 		 * If the type of mbuf has changed since the last mbuf
 		 * examined ('type'), end the receive operation.
@@ -2001,7 +2005,7 @@ restart:
 
 	/* Socket buffer got some data that we shall deliver now. */
 	if (sbavail(sb) > 0 && !(flags & MSG_WAITALL) &&
-	    ((sb->sb_flags & SS_NBIO) ||
+	    ((so->so_state & SS_NBIO) ||
 	     (flags & (MSG_DONTWAIT|MSG_NBIO)) ||
 	     sbavail(sb) >= sb->sb_lowat ||
 	     sbavail(sb) >= uio->uio_resid ||
@@ -2044,6 +2048,8 @@ deliver:
 			for (m = sb->sb_mb;
 			     m != NULL && m->m_len <= len;
 			     m = m->m_next) {
+				KASSERT(!(m->m_flags & M_NOTAVAIL),
+				    ("%s: m %p not available", __func__, m));
 				len -= m->m_len;
 				uio->uio_resid -= m->m_len;
 				sbfree(sb, m);
@@ -3173,6 +3179,13 @@ pru_send_notsupp(struct socket *so, int flags, struct mbuf *m,
 {
 
 	return EOPNOTSUPP;
+}
+
+int
+pru_ready_notsupp(struct socket *so, struct mbuf *m, int count)
+{
+
+	return (EOPNOTSUPP);
 }
 
 /*
