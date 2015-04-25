@@ -902,9 +902,10 @@ taskqgroup_attach(struct taskqgroup *qgroup, struct grouptask *gtask,
 	if (irq != -1 && smp_started) {
 		CPU_ZERO(&mask);
 		CPU_SET(qgroup->tqg_queue[qid].tgc_cpu, &mask);
+		mtx_unlock(&qgroup->tqg_lock);
 		intr_setaffinity(irq, &mask);
-	}
-	mtx_unlock(&qgroup->tqg_lock);
+	} else
+		mtx_unlock(&qgroup->tqg_lock);
 }
 
 void
