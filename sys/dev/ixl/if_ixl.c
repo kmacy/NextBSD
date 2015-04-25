@@ -2213,8 +2213,6 @@ ixl_initialize_vsi(struct ixl_vsi *vsi)
 void
 ixl_free_vsi(struct ixl_vsi *vsi)
 {
-	free(vsi->queues, M_DEVBUF);
-
 	/* Free VSI filter list */
 	ixl_free_mac_filters(vsi);
 }
