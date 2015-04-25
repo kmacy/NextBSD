@@ -248,7 +248,10 @@ struct iflib_rxq {
 	iflib_ctx_t	ifr_ctx;
 	uint32_t	ifr_size;
 	uint32_t	ifr_cidx;
-	uint32_t	ifr_pidx;
+	uint32_t	ifr_pidx; /* if there is a separate completion queue -
+				     * these are the cq cidx and pidx otherwise
+					 * these are unused
+					 */
 	uint64_t	ifr_rx_irq;
 	uint16_t	ifr_id;
 	int			ifr_lro_enabled;
@@ -1167,7 +1170,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 {
 	iflib_ctx_t ctx = rxq->ifr_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
-	int avail, fl_cidx, cidx = rxq->ifr_cidx;
+	int avail, fl_cidx, cidx;
 	struct if_rxd_info ri;
 	iflib_dma_info_t di;
 	int qsid, err, budget_left = budget;
@@ -1196,6 +1199,11 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 #endif /* DEV_NETMAP */
 
 	ri.iri_qsidx = rxq->ifr_id;
+	if (sctx->isc_flags & IFLIB_HAS_CQ)
+		cidx  = rxq->ifr_cidx;
+	else
+		cidx = rxq->ifr_fl[0].ifl_cidx;
+
 	mh = mt = NULL;
 	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0)
 		return (false);
@@ -1263,7 +1271,10 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 			mt = m;
 		}
 	}
-	rxq->ifr_cidx = cidx;
+	if (sctx->isc_flags & IFLIB_HAS_CQ)
+		rxq->ifr_cidx = cidx;
+	else
+		rxq->ifr_fl[0].ifl_cidx = cidx;
 
 	while (mh != NULL) {
 		m = mh;
@@ -1282,7 +1293,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		tcp_lro_flush(&rxq->ifr_lc, queued);
 	}
 
-	return sctx->isc_rxd_available(sctx, rxq->ifr_id, rxq->ifr_cidx);
+	return sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
 }
 
 #define M_CSUM_FLAGS(m) ((m)->m_pkthdr.csum_flags)
@@ -2502,7 +2513,7 @@ iflib_irq_alloc(if_shared_ctx_t sctx, if_irq_t irq, int rid,
 
 int
 iflib_irq_alloc_generic(if_shared_ctx_t sctx, if_irq_t irq, int rid,
-						intr_type_t type, driver_filter_t *filter,
+						iflib_intr_type_t type, driver_filter_t *filter,
 						void *filter_arg, int qid, char *name)
 {
 	iflib_ctx_t ctx = sctx->isc_ctx;
@@ -2561,7 +2572,7 @@ iflib_irq_alloc_generic(if_shared_ctx_t sctx, if_irq_t irq, int rid,
 }
 
 void
-iflib_softirq_alloc_generic(if_shared_ctx_t sctx, int rid, intr_type_t type,  void *arg, int qid, char *name)
+iflib_softirq_alloc_generic(if_shared_ctx_t sctx, int rid, iflib_intr_type_t type,  void *arg, int qid, char *name)
 {
 	iflib_ctx_t ctx = sctx->isc_ctx;
 	struct grouptask *gtask;

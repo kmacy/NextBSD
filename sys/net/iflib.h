@@ -101,7 +101,7 @@ typedef enum {
 	IFLIB_INTR_LEGACY,
 	IFLIB_INTR_MSI,
 	IFLIB_INTR_MSIX
-} iflib_intr_type_t;
+} iflib_intr_mode_t;
 
 /*
  * Context shared between the driver and the iflib layer
@@ -127,12 +127,13 @@ struct if_shared_ctx {
 	device_t isc_dev;
 	if_t isc_ifp;
 	cpuset_t isc_cpus;
-	iflib_intr_type_t isc_intr;
+	iflib_intr_mode_t isc_intr;
 	int isc_vectors;
 	int isc_nqsets;
 	int isc_ntxd;
 	int isc_nrxd;
 	int isc_nfl;
+	int isc_flags;
 	bus_size_t isc_q_align;
 	bus_size_t isc_tx_maxsize;
 	bus_size_t isc_tx_maxsegsize;
@@ -155,12 +156,15 @@ typedef enum {
 	IFLIB_INTR_TX,
 	IFLIB_INTR_RX,
 	IFLIB_INTR_ADMIN,
-} intr_type_t;
+} iflib_intr_type_t;
 
 #define UPCAST(sc) ((if_shared_ctx_t)(sc))
 #ifndef ETH_ADDR_LEN
 #define ETH_ADDR_LEN 6
 #endif
+
+
+#define IFLIB_HAS_CQ 0x1
 
 int iflib_device_detach(device_t);
 int iflib_device_suspend(device_t);
@@ -182,9 +186,9 @@ int iflib_qset_addr_get(if_shared_ctx_t, int qidx, caddr_t *vaddrs, uint64_t *pa
 
 int iflib_irq_alloc(if_shared_ctx_t, if_irq_t, int, driver_filter_t, void *filter_arg, driver_intr_t, void *arg, char *name);
 int iflib_irq_alloc_generic(if_shared_ctx_t ctx, if_irq_t irq, int rid,
-							intr_type_t type, driver_filter_t *filter,
+							iflib_intr_type_t type, driver_filter_t *filter,
 							void *filter_arg, int qid, char *name);
-void iflib_softirq_alloc_generic(if_shared_ctx_t sctx, int rid, intr_type_t type,  void *arg, int qid, char *name);
+void iflib_softirq_alloc_generic(if_shared_ctx_t sctx, int rid, iflib_intr_type_t type,  void *arg, int qid, char *name);
 
 void iflib_irq_free(if_shared_ctx_t sctx, if_irq_t irq);
 
