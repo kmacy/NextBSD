@@ -1234,14 +1234,16 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		qidx = ri.iri_qidx;
 		if (++cidx == sctx->isc_nrxd)
 			cidx = 0;
-		if (ri.iri_m != NULL) {
-			m = ri.iri_m;
-			ri.iri_m = NULL;
-			goto imm_pkt;
+		if (sctx->isc_flags & IFLIB_HAS_CQ) {
+			if (ri.iri_m != NULL) {
+				m = ri.iri_m;
+				ri.iri_m = NULL;
+				goto imm_pkt;
+			}
+			/* was this only a completion queue message? */
+			if (qidx == -1)
+				continue;
 		}
-		/* was this only a completion queue message? */
-		if (qidx == -1)
-			continue;
 		fl = &rxq->ifr_fl[qidx];
 		fl_cidx = fl->ifl_cidx;
 		bus_dmamap_unload(rxq->ifr_desc_tag, fl->ifl_sds[fl_cidx].ifsd_map);
