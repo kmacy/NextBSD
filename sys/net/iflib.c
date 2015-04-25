@@ -301,12 +301,15 @@ TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 static SYSCTL_NODE(_net, OID_AUTO, iflib, CTLFLAG_RD, 0,
                    "iflib driver parameters");
 static int iflib_tx_frees;
+static int iflib_tx_seen;
 static int iflib_rx_allocs;
 
+SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
+		   &iflib_tx_seen, 0, "# tx mbufs seen");
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
-    &iflib_tx_frees, 0, "# tx frees");
+		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_allocs, CTLFLAG_RD,
-    &iflib_rx_allocs, 0, "# rx allocations");
+		   &iflib_rx_allocs, 0, "# rx allocations");
 
 
 
@@ -1071,6 +1074,9 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 
 	MPASS(sd->ifsd_cl != NULL);
 
+	fl->ifl_credits--;
+	/* SYNC ? */
+
 	if (iflib_recycle_enable && ri->iri_len <= IFLIB_RX_COPY_THRESH) {
 		panic(" not all cases handled");
 		if ((m = m_gethdr(M_NOWAIT, MT_DATA)) == NULL)
@@ -1681,7 +1687,10 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	struct mbuf *marr[16], **mp, *next, *tnext;
 	int err, i, count, qidx;
 
+	atomic_add_int(&iflib_tx_seen, 1);
+
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0 || !LINK_ACTIVE(ctx)) {
+		atomic_add_int(&iflib_tx_frees, 1);
 		m_freem(m);
 		return (0);
 	}
@@ -1690,8 +1699,12 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	for (next = m; next->m_nextpkt != NULL; next = next->m_nextpkt)
 		count++;
 	if (count > 16)
-		if ((mp = malloc(count*sizeof(struct mbuf *), M_IFLIB, M_NOWAIT)) == NULL)
+		if ((mp = malloc(count*sizeof(struct mbuf *), M_IFLIB, M_NOWAIT)) == NULL) {
+			m_freem(m);
+			/* XXX simplify for now */
+			atomic_add_int(&iflib_tx_frees, 1);
 			return (ENOBUFS);
+		}
 	for (tnext = next = m, i = 0; next != NULL; i++) {
 		mp[i] = next;
 		tnext = next;
