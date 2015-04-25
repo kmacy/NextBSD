@@ -764,7 +764,6 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 {
 	struct ixl_vsi		*vsi = DOWNCAST(sctx);
 	struct rx_ring		*rxr = &vsi->queues[ri->iri_qsidx].rxr;
-	int			processed = 0;
 	union i40e_rx_desc	*cur;
 	u32		status, error;
 	u16		hlen, plen, vtag;
@@ -772,6 +771,7 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 	u8		ptype;
 	bool		eop;
 
+	ri->iri_qidx = 0;
 	cur = &rxr->rx_base[ri->iri_cidx];
 	qword = le64toh(cur->wb.qword1.status_error_len);
 	status = (qword & I40E_RXD_QW1_STATUS_MASK)
@@ -836,10 +836,8 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 			ri->iri_vtag = vtag;
 			ri->iri_flags |= M_VLANTAG;
 		}
-		++processed;
 		ri->iri_next_offset = 0;	
 	}
-	ri->iri_qidx = 0;
 
 	return (0);
 }
