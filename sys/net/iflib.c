@@ -806,6 +806,11 @@ static __inline void
 __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 {
 	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits;
+	uint32_t delta = (fl)->ifl_pidx > (fl)->ifl_cidx ? ((fl)->ifl_size - ((fl)->ifl_pidx - (fl)->ifl_cidx)) : ((fl)->ifl_cidx - (fl)->ifl_pidx);
+
+	if (reclaimable)
+		MPASS(fl->ifl_pidx != fl->ifl_cidx);
+	MPASS(reclaimable == delta);
 
 	if (reclaimable > 0)
 		_iflib_fl_refill(ctx, fl, min(max, reclaimable));
@@ -1480,8 +1485,7 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 	 * Add some rate-limiting check so that that
 	 * this isn't called every time
 	 */
-	if (sctx->isc_txd_credits_update != NULL &&
-		reclaim <= thresh)
+	if (sctx->isc_txd_credits_update != NULL && reclaim <= thresh)
 		sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx);
 
 	reclaim = DESC_RECLAIMABLE(txq);
