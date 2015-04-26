@@ -741,9 +741,9 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	MPASS(fl->ifl_credits >= 0);
 	MPASS(fl->ifl_credits <= fl->ifl_size);
 
-	atomic_add_int(iflib_fl_refills, 1);
+	atomic_add_int(&iflib_fl_refills, 1);
 	if (n > 8)
-		atomic_add_int(iflib_fl_refills_large, 1);
+		atomic_add_int(&iflib_fl_refills_large, 1);
 batch_start:
 	i = 0;
 	while (n--) {
