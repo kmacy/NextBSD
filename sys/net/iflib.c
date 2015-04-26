@@ -737,16 +737,16 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 
 	MPASS(n > 0);
-	MPASS(n <= fl->ifl_size);
 	MPASS(fl->ifl_credits >= 0);
-	MPASS(fl->ifl_credits <= fl->ifl_size);
+	MPASS(n <= fl->ifl_size);
+	MPASS(fl->ifl_credits + n <= fl->ifl_size);
 
 	atomic_add_int(&iflib_fl_refills, 1);
 	if (n > 8)
 		atomic_add_int(&iflib_fl_refills_large, 1);
 batch_start:
 	i = 0;
-	while (n--) {
+	while (n-- && i < 256) {
 		/*
 		 * We allocate an uninitialized mbuf + cluster, mbuf is
 		 * initialized after rx.
@@ -765,6 +765,7 @@ batch_start:
 			if ((err = bus_dmamap_create(fl->ifl_ifdi->idi_tag, 0, &rxsd->ifsd_map))) {
 				log(LOG_WARNING, "bus_dmamap_create failed %d\n", err);
 				uma_zfree(fl->ifl_zone, cl);
+				n = 0;
 				goto done;
 			}
 			rxsd->ifsd_flags |= RX_SW_DESC_MAP_CREATED;
@@ -784,6 +785,7 @@ batch_start:
 				if (q->zone == zone_pack)
 					uma_zfree(q->ifr_zone, cl);
 				m_free(m);
+				n = 0;
 				goto done;
 			}
 			phys_addr = cb_arg.seg.ds_addr;
@@ -798,22 +800,22 @@ batch_start:
 		fl->ifl_vm_addrs[i] = cl;
 		rxsd++;
 		fl->ifl_credits++;
+		i++;
+		MPASS(fl->ifl_credits <= fl->ifl_size);
 		if (++fl->ifl_pidx == fl->ifl_size) {
 			fl->ifl_pidx = 0;
 			rxsd = fl->ifl_sds;
 		}
-		if (++i == 256)
-			break;
 	}
-	MPASS(fl->ifl_rxq != NULL);
-	sctx->isc_rxd_refill(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, pidx,
-						 fl->ifl_phys_addrs, fl->ifl_vm_addrs, i);
-	pidx = fl->ifl_pidx;
-	if (n)
-		goto batch_start;
 #if !defined(__i386__) && !defined(__amd64__)
 done:
 #endif
+	sctx->isc_rxd_refill(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, pidx,
+						 fl->ifl_phys_addrs, fl->ifl_vm_addrs, i);
+	if (n) {
+		pidx = fl->ifl_pidx;
+		goto batch_start;
+	}
 	sctx->isc_rxd_flush(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
 }
 
