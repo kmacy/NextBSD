@@ -780,10 +780,10 @@ batch_start:
 		rxsd->ifsd_m = m;
 		fl->ifl_phys_addrs[i] = phys_addr;
 		fl->ifl_vm_addrs[i] = cl;
-		pidx++;
 		rxsd++;
-		if (pidx == fl->ifl_size) {
-			pidx = 0;
+		fl->ifl_credits++;
+		if (++fl->ifl_pidx == fl->ifl_size) {
+			fl->ifl_pidx = 0;
 			rxsd = fl->ifl_sds;
 		}
 		if (++i == 256)
@@ -792,11 +792,10 @@ batch_start:
 	MPASS(fl->ifl_rxq != NULL);
 	sctx->isc_rxd_refill(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, pidx,
 						 fl->ifl_phys_addrs, fl->ifl_vm_addrs, i);
-	fl->ifl_credits += i;
-	fl->ifl_pidx = pidx;
+	pidx = fl->ifl_pidx;
 	if (n)
 		goto batch_start;
-#ifdef notyet
+#if !defined(__i386__) && !defined(__amd64__)
 done:
 #endif
 	sctx->isc_rxd_flush(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
@@ -882,6 +881,7 @@ iflib_fl_setup(iflib_fl_t fl)
 
 	/* Now replenish the mbufs */
 	_iflib_fl_refill(ctx, fl, fl->ifl_size);
+	MPASS(fl->ifl_pidx == fl->ifl_size-1);
 	MPASS(fl->ifl_size == fl->ifl_credits);
 	/*
 	 * handle failure
