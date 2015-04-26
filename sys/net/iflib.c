@@ -732,7 +732,7 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	int pidx = fl->ifl_pidx;
 	iflib_sd_t rxsd = &fl->ifl_sds[pidx];
 	caddr_t cl;
-	int i;
+	int i = 0;
 	uint64_t phys_addr;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 
@@ -744,9 +744,8 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	atomic_add_int(&iflib_fl_refills, 1);
 	if (n > 8)
 		atomic_add_int(&iflib_fl_refills_large, 1);
-batch_start:
-	i = 0;
-	while (n-- && i < 256) {
+
+	while (n--) {
 		/*
 		 * We allocate an uninitialized mbuf + cluster, mbuf is
 		 * initialized after rx.
@@ -806,16 +805,16 @@ batch_start:
 			fl->ifl_pidx = 0;
 			rxsd = fl->ifl_sds;
 		}
+		if (n == 0 || i == 256) {
+			sctx->isc_rxd_refill(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, pidx,
+								 fl->ifl_phys_addrs, fl->ifl_vm_addrs, i);
+			i = 0;
+			pidx = fl->ifl_pidx;
+		}
 	}
 #if !defined(__i386__) && !defined(__amd64__)
 done:
 #endif
-	sctx->isc_rxd_refill(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, pidx,
-						 fl->ifl_phys_addrs, fl->ifl_vm_addrs, i);
-	if (n) {
-		pidx = fl->ifl_pidx;
-		goto batch_start;
-	}
 	sctx->isc_rxd_flush(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
 }
 
