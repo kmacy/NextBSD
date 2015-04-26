@@ -359,7 +359,12 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 	/* should be size - but what about arbitrary XPC data? */
 	request->msgh_size = MAX_RECV;
 	request->msgh_local_port = portset;
-	kr = mach_msg_receive(request);
+	kr = mach_msg(request, MACH_RCV_MSG |
+				  MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
+				  MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+				  0, request->msgh_size, request->msgh_local_port,
+				  MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+
 	if (kr != 0)
 		LOG("mach_msg_receive returned %d\n", kr);
 	*rcvport = request->msgh_remote_port;
