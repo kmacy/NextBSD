@@ -171,9 +171,7 @@ mach_msg_send(mach_msg_header_t *msg)
 mach_msg_return_t
 mach_msg_receive(mach_msg_header_t *msg)
 {
-	return mach_msg(msg, MACH_RCV_MSG |
-					MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
-					MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT),
+	return mach_msg(msg, MACH_RCV_MSG,
 			0, msg->msgh_size, msg->msgh_local_port,
 			MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
 }
