@@ -458,24 +458,35 @@ ipc_object_copyin(
 	ipc_entry_t entry;
 	ipc_port_t soright;
 	kern_return_t kr;
+	int xlock;
 
 	/*
 	 *	Could first try a read lock when doing
 	 *	MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MAKE_SEND,
 	 *	and MACH_MSG_TYPE_MAKE_SEND_ONCE.
 	 */
-
-	kr = ipc_right_lookup_write(space, name, &entry);
-	if (kr != KERN_SUCCESS)
+	if (msgt_name == MACH_MSG_TYPE_MAKE_SEND ||
+		msgt_name == MACH_MSG_TYPE_COPY_SEND ||
+		msgt_name == MACH_MSG_TYPE_MAKE_SEND_ONCE)
+		xlock = 0;
+	else
+		xlock = 1;
+	kr = ipc_right_lookup(space, name, &entry, xlock);
+	if (kr != KERN_SUCCESS) {
+		printf("ipc_right_lookup failed: msgt=%d kr=%d\n", msgt_name, kr);
 		return kr;
+	}
 	/* space is write-locked and active */
 
-	kr = ipc_right_copyin(space, name, entry,
-			      msgt_name, TRUE,
-			      objectp, &soright);
+	kr = ipc_right_copyin(space, name, entry, msgt_name, TRUE, objectp,
+		     &soright);
+
 	if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
 		ipc_entry_dealloc(space, name, entry);
-	is_write_unlock(space);
+	if (xlock)
+		is_write_unlock(space);
+	else
+		is_read_unlock(space);
 
 	if ((kr == KERN_SUCCESS) && (soright != IP_NULL))
 		ipc_notify_port_deleted(soright, name);
