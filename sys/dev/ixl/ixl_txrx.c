@@ -633,7 +633,7 @@ ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx)
 
 	cnt = 0;
 	i = idx;
-	do {
+	while (cnt < sctx->isc_nrxd) {
 		cur = &rxr->rx_base[i];
 		qword = le64toh(cur->wb.qword1.status_error_len);
 		status = (qword & I40E_RXD_QW1_STATUS_MASK)
@@ -643,7 +643,7 @@ ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx)
 		cnt++;
 		if (++i == sctx->isc_nrxd)
 			i = 0;
-	} while (1);
+	}
 
 	return (cnt);
 }
