@@ -306,6 +306,10 @@ static SYSCTL_NODE(_net, OID_AUTO, iflib, CTLFLAG_RD, 0,
 static int iflib_tx_frees;
 static int iflib_tx_seen;
 static int iflib_rx_allocs;
+static int iflib_rx_allocs;
+static int iflib_fl_refills;
+static int iflib_fl_refills_large;
+
 
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
@@ -313,6 +317,10 @@ SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
 		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_allocs, CTLFLAG_RD,
 		   &iflib_rx_allocs, 0, "# rx allocations");
+SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills, CTLFLAG_RD,
+		   &iflib_fl_refills, 0, "# refills");
+SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills_large, CTLFLAG_RD,
+		   &iflib_fl_refills_large, 0, "# large refills");
 
 
 
@@ -731,6 +739,11 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	MPASS(n > 0);
 	MPASS(n <= fl->ifl_size);
 	MPASS(fl->ifl_credits >= 0);
+	MPASS(fl->ifl_credits <= fl->ifl_size);
+
+	atomic_add_int(iflib_fl_refills, 1);
+	if (n > 8)
+		atomic_add_int(iflib_fl_refills_large, 1);
 batch_start:
 	i = 0;
 	while (n--) {
@@ -811,6 +824,7 @@ __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 #ifdef INVARIANTS
 	uint32_t delta = (fl)->ifl_pidx > (fl)->ifl_cidx ? ((fl)->ifl_size - ((fl)->ifl_pidx - (fl)->ifl_cidx)) : ((fl)->ifl_cidx - (fl)->ifl_pidx);
 
+	MPASS(fl->ifl_credits <= fl->ifl_size);
 	MPASS(reclaimable == delta);
 #endif
 	if (reclaimable > 0)
