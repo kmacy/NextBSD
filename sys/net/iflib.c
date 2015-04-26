@@ -728,6 +728,9 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	uint64_t phys_addr;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 
+	MPASS(n > 0);
+	MPASS(n <= fl->ifl_size);
+	MPASS(fl->ifl_credits >= 0);
 batch_start:
 	i = 0;
 	while (n--) {
@@ -819,7 +822,8 @@ iflib_fl_bufs_free(iflib_fl_t fl)
 {
 	uint32_t cidx = fl->ifl_cidx;
 
-	while (fl->ifl_credits--) {
+	MPASS(fl->ifl_credits >= 0);
+	while (fl->ifl_credits) {
 		iflib_sd_t d = &fl->ifl_sds[cidx];
 
 		if (d->ifsd_flags & RX_SW_DESC_INUSE) {
@@ -834,6 +838,7 @@ iflib_fl_bufs_free(iflib_fl_t fl)
 		d->ifsd_m = NULL;
 		if (++cidx == fl->ifl_size)
 			cidx = 0;
+		fl->ifl_credits--;
 	}
 }
 
@@ -880,8 +885,9 @@ iflib_fl_setup(iflib_fl_t fl)
 	iflib_fl_bufs_free(fl);
 
 	/* Now replenish the mbufs */
+	MPASS(fl->ifl_credits == 0);
 	_iflib_fl_refill(ctx, fl, fl->ifl_size);
-	MPASS(fl->ifl_pidx == fl->ifl_size-1);
+	MPASS(fl->ifl_pidx == 0);
 	MPASS(fl->ifl_size == fl->ifl_credits);
 	/*
 	 * handle failure
