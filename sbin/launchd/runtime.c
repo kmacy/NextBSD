@@ -729,7 +729,6 @@ runtime_fork(mach_port_t bsport)
 	syslog(LOG_ERR, "setting bsport");
 	(void)os_assumes_zero(launchd_set_bport(bsport));
 	syslog(LOG_ERR, "set bsport");
-	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
 	bootstrap_port = bsport;
 
 	__OS_COMPILETIME_ASSERT__(SIG_ERR == (typeof(SIG_ERR))-1);
