@@ -485,7 +485,6 @@ struct ixl_vsi {
 	bool			link_active;
 	u16			seid;
 	u32			link_speed;
-	bool			link_up;
 	struct if_irq	irq;	
 	u16			uplink_seid;
 	u16			downlink_seid;

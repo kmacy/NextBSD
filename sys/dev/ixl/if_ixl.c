@@ -1159,7 +1159,7 @@ ixl_if_media_status(if_shared_ctx_t sctx, struct ifmediareq * ifmr)
 	ifmr->ifm_status = IFM_AVALID;
 	ifmr->ifm_active = IFM_ETHER;
 
-	if (!vsi->link_up) {
+	if (!pf->link_up) {
 		return;
 	}
 
