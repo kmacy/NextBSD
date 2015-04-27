@@ -738,7 +738,6 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 
 	MPASS(n > 0);
 	MPASS(fl->ifl_credits >= 0);
-	MPASS(n <= fl->ifl_size);
 	MPASS(fl->ifl_credits + n <= fl->ifl_size);
 
 	atomic_add_int(&iflib_fl_refills, 1);
@@ -2715,13 +2714,15 @@ iflib_admin_intr_deferred(if_shared_ctx_t sctx)
 }
 
 void
-iflib_link_state_change(if_shared_ctx_t sctx, uint64_t baudrate, int link_state)
+iflib_link_state_change(if_shared_ctx_t sctx, int link_state)
 {
 	if_t ifp = sctx->isc_ifp;
 	iflib_ctx_t ctx = sctx->isc_ctx;
 	iflib_txq_t txq = ctx->ifc_txqs;
 
+#if 0
 	if_setbaudrate(ifp, baudrate);
+#endif	
 	/* If link down, disable watchdog */
 	if ((ctx->ifc_link_state == LINK_STATE_UP) && (link_state == LINK_STATE_DOWN)) {
 		for (int i = 0; i < sctx->isc_nqsets; i++, txq++)

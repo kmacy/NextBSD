@@ -201,7 +201,7 @@ void iflib_tx_intr_deferred(if_shared_ctx_t sctx, int txqid);
 void iflib_rx_intr_deferred(if_shared_ctx_t sctx, int rxqid);
 void iflib_admin_intr_deferred(if_shared_ctx_t sctx);
 
-void iflib_link_state_change(if_shared_ctx_t sctx, uint64_t baudrate, int linkstate);
+void iflib_link_state_change(if_shared_ctx_t sctx, int linkstate);
 
 int iflib_tx_cidx_get(if_shared_ctx_t sctx, int txqid);
 void iflib_tx_credits_update(if_shared_ctx_t sctx, int txqid, int credits);
