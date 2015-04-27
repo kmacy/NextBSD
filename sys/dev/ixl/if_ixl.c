@@ -1487,13 +1487,13 @@ ixl_update_link_status(struct ixl_pf *pf)
 			   hw->phy.link_info.link_speed == I40E_LINK_SPEED_100MB))
 				device_printf(dev, "The partition detected link"
 				    "speed that is less than 10Gbps\n");
-			if_link_state_change(UPCAST(vsi)->isc_ifp, LINK_STATE_UP);
+			iflib_link_state_change(UPCAST(vsi), LINK_STATE_UP);
 		}
 	} else { /* Link down */
 		if (vsi->link_active == TRUE) {
 			if (bootverbose)
 				device_printf(dev,"Link is Down\n");
-			if_link_state_change(UPCAST(vsi)->isc_ifp, LINK_STATE_DOWN);
+			iflib_link_state_change(UPCAST(vsi), LINK_STATE_DOWN);
 			vsi->link_active = FALSE;
 		}
 	}
@@ -1908,7 +1908,7 @@ ixl_setup_interface(device_t dev, struct ixl_vsi *vsi)
 	if_setifheaderlen(ifp, sizeof(struct ether_vlan_header));
 	if_setcapabilitiesbit(ifp, cap, 0);
 	if_setcapenable(ifp, if_getcapabilities(ifp));
-
+    if_setbaudrate(ifp, 4000000000);
 	vsi->max_frame_size =
 	    ifp->if_mtu + ETHER_HDR_LEN + ETHER_CRC_LEN
 	    + ETHER_VLAN_ENCAP_LEN;
