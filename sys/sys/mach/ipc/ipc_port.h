@@ -240,6 +240,14 @@ struct ipc_port {
 	struct ipc_thread_queue ip_blocked;
 	ipc_port_flags_t ip_flags;
 	TAILQ_ENTRY(ipc_port) ip_next;
+	natural_t ip_sprequests: 1,
+		ip_spimportant:1,
+		ip_impdonation:1,
+		ip_tempowner:1,
+		ip_guarded:1,
+		ip_strict_guard:1,
+		ip_pad:26;
+	mach_vm_address_t ip_context;
 };
 
 

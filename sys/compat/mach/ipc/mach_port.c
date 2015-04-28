@@ -1702,11 +1702,35 @@ mach_port_extract_member(
 
 int
 mach_port_get_context(
-	ipc_space_t task,
+	ipc_space_t space,
 	mach_port_name_t name,
 	mach_vm_address_t *context
 	)
-	UNSUPPORTED;
+{
+	ipc_port_t port;
+	kern_return_t kr;
+
+	if (space == IS_NULL)
+		return KERN_INVALID_TASK;
+
+	if (!MACH_PORT_NAME_VALID(name))
+		return KERN_INVALID_RIGHT;
+
+	kr = ipc_port_translate_receive(space, name, &port);
+	if (kr != KERN_SUCCESS)
+		return kr;
+
+	/* Port locked and active */
+
+	/* For strictly guarded ports, return empty context (which acts as guard) */
+	if (port->ip_strict_guard)
+		*context = 0;
+	else
+		*context = port->ip_context;
+
+	ip_unlock(port);
+	return KERN_SUCCESS;
+}
 
 int	
 mach_port_guard(
@@ -1742,11 +1766,39 @@ mach_port_peek(
 
 int
 mach_port_set_context(
-	ipc_space_t task,
+	ipc_space_t space,
 	mach_port_name_t name,
 	mach_vm_address_t context
 	)
-	UNSUPPORTED;
+{
+	ipc_port_t port;
+	kern_return_t kr;
+
+	if (space == IS_NULL)
+		return KERN_INVALID_TASK;
+
+	if (!MACH_PORT_NAME_VALID(name))
+		return KERN_INVALID_RIGHT;
+
+	kr = ipc_port_translate_receive(space, name, &port);
+	if (kr != KERN_SUCCESS)
+		return kr;
+
+#ifdef notyet
+	/* port is locked and active */
+	if(port->ip_strict_guard) {
+		uint64_t portguard = port->ip_context;
+		ip_unlock(port);
+		/* For strictly guarded ports, disallow overwriting context; Raise Exception */
+		mach_port_guard_exception(name, context, portguard, kGUARD_EXC_SET_CONTEXT);
+		return KERN_INVALID_ARGUMENT;
+	}
+#endif
+	port->ip_context = context;
+
+	ip_unlock(port);
+	return KERN_SUCCESS;
+}
 
 int
 mach_port_space_basic_info(

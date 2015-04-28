@@ -323,7 +323,7 @@ mach_msg_receive(
 	mach_port_seqno_t seqno;
 	mach_msg_return_t mr;
 	mach_msg_body_t *slist;
-	mach_msg_format_0_trailer_t *trailer;
+	mach_msg_max_trailer_t *trailer;
 	mach_port_name_t lportname;
 	ipc_entry_bits_t bits;
 
@@ -382,11 +382,12 @@ mach_msg_receive(
 		FREE_SCATTER_LIST(slist, slist_size, slist_rt);
 		return mr;
 	}
-	trailer = (mach_msg_format_0_trailer_t *)
+	trailer = (mach_msg_max_trailer_t *)
 			((vm_offset_t)kmsg->ikm_header +
 			round_msg(kmsg->ikm_header->msgh_size));
 	if (option & MACH_RCV_TRAILER_MASK) {
 		trailer->msgh_seqno = seqno;
+		trailer->msgh_context = kmsg->ikm_header->msgh_remote_port->ip_context;
 		trailer->msgh_trailer_type = GET_RCV_ELEMENTS(option);
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
 	}
@@ -496,8 +497,10 @@ msg_receive_error(
 	mach_port_seqno_t	seqno,
 	ipc_space_t		space)
 {
-	mach_msg_format_0_trailer_t *trailer;
+	mach_vm_address_t context;
+	mach_msg_max_trailer_t *trailer;
 
+	context = kmsg->ikm_header->msgh_remote_port->ip_context;
 	/*
 	 * Copy out the destination port in the message.
  	 * Destroy all other rights and memory in the message.
@@ -507,7 +510,7 @@ msg_receive_error(
 	/*
 	 * Build a minimal message with the requested trailer.
 	 */
-	trailer = (mach_msg_format_0_trailer_t *) 
+	trailer = (mach_msg_max_trailer_t *) 
 			((vm_offset_t)kmsg->ikm_header +
 			round_msg(sizeof(mach_msg_header_t)));
 	kmsg->ikm_header->msgh_size = sizeof(mach_msg_header_t);
@@ -516,6 +519,7 @@ msg_receive_error(
 		sizeof(trailer_template));
 	if (option & MACH_RCV_TRAILER_MASK) {
 		trailer->msgh_seqno = seqno;
+		trailer->msgh_context = context;
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
 	}
 
