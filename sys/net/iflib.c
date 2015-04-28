@@ -1010,6 +1010,8 @@ iflib_init_locked(iflib_ctx_t ctx)
 			txq->ift_timer.c_cpu);
 }
 
+#define FLOG printf("%s called\n", __FUNCTION__)
+
 static int
 iflib_media_change(if_t ifp)
 {
@@ -1631,14 +1633,14 @@ _task_fn_admin(void *context, int pending)
 {
 	if_shared_ctx_t sctx = context;
 	iflib_ctx_t ctx = sctx->isc_ctx;
-	iflib_txq_t txq = ctx->ifc_txqs;
+	iflib_txq_t txq;
 	int i;
 
 	if (!(if_getdrvflags(sctx->isc_ifp) & IFF_DRV_RUNNING))
 		return;
 
 	CTX_LOCK(ctx);
-	for (i = 0; i < sctx->isc_nqsets; i++, txq++) {
+	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++) {
 		mtx_lock(&txq->ift_mtx);
 		callout_stop(&txq->ift_timer);
 		mtx_unlock(&txq->ift_mtx);
@@ -1652,7 +1654,7 @@ _task_fn_admin(void *context, int pending)
 	if (LINK_ACTIVE(ctx) == 0)
 		return;
 
-	for (i = 0; i < sctx->isc_nqsets; i++, txq++)
+	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++)
 		buf_ring_sc_drain(txq->ift_br[0], IFLIB_RESTART_BUDGET);
 }
 
