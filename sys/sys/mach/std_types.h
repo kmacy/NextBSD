@@ -115,6 +115,9 @@
 
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
+#define MACH_VERIFY(exp, str) do {					\
+		if (!(exp)) printf str;				\
+	} while (0) 
 #define mach_mutex_init(a, b) mtx_init(a, b, NULL, MTX_DEF|MTX_DUPOK)
 #define MACH_IPC_DEBUG 0
 #define MACH_DEBUG 0
