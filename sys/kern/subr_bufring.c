@@ -132,6 +132,7 @@ typedef union prod_state_ {
 #define BR_INDEX(x) ((x) & BR_RING_MASK)
 #define BR_HANDOFF(br) ((br)->br_cons & (BR_RING_ABDICATING|BR_RING_IDLE))
 #define BR_STALLED(br) ((br)->br_cons & BR_RING_STALLED)
+#define BR_CONS_IDX(br) ((br)->br_cons & BR_RING_MASK)
 #define BR_RING_PENDING (1<<30)
 #define BR_RING_OWNED   (1<<31)
 
@@ -298,7 +299,7 @@ buf_ring_sc_get_stats_v0(struct buf_ring_sc *br, struct buf_ring_sc_stats_v0 *br
 static br_state
 buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 {
-	uint32_t cidx = br->br_cons;
+	uint32_t cidx = BR_CONS_IDX(br);
 	uint32_t pidx = br->br_prod_tail;
 	uint32_t n;
 	int avail;
@@ -322,12 +323,12 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 		buf_ring_sc_advance(br, n);
 		budget -= n;
 		if (budget == 0) {
-			if (br->br_cons != br->br_prod_tail)
+			if (BR_CONS_IDX(br) != br->br_prod_tail)
 				state = BR_ABDICATED;
 			break;
 		}
 		pidx = br->br_prod_tail;
-		cidx = br->br_cons;
+		cidx = BR_CONS_IDX(br);
 	}
 
 	return (state);
@@ -464,12 +465,12 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	prod_state state;
 #ifdef DEBUG_BUFRING
 	int i, j;
-	for (i = br->br_cons; i != ORDERED_LOAD_32(&br->br_prod_tail);
+	for (i = BR_CONS_IDX(br); i != ORDERED_LOAD_32(&br->br_prod_tail);
 	     i = ((i + 1) & br->br_mask))
 		for (j = 0; j < count; j++)
 			if (brsc_entry_get(br, i) == ents[j])
 				panic("buf=%p already enqueue at %d prod=%d cons=%d",
-					  ents[j], i, br->br_prod_tail, br->br_cons);
+					  ents[j], i, br->br_prod_tail, BR_CONS_IDX(br));
 #endif
 	critical_enter();
 
@@ -614,7 +615,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 	/*
 	 * for correctness prod_tail must be read before ring[cons]
 	 */
-	cons = br->br_cons;
+	cons = BR_CONS_IDX(br);
 	prod_tail = ORDERED_LOAD_32(&br->br_prod_tail);
 	avail = prod_tail - cons;
 
@@ -650,9 +651,9 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 void
 buf_ring_sc_putback(struct buf_ring_sc *br, void *new, int idx)
 {
-	KASSERT(br->br_cons != br->br_prod_tail,
+	KASSERT(BR_CONS_IDX(br) != br->br_prod_tail,
 			("Buf-Ring has none in putback")) ;
-	brsc_entry_set(br, br->br_cons + idx, new);
+	brsc_entry_set(br, BR_CONS_IDX(br) + idx, new);
 }
 
 /*
@@ -669,7 +670,7 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 	advance_count = count;
 	KASSERT(count > 0, ("invalid advance count"));
 
-	cons = br->br_cons;
+	cons = BR_CONS_IDX(br);
 	prod_tail = br->br_prod_tail;
 	cons_next = (cons + advance_count) & br->br_mask;
 
