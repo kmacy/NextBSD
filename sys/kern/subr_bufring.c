@@ -556,7 +556,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	/* ensure  that the ring update reaches memory before the new
 	 * value of prod_tail
 	 */
-	atomic_store_rel_32(&br->br_prod_tail, prod_next);
+	atomic_store_rel_32(&br->br_prod_tail, BR_INDEX(prod_next));
 
 	/* now that we've completed the enqueue if we know that we're
 	 * the next owner we need to wait for the current owner to clear
