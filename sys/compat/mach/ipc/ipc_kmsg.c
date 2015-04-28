@@ -1456,6 +1456,12 @@ ipc_kmsg_copyin_header(
 	return MACH_SEND_INVALID_REPLY;
 }
 
+#ifdef INVARIANTS
+#define ERIGHTLOG printf("MACH_SEND_INVALID_RIGHT: %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__)
+#else
+#define ERIGHTLOG
+#endif
+
 mach_msg_descriptor_t *ipc_kmsg_copyin_port_descriptor(
         volatile mach_msg_port_descriptor_t *dsc,
         mach_msg_legacy_port_descriptor_t *user_dsc,
@@ -1488,6 +1494,7 @@ ipc_kmsg_copyin_port_descriptor(
         kern_return_t kr = ipc_object_copyin(space, name, user_disp, &object);
         if (kr != KERN_SUCCESS) {
             *mr = MACH_SEND_INVALID_RIGHT;
+			ERIGHTLOG;
             return NULL;
         }
 
@@ -1756,6 +1763,7 @@ ipc_kmsg_copyin_body(
 			kr = ipc_object_copyin(space, name, typename, &object);
 			if (kr != KERN_SUCCESS) {
 				ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
+				ERIGHTLOG;
 				return MACH_SEND_INVALID_RIGHT;
 			}
 			if ((dsc->disposition == MACH_MSG_TYPE_PORT_RECEIVE) &&
@@ -1821,6 +1829,7 @@ ipc_kmsg_copyin_body(
 					!= KERN_SUCCESS) {
 
 					ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
+					ERIGHTLOG;
 					return MACH_SEND_INVALID_MEMORY;
 				}
 
