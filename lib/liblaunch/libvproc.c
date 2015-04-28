@@ -486,6 +486,7 @@ _vproc_post_fork_ping(void)
 	mach_port_t session = MACH_PORT_NULL;
 	kern_return_t kr = vproc_mig_post_fork_ping(bootstrap_port, mach_task_self(), &session);
 	if (kr) {
+		syslog(LOG_DEBUG, "vproc_mig_post_fork_ping kr=%x bootstrap_port=%d\n", kr, bootstrap_port);
 		return _vproc_post_fork_ping;
 	}
 
