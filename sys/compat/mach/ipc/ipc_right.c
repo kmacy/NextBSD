@@ -167,6 +167,7 @@ ipc_right_lookup(
 	if (xlock && (port = (ipc_port_t)entry->ie_object) != NULL &&
 		port->ip_receiver != space) {
 		is_write_unlock(space);
+		printf("KERN_INVALID_RIGHT %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__);
 		return KERN_INVALID_RIGHT;
 	}
 
