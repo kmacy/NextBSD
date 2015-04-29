@@ -31,6 +31,7 @@
 
 #include <sys/_types.h>
 #include <sys/cdefs.h>
+#include <sys/mach/port.h>
 
 #ifndef KERNEL
 
