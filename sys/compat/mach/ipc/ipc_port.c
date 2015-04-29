@@ -1016,7 +1016,7 @@ ipc_port_check_circularity(
 			ip_unlock(dest);
 			dest = next;
 		}
-
+		printf("port %p is circular\n", port);
 		return TRUE;
 	}
 

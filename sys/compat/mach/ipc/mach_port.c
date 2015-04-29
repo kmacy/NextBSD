@@ -1269,8 +1269,6 @@ mach_port_request_notification(
 {
 	kern_return_t kr;
 
-	pause("huh?", 100);
-	printf("mach_port_request_notification called ...");
 	if (space == IS_NULL)
 		return KERN_INVALID_TASK;
 
