@@ -56,6 +56,7 @@ SUBDIR=	adduser \
 	nfsuserd \
 	nmtree \
 	nologin \
+	notifyd \
 	${_pc_sysinstall} \
 	pciconf \
 	periodic \
