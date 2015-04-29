@@ -187,32 +187,6 @@ audit_set_terminal_host(uint32_t *m)
 }
 #endif
 
-void
-audit_token_to_au32(audit_token_t atoken, uid_t *auidp, uid_t *euidp,
-    gid_t *egidp, uid_t *ruidp, gid_t *rgidp, pid_t *pidp, au_asid_t *asidp,
-    au_tid_t *tidp)
-{
-
-        if (auidp != NULL)
-                *auidp = (uid_t)atoken.val[0];
-        if (euidp != NULL)
-                *euidp = (uid_t)atoken.val[1];
-        if (egidp != NULL)
-                *egidp = (gid_t)atoken.val[2];
-        if (ruidp != NULL)
-                *ruidp = (uid_t)atoken.val[3];
-        if (rgidp != NULL)
-                *rgidp = (gid_t)atoken.val[4];
-        if (pidp != NULL)
-                *pidp = (pid_t)atoken.val[5];
-        if (asidp != NULL)
-                *asidp = (au_asid_t)atoken.val[6];
-        if (tidp != NULL) {
-                audit_set_terminal_host(&tidp->machine);
-                tidp->port = (dev_t)atoken.val[7];
-        }
-}
-
 mach_port_t
 runtime_get_kernel_port(void)
 {

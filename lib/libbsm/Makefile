@@ -31,7 +31,7 @@ SRCS=	bsm_audit.c							\
 #
 # Must use BSM include files from within the contrib area, not the system.
 #
-CFLAGS+=	-I${OPENBSMDIR} -I${LIBBSMDIR}
+CFLAGS+=	-I${OPENBSMDIR} -I${LIBBSMDIR} -I${.CURDIR}/../../sys
 
 WARNS?=		1
 
