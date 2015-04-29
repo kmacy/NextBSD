@@ -1,6 +1,7 @@
 .include <bsd.init.mk>
 
 LIB=	notify
+WARNS=	6
 
 .PATH: .
 .PATH: ../../sbin/launchd
