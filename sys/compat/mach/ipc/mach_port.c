@@ -1550,7 +1550,7 @@ mach_port_set_attributes(
                 ip_unlock(port);
                 break;
         }
-	case MACH_PORT_DNREQUESTS_SIZE: {
+		case MACH_PORT_DNREQUESTS_SIZE: {
                 if (count < MACH_PORT_DNREQUESTS_SIZE_COUNT)
                         return KERN_FAILURE;
                 
@@ -1559,11 +1559,29 @@ mach_port_set_attributes(
                         return kr;
                 /* port is locked and active */
 		
-		kr = ipc_port_dngrow(port, *(int *)info);
-		if (kr != KERN_SUCCESS)
-			return kr;
-		break;
-	}
+				kr = ipc_port_dngrow(port, *(int *)info);
+				if (kr != KERN_SUCCESS)
+					return kr;
+				break;
+		}
+		case MACH_PORT_TEMPOWNER: {
+			if (!MACH_PORT_NAME_VALID(name))
+				return KERN_INVALID_RIGHT;
+			kr = ipc_port_translate_receive(space, name, &port);
+			if (kr != KERN_SUCCESS)
+				return kr;
+
+			if (is_ipc_kobject(ip_kotype(port))) {
+				ip_unlock(port);
+				return KERN_INVALID_ARGUMENT;
+			}
+			/*  without IMPORTANCE_INHERITANCE - this is essentially
+			 *  trivial
+			 */
+			port->ip_impdonation = 1;
+			port->ip_tempowner = 1;
+			ip_unlock(port);
+		}
         default:
 		return KERN_INVALID_ARGUMENT;
                 /*NOTREACHED*/
