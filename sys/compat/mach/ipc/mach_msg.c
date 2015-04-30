@@ -388,7 +388,6 @@ mach_msg_receive(
 	if (option & MACH_RCV_TRAILER_MASK) {
 		trailer->msgh_seqno = seqno;
 		trailer->msgh_context = kmsg->ikm_header->msgh_remote_port->ip_context;
-		trailer->msgh_trailer_type = GET_RCV_ELEMENTS(option);
 		trailer->msgh_trailer_size = REQUESTED_TRAILER_SIZE(option);
 	}
 
