@@ -322,11 +322,19 @@ typedef struct
 typedef struct
 {
   void* address;
+#ifndef __LP64__
   mach_msg_size_t       	size;
+#endif
   boolean_t     		deallocate: 8;
   mach_msg_copy_options_t       copy: 8;
   unsigned int     		pad1: 8;
   mach_msg_descriptor_type_t    type: 8;
+#ifdef __LP64__
+  mach_msg_size_t       	size;
+#endif
+#if defined(KERNEL) && !defined(__LP64__)
+  uint32_t          pad_end;
+#endif
 } mach_msg_ool_descriptor_t;
 
 typedef struct
