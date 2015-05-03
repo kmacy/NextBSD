@@ -90,7 +90,9 @@
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/vm_types.h>
+
 #ifdef _KERNEL
+#include <sys/mach/mach_vm.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/param.h>
@@ -160,7 +162,6 @@
 #define thread_deallocate(thread)
 #define task_name_deallocate(task)
 #define assert_wait(a, b)
-#define vm_map_copy_discard(map)
 #define cpu_number() curcpu
 #define vm_map_copy_overwrite(a, b, c, d) 0
 #define vm_map_copyin(a, b, c, d, e) 0
@@ -175,61 +176,7 @@
 #define VM_MAP_COPY_PAGE_LIST_MAX	20
 #define	VM_MAP_COPY_PAGE_LIST_MAX_SIZE	(VM_MAP_COPY_PAGE_LIST_MAX * PAGE_SIZE)
 
-struct vm_map_copy {
-	int			type;
-#define VM_MAP_COPY_ENTRY_LIST		1
-#define VM_MAP_COPY_OBJECT		2
-#define VM_MAP_COPY_PAGE_LIST		3
-#define VM_MAP_COPY_KERNEL_BUFFER	4
-	vm_offset_t		offset;
-	vm_size_t		size;
-	union {
-#if 0		
-	    struct vm_map_header	hdr;	/* ENTRY_LIST */
-#endif		
-	    struct {				/* OBJECT */
-	    	vm_object_t		object;
-		vm_size_t		index;	/* record progress as pages
-						 * are moved from object to
-						 * page list; must be zero
-						 * when first invoking
-						 * vm_map_object_to_page_list
-						 */
-	    } c_o;
-	    struct {				/* PAGE_LIST */
-		int			npages;
-			boolean_t		page_loose;
-#if 0			
-		vm_map_copy_cont_t	cont;
-			vm_map_copyin_args_t	cont_args;
-#endif			
-		vm_page_t		page_list[VM_MAP_COPY_PAGE_LIST_MAX];
-	    } c_p;
-	    struct {				/* KERNEL_BUFFER */
-		vm_offset_t		kdata;
-		vm_size_t		kalloc_size;  /* size of this copy_t */
-	    } c_k;
-	} c_u;
-};
 
-#define cpy_hdr			c_u.hdr
-
-#define cpy_object		c_u.c_o.object
-#define	cpy_index		c_u.c_o.index
-
-#define cpy_page_list		c_u.c_p.page_list
-#define cpy_npages		c_u.c_p.npages
-#define cpy_page_loose		c_u.c_p.page_loose
-#define cpy_cont		c_u.c_p.cont
-#define cpy_cont_args		c_u.c_p.cont_args
-
-#define cpy_kdata		c_u.c_k.kdata
-#define cpy_kalloc_size		c_u.c_k.kalloc_size
-
-#define	VM_MAP_COPY_NULL	((vm_map_copy_t) 0)
-
-
-typedef struct vm_map_copy *vm_map_copy_t;
 #include <sys/mach/macro_help.h>
 #else
 #define decl_simple_lock_data(a, b)
