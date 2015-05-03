@@ -152,6 +152,9 @@ DISPATCH_TSD_INLINE DISPATCH_CONST
 static inline unsigned int
 _dispatch_cpu_number(void)
 {
+#ifdef __FreeBSD__
+	return 0; // XXX: I don't know any easy way to get current CPU number
+#endif
 #if TARGET_IPHONE_SIMULATOR && IPHONE_SIMULATOR_HOST_MIN_VERSION_REQUIRED < 1090
 	return 0;
 #elif __has_include(<os/tsd.h>)

@@ -83,7 +83,9 @@ _dispatch_hw_get_config(_dispatch_hw_config_t c)
 	uint32_t val = 1;
 	const char *name = NULL;
 	int r;
-#if defined(__APPLE__)
+#if defined(__FreeBSD__)
+	(void)c; name = "kern.smp.cpus";
+#elif defined(__APPLE__)
 	switch (c) {
 	case _dispatch_hw_config_logical_cpus:
 		name = "hw.logicalcpu_max"; break;
@@ -92,8 +94,6 @@ _dispatch_hw_get_config(_dispatch_hw_config_t c)
 	case _dispatch_hw_config_active_cpus:
 		name = "hw.activecpu"; break;
 	}
-#elif defined(__FreeBSD__)
-	 (void)c; name = "kern.smp.cpus";
 #endif
 	if (name) {
 		size_t valsz = sizeof(val);
