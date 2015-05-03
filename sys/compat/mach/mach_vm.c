@@ -237,13 +237,18 @@ int
 mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 {
 	size_t size = round_page(_size);
-	vm_offset_t daddr;
+	vm_offset_t start, daddr;
 	vm_prot_t prot, protmax;
 	int err;
 
 	prot = VM_PROT_READ|VM_PROT_WRITE;
 	protmax = VM_PROT_ALL;
 	KASSERT(addr != NULL, ("invalid addr passed"));
+#if defined(INVARIANTS) && defined(__LP64__)
+	start = 1UL<<32;
+#else
+	start = 0;
+#endif
 
 	daddr = trunc_page(*addr);
 	vm_map_lock(map);
@@ -271,6 +276,8 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 	vm_map_unlock(map);
 	return (err);
 }
+
+
 
 int
 mach_vm_deallocate(vm_map_t target __unused, mach_vm_address_t addr, mach_vm_size_t len)
@@ -695,6 +702,84 @@ mach_vm_machine_attribute(vm_map_t target_task, mach_vm_address_t addr, mach_vm_
 		return (KERN_FAILURE);
 
 	return (copyout(&value, valuep, sizeof(value)));
+}
+
+/*
+ *	vm_map_entry_dispose:	[ internal use only ]
+ *
+ *	Inverse of vm_map_entry_create.
+ */
+#define	vm_map_entry_dispose(map, entry)		\
+MACRO_BEGIN						\
+	assert((entry) != (map)->first_free &&		\
+	       (entry) != (map)->hint);			\
+	_vm_map_entry_dispose(&(map)->hdr, (entry));	\
+MACRO_END
+
+#define	vm_map_copy_entry_dispose(map, entry) \
+	_vm_map_entry_dispose(&(copy)->cpy_hdr, (entry))
+
+static uma_zone_t vm_map_entry_zone;
+static uma_zone_t vm_map_copy_zone;
+static uma_zone_t vm_map_kentry_zone;
+
+static void
+_vm_map_entry_dispose(
+	register struct vm_map_header	*map_header,
+	register vm_map_entry_t		entry)
+{
+	uma_zone_t		zone;
+
+	if (map_header->entries_pageable)
+	    zone = vm_map_entry_zone;
+	else
+	    zone = vm_map_kentry_zone;
+
+	uma_zfree(zone, entry);
+}
+
+
+/*
+ *	Routine:	vm_map_copy_discard
+ *
+ *	Description:
+ *		Dispose of a map copy object (returned by
+ *		vm_map_copyin).
+ */
+void
+vm_map_copy_discard(
+	vm_map_copy_t	copy)
+{
+
+	if (copy == VM_MAP_COPY_NULL)
+		return;
+
+	switch (copy->type) {
+	case VM_MAP_COPY_ENTRY_LIST:
+		while (vm_map_copy_first_entry(copy) !=
+			   vm_map_copy_to_entry(copy)) {
+			vm_map_entry_t	entry = vm_map_copy_first_entry(copy);
+#ifdef notyet
+			vm_map_copy_entry_unlink(copy, entry);
+#endif
+			vm_object_deallocate(entry->object.vm_object);
+			vm_map_copy_entry_dispose(copy, entry);
+		}
+		break;
+	case VM_MAP_COPY_OBJECT:
+		vm_object_deallocate(copy->cpy_object);
+		break;
+	case VM_MAP_COPY_KERNEL_BUFFER:
+
+		/*
+		 * The vm_map_copy_t and possibly the data buffer were
+		 * allocated by a single call to kalloc(), i.e. the
+		 * vm_map_copy_t was not allocated out of the zone.
+		 */
+		kfree((vm_offset_t) copy, copy->cpy_kalloc_size);
+		return;
+	}
+	uma_zfree(vm_map_copy_zone, copy);
 }
 
 int
