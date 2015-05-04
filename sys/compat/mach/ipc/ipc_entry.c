@@ -378,7 +378,10 @@ ipc_entry_dealloc(
 
 	idx = entry->ie_index;
 	if (idx < space->is_table_size) {
-		if ((entryp = space->is_table[idx]) == entry)
+		entryp = space->is_table[idx];
+		assert(entryp);
+
+		if (entryp == entry)
 			space->is_table[idx] = entry->ie_link;
 		else {
 			while (entryp->ie_link != NULL) {
