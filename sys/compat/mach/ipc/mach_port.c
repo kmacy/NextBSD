@@ -1276,7 +1276,7 @@ mach_port_request_notification(
 		return KERN_INVALID_CAPABILITY;
 
 	switch (id) {
-	    case MACH_NOTIFY_PORT_DESTROYED: {
+	case MACH_NOTIFY_PORT_DESTROYED: {
 		ipc_port_t port, previous;
 
 		if (sync != 0)
@@ -1295,9 +1295,9 @@ mach_port_request_notification(
 
 		*previousp = previous;
 		break;
-	    }
+	}
 
-	    case MACH_NOTIFY_NO_SENDERS: {
+	case MACH_NOTIFY_NO_SENDERS: {
 		ipc_port_t port;
 
 		if (!MACH_PORT_NAME_VALID(name))
@@ -1311,13 +1311,29 @@ mach_port_request_notification(
 		ipc_port_nsrequest(port, sync, notify, previousp);
 		/* port is unlocked */
 		break;
-	    }
+	}
 
-	    case MACH_NOTIFY_DEAD_NAME:
-			return KERN_INVALID_ARGUMENT;
+	case MACH_NOTIFY_DEAD_NAME: {
+		ipc_port_t port;
+		ipc_port_request_index_t indexp;
+
+		if (!MACH_PORT_NAME_VALID(name))
+			return KERN_INVALID_RIGHT;
+
+		kr = ipc_port_translate_receive(space, name, &port);
+		if (kr != KERN_SUCCESS)
+			return kr;
+		/* port is locked and active */
+
+		ipc_port_dnrequest(port, name, notify, &indexp);
+		ip_unlock(port);
+
+		/* XXX: what to do here? return index? */
+		*previousp = MACH_PORT_NULL;
 		break;
+	}
 
-	    default:
+	default:
 		return KERN_INVALID_VALUE;
 	}
 	printf("success!\n");
