@@ -179,14 +179,14 @@ copyout_proc(struct proc *p, const void *kaddr, void *uaddr, size_t len)
 
 int
 mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
-			mach_vm_offset_t _mask __unused, int _flags, mem_entry_name_port_t object __unused,
+			mach_vm_offset_t _mask, int _flags, mem_entry_name_port_t object __unused,
 			memory_object_offset_t offset __unused, boolean_t copy __unused,
 			vm_prot_t cur_protection, vm_prot_t max_protection, vm_inherit_t inh)
 {
-	vm_offset_t addr;
+	vm_offset_t addr = 0;
 	size_t size;
 	int flags;
-	int docow, error;
+	int docow, error, find_space;
 
 	/* XXX Darwin fails on mapping a page at address 0 */
 	if ((_flags & MACH_VM_FLAGS_ANYWHERE) == 0 && *address == 0)
@@ -194,24 +194,18 @@ mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
 
 	size = round_page(_size);
 	docow = error = 0;
-#if 0
-	/* Where Mach uses 0x00ff, we use 0x0100 */
-	if ((req->req_mask & (req->req_mask + 1)) || (req->req_mask == 0))
-		req->req_mask = 0;
-	else
-		req->req_mask += 1;
-#endif
+
+	if (!(_mask & (_mask + 1)) && _mask != 0)
+		_mask++;
+
+	find_space = _mask ? VMFS_ALIGNED_SPACE(ffs(_mask)) : VMFS_ANY_SPACE;
 	flags = MAP_ANON;
 	if ((_flags & MACH_VM_FLAGS_ANYWHERE) == 0) {
 		flags |= MAP_FIXED;
 		addr = trunc_page(*address);
 	} else
 		addr = 0;
-	vm_map_lock(map);
-	if (vm_map_findspace(map, addr, size, &addr)) {
-		error = ENOMEM;
-		goto done;
-	}
+
 	switch(inh) {
 	case MACH_VM_INHERIT_SHARE:
 		flags |= MAP_INHERIT_SHARE;
@@ -227,14 +221,15 @@ mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
 		uprintf("mach_vm_map: unsupported inheritance flag %d\n", inh);
 		break;
 	}
-	if (vm_map_insert(map, NULL, 0, addr, addr + size, cur_protection,
-					  max_protection, docow)) {
-		error = EFAULT;
+
+	if (vm_map_find(map, NULL, 0, &addr, size, 0, find_space,
+	    cur_protection, max_protection, docow) != KERN_SUCCESS) {
+		error = ENOMEM;
 		goto done;
 	}
+
 	*address = addr;
 done:
-	vm_map_unlock(map);
 	return (error);
 }
 
