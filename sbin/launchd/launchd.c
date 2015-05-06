@@ -199,7 +199,6 @@ main(int argc, char *const *argv)
 		launchd_exit(EXIT_FAILURE);
 	}
 
-	syslog(LOG_ERR, "launchd_runtime_init()\n");
 	launchd_runtime_init();
 
 	if (NULL == getenv("PATH")) {
@@ -209,11 +208,8 @@ main(int argc, char *const *argv)
 	if (NULL == getenv("LD_LIBRARY_PATH")) {
 		setenv("LD_LIBRARY_PATH", _LD_LIBRARY_PATH_STDPATH, 1);
 	}
-	syslog(LOG_ERR, "paths set\n");
 	if (pid1_magic) {
-		syslog(LOG_ERR, "doing pid1_magic\n");
 		pid1_magic_init();
-		syslog(LOG_ERR, "pid1_magic done !!!!!!\n");
 		int cfd = -1;
 		if ((cfd = open(_PATH_CONSOLE, O_WRONLY | O_NOCTTY)) != -1) {
 			_fd(cfd);
@@ -260,10 +256,8 @@ main(int argc, char *const *argv)
 		 *
 		 * <rdar://problem/5039559&6153301>
 		 */
-		syslog(LOG_ERR, "create update thread\n");
 		pthread_t t = NULL;
 		(void)os_assumes_zero(pthread_create(&t, NULL, update_thread, NULL));
-		syslog(LOG_ERR, "detach update thread\n");
 		(void)os_assumes_zero(pthread_detach(t));
 
 		/* PID 1 doesn't have a flat namespace. */
@@ -313,16 +307,12 @@ main(int argc, char *const *argv)
 	}
 
 	monitor_networking_state();
-	syslog(LOG_ERR, "jobmgr_init sflag=%x\n", sflag);
 	jobmgr_init(sflag);
-	syslog(LOG_ERR, "launchd_runtime_init2()\n");
 	launchd_runtime_init2();
 	if (getpid() == 1 /* && !job_active(rlcj) */) {
-			syslog(LOG_ERR, "init_pre_kevent() for reaaaaal!!! \n");
 			init_pre_kevent();
 	}
 	sleep(1);
-	syslog(LOG_ERR, "launchd_runtime()\n");
 	launchd_runtime();
 }
 
