@@ -1595,6 +1595,7 @@ mach_port_set_attributes(
 			port->ip_impdonation = 1;
 			port->ip_tempowner = 1;
 			ip_unlock(port);
+			break;
 		}
         default:
 		return KERN_INVALID_ARGUMENT;
