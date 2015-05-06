@@ -261,10 +261,16 @@ cmd_start_stop(int argc, char * const argv[])
 static int
 cmd_remove(int argc, char * const argv[])
 {
-	(void)argc;
-	(void)argv;
+	json_t *msg;
 
-	errx(1, "Not implemented yet");
+	msg = json_object();
+
+	if (argc < 2)
+		errx(1, "Usage: remove <jobname>");
+
+	json_object_set(msg, "RemoveJob", json_string(argv[1]));
+	launch_msg_json(msg);
+	return (0);
 }
 
 static int
