@@ -81,7 +81,8 @@
  *	Functions to manipulate IPC capabilities.
  */
 
-#include "opt_ddb.h"
+#include "opt_global.h"
+#include "opt_witness.h"
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
@@ -1361,7 +1362,7 @@ ipc_right_copyin_check(
 
 #define ELOG printf("%s:%d bits: %08x\n", __FILE__, __LINE__, bits)
 extern void kdb_backtrace(void);
-#ifdef KDB
+#if defined(KDB) && defined(WITNESS)
 extern int witness_trace;
 #endif
 
@@ -1487,14 +1488,14 @@ ipc_right_copyin(
 
 		if ((bits & MACH_PORT_TYPE_SEND_RIGHTS) == 0) {
 			ELOG;
-			#ifdef KDB
+			#if defined(KDB) && defined(WITNESS)
 			bits = witness_trace;
 			witness_trace = 0;
 			#endif
 			pause("DEBUG", 30);
 			kdb_backtrace();
 			pause("DEBUG", 30);
-			#ifdef KDB
+			#if defined(KDB) && defined(WITNESS)
 			witness_trace = bits;
 			#endif
 			goto invalid_right;
