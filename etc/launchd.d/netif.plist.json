@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/netif.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/netif.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "netif"
+}

@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/rwhod",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/rwhod"
+  ],
+  "RunAtLoad": true,
+  "Label": "rwho"
+}

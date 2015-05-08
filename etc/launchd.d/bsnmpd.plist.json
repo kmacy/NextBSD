@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/bsnmpd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/bsnmpd",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "bsnmpd"
+}

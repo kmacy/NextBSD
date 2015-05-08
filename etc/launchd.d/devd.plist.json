@@ -1,0 +1,10 @@
+{
+  "Program": "/sbin/devd",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/sbin/devd",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "devd"
+}

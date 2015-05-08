@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/mrouted",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/mrouted",
+    "-d packet"
+  ],
+  "RunAtLoad": true,
+  "Label": "mrouted"
+}

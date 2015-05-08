@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/ipfs.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/ipfs.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "ipfs"
+}

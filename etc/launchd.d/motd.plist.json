@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/motd.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/motd.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "motd"
+}

@@ -1,0 +1,11 @@
+{
+  "Program": "/usr/sbin/ppp",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/ppp",
+    "-nat",
+    "-foreground"
+  ],
+  "RunAtLoad": true,
+  "Label": "launchd.ppp"
+}

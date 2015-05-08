@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/var.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/var.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "var"
+}

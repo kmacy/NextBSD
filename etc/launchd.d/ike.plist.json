@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/local/sbin/isakmpd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/local/sbin/isakmpd"
+  ],
+  "RunAtLoad": true,
+  "Label": "ike"
+}

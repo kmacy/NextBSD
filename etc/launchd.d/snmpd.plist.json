@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/snmpd.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/snmpd.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "snmpd"
+}

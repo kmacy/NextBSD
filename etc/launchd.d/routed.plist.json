@@ -1,0 +1,10 @@
+{
+  "Program": "/sbin/routed",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/sbin/routed",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "routed"
+}

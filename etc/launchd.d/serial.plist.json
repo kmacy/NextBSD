@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/serial.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/serial.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "serial"
+}

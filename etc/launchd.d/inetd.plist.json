@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/inetd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/inetd"
+  ],
+  "RunAtLoad": true,
+  "Label": "inetd"
+}

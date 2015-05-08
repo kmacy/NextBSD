@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/ramdisk-own.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/ramdisk-own.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "ramdisk-own"
+}

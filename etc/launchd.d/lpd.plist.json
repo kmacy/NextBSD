@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/lpd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/lpd"
+  ],
+  "RunAtLoad": true,
+  "Label": "lpd"
+}

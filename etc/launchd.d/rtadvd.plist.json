@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/rtadvd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/rtadvd",
+    "-f"
+  ],
+  "RunAtLoad": true,
+  "Label": "rtadvd"
+}

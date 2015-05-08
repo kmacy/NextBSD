@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/local/sbin/pim6dd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/local/sbin/pim6dd"
+  ],
+  "RunAtLoad": true,
+  "Label": "mroute6d"
+}

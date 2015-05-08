@@ -1,0 +1,9 @@
+{
+  "Program": "/sbin/ipmon",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/sbin/ipmon"
+  ],
+  "RunAtLoad": true,
+  "Label": "ipmon"
+}

@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/apmd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/apmd"
+  ],
+  "RunAtLoad": true,
+  "Label": "apmd"
+}

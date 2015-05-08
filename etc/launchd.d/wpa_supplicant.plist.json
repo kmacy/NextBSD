@@ -1,0 +1,12 @@
+{
+  "Program": "/usr/sbin/wpa_supplicant",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/wpa_supplicant",
+    "-i ndis0",
+    "-c /etc/wpa_supplicant.conf",
+    "-D ndis"
+  ],
+  "RunAtLoad": true,
+  "Label": "wpa_supplicant"
+}

@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/watchdogd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/watchdogd",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "watchdogd"
+}

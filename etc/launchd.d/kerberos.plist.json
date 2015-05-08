@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/kerberos5d",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/kerberos5d"
+  ],
+  "RunAtLoad": true,
+  "Label": "kerberos"
+}

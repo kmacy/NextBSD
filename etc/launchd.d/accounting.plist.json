@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/accton",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/usr/sbin/accton",
+    "/var/account/acct"
+  ],
+  "RunAtLoad": true,
+  "Label": "accounting"
+}

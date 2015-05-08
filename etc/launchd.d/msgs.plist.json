@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/msgs.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/msgs.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "msgs"
+}

@@ -1,0 +1,10 @@
+{
+  "Program": "/sbin/natd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/sbin/natd",
+    "-v"
+  ],
+  "RunAtLoad": true,
+  "Label": "natd"
+}

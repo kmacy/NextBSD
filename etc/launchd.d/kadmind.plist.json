@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/kadmind5",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/kadmind5"
+  ],
+  "RunAtLoad": true,
+  "Label": "kadmind"
+}

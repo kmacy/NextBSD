@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/ipsec.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/ipsec.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "ipsec"
+}

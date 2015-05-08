@@ -1,0 +1,10 @@
+{
+  "Program": "/sbin/adjkerntz",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/sbin/adjkerntz",
+    "-i"
+  ],
+  "RunAtLoad": true,
+  "Label": "adjkerntz"
+}

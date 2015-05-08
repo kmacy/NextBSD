@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/early.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/early.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "early.sh"
+}

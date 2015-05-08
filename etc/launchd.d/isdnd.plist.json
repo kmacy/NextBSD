@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/isdnd.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/isdnd.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "isdnd"
+}

@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/named",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/named",
+    "-f -u root"
+  ],
+  "RunAtLoad": true,
+  "Label": "named"
+}

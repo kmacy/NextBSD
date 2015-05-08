@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/rpc_statd.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/rpc_statd.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "rpc_statd"
+}

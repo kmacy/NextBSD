@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/timezone.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/timezone.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "timezone"
+}

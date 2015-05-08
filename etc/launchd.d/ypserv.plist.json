@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/ypserv",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/ypserv",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "ypserv"
+}
