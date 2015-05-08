@@ -27,17 +27,28 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
 #include <dirent.h>
 #include <err.h>
+#include <syslog.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include <launch.h>
 #include <jansson.h>
 
 #define N(x)    ((sizeof(x)) / (sizeof(x[0])))
 
 static launch_data_t to_launchd(json_t *json);
+static launch_data_t to_launchd_sockets(json_t *json);
+static launch_data_t create_socket(json_t *json);
 static void to_json_dict(const launch_data_t lval, const char *key, void *ctx);
 static json_t *to_json(launch_data_t ld);
 static json_t *launch_msg_json(json_t *msg);
@@ -67,13 +78,209 @@ static const struct {
 	{ "help",	cmd_help,	"This help output" },
 };
 
-
 static const char *bootstrap_paths[] = {
 	"/conf/base/etc/plists",
 	"/etc/plists",
 	"/usr/local/etc/plists",
 };
 
+static launch_data_t
+to_launchd_sockets(json_t *json)
+{
+	launch_data_t result, arr;
+	const char *key;
+	size_t idx;
+	json_t *val, *val2;
+
+	result = launch_data_alloc(LAUNCH_DATA_DICTIONARY);
+
+	json_object_foreach(json, key, val) {
+		arr = launch_data_alloc(LAUNCH_DATA_ARRAY);
+
+		switch (json_typeof(val)) {
+			case JSON_OBJECT:
+				launch_data_array_set_index(arr,
+				    create_socket(val), 0);
+				break;
+
+			case JSON_ARRAY:
+				json_array_foreach(json, idx, val2) {
+					launch_data_array_set_index(result,
+					    create_socket(val2), idx);
+				}
+				break;
+
+			default:
+				errx(1, "Invalid jlist specification");
+		}
+
+		launch_data_dict_insert(result, arr, key);
+	}
+
+	return (result);
+}
+
+static launch_data_t
+create_socket(json_t *json)
+{
+	int st = SOCK_STREAM;
+	int sfd;
+	int saved_errno;
+	bool passive = true;
+	json_t *val;
+
+	if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_TYPE))) {
+		if (!strcasecmp(json_string_value(val), "stream"))
+			st = SOCK_STREAM;
+		else if (!strcasecmp(json_string_value(val), "dgram"))
+			st = SOCK_DGRAM;
+		else if (!strcasecmp(json_string_value(val), "seqpacket"))
+			st = SOCK_SEQPACKET;
+	}
+
+	if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PASSIVE)))
+		passive = json_is_true(val);
+
+	if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PATHNAME))) {
+		struct sockaddr_un sun;
+		mode_t sun_mode = 0;
+		mode_t oldmask;
+		bool setm = false;
+
+		memset(&sun, 0, sizeof(sun));
+
+		sun.sun_family = AF_UNIX;
+
+		strncpy(sun.sun_path, json_string_value(val), sizeof(sun.sun_path));
+
+		if ((sfd = (socket(AF_UNIX, st, 0)) == -1))
+			errx(1, "socket(): %s", strerror(errno));
+
+		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PATHMODE))) {
+			sun_mode = (mode_t)json_integer_value(val);
+			setm = true;
+		}
+
+		if (passive) {
+			if (unlink(sun.sun_path) == -1 && errno != ENOENT) {
+				saved_errno = errno;
+				close(sfd);
+				errx(1, "unlink(): %s", strerror(saved_errno));
+			}
+			oldmask = umask(S_IRWXG|S_IRWXO);
+			if (bind(sfd, (struct sockaddr *)&sun, (socklen_t) sizeof sun) == -1) {
+				saved_errno = errno;
+				close(sfd);
+				umask(oldmask);
+				errx(1, "bind(): %s", strerror(saved_errno));
+			}
+			umask(oldmask);
+			if (setm)
+				chmod(sun.sun_path, sun_mode);
+
+			if ((st == SOCK_STREAM || st == SOCK_SEQPACKET) && listen(sfd, -1) == -1) {
+				saved_errno = errno;
+				close(sfd);
+				errx(1, "listen(): %s", strerror(saved_errno));
+			}
+		} else if (connect(sfd, (struct sockaddr *)&sun, (socklen_t) sizeof sun) == -1) {
+			saved_errno = errno;
+			close(sfd);
+			errx(1, "connect(): %s", strerror(saved_errno));
+		}
+
+		return launch_data_new_fd(sfd);
+	} else {
+		const char *node = NULL, *serv = NULL, *mgroup = NULL;
+		char servnbuf[50];
+		struct addrinfo hints, *res0, *res;
+		int gerr, sock_opt = 1;
+
+		memset(&hints, 0, sizeof(hints));
+
+		hints.ai_socktype = st;
+		if (passive) {
+			hints.ai_flags |= AI_PASSIVE;
+		}
+
+		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_NODENAME)))
+			node = json_string_value(val);
+
+		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_MULTICASTGROUP)))
+			mgroup = json_string_value(val);
+
+		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_SERVICENAME))) {
+			if (json_typeof(val) == JSON_INTEGER) {
+				sprintf(servnbuf, "%ld", json_integer_value(val));
+				serv = servnbuf;
+			} else {
+				serv = json_string_value(val);
+			}
+		}
+
+		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_FAMILY))) {
+			if (!strcasecmp(json_string_value(val), "IPv4")) {
+				hints.ai_family = AF_INET;
+			} else if (!strcasecmp(json_string_value(val), "IPv6")) {
+				hints.ai_family = AF_INET6;
+			}
+		}
+
+		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PROTOCOL))) {
+			if (!strcasecmp(json_string_value(val), "TCP")) {
+				hints.ai_protocol = IPPROTO_TCP;
+			} else if (!strcasecmp(json_string_value(val), "UDP")) {
+				hints.ai_protocol = IPPROTO_UDP;
+			}
+		}
+
+		if ((gerr = getaddrinfo(node, serv, &hints, &res0)) != 0)
+			errx(1, "getaddrinfo(): %s", gai_strerror(gerr));
+
+		for (res = res0; res; res = res->ai_next) {
+			if ((sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
+				errx(1, "socket(): %s", strerror(errno));
+
+			if (hints.ai_flags & AI_PASSIVE) {
+				if (AF_INET6 == res->ai_family && -1 == setsockopt(sfd, IPPROTO_IPV6, IPV6_V6ONLY,
+				    (void *)&sock_opt, (socklen_t) sizeof sock_opt))
+					errx(1, "setsockopt(IPV6_V6ONLY): %m");
+
+				if (mgroup) {
+					if (setsockopt(sfd, SOL_SOCKET, SO_REUSEPORT, (void *)&sock_opt, (socklen_t) sizeof sock_opt) == -1)
+						errx(1, "setsockopt(SO_REUSEPORT): %s", strerror(errno));
+				} else {
+					if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&sock_opt, (socklen_t) sizeof sock_opt) == -1)
+						errx(1, "setsockopt(SO_REUSEADDR): %s", strerror(errno));
+				}
+
+				if (bind(sfd, res->ai_addr, res->ai_addrlen) == -1)
+					errx(1, "bind(): %s", strerror(errno));
+
+				/* The kernel may have dynamically assigned some part of the
+				 * address. (The port being a common example.)
+				 */
+				if (getsockname(sfd, res->ai_addr, &res->ai_addrlen) == -1)
+					errx(1, "getsockname(): %s", strerror(errno));
+
+				//if (mgroup) {
+				//	do_mgroup_join(sfd, res->ai_family, res->ai_socktype, res->ai_protocol, mgroup);
+				//}
+				if ((res->ai_socktype == SOCK_STREAM || res->ai_socktype == SOCK_SEQPACKET) && listen(sfd, -1) == -1)
+					errx(1, "listen(): %s", strerror(errno));
+
+			} else {
+				if (connect(sfd, res->ai_addr, res->ai_addrlen) == -1)
+					errx(1, "connect(): %s", strerror(errno));
+			}
+
+			return launch_data_new_fd(sfd);
+		}
+	}
+
+	errx(1, "Invalid socket specification");
+	return (NULL);
+}
 
 static launch_data_t
 to_launchd(json_t *json)
@@ -107,6 +314,13 @@ to_launchd(json_t *json)
 	case JSON_OBJECT:
 		dict = launch_data_alloc(LAUNCH_DATA_DICTIONARY);
 		json_object_foreach(json, key, val) {
+			if (!strcmp(key, "Sockets")) {
+				launch_data_dict_insert(dict,
+				    to_launchd_sockets(val), key);
+
+				continue;
+			}
+
 			launch_data_dict_insert(dict, to_launchd(val), key);
 		}
 
@@ -354,6 +568,9 @@ main(int argc, char * const argv[])
 
 		}
 	}
+
+	if (optind == argc)
+		return cmd_help(0, NULL);
 
 	cmd = argv[optind];
 
