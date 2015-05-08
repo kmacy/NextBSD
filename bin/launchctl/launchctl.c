@@ -163,7 +163,7 @@ to_json(launch_data_t ld)
 		return json_string(txt);
 
 	case LAUNCH_DATA_MACHPORT:
-		asprintf(&txt, "<mach port %d>", launch_data_get_fd(ld));
+		asprintf(&txt, "<mach port %d>", launch_data_get_machport(ld));
 		return json_string(txt);
 
 	default:
