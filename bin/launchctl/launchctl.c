@@ -131,6 +131,7 @@ to_json_dict(const launch_data_t lval, const char *key, void *ctx)
 static json_t *
 to_json(launch_data_t ld)
 {
+	char *txt;
 	json_t *arr, *obj;
 	size_t i;
 
@@ -156,6 +157,14 @@ to_json(launch_data_t ld)
 		obj = json_object();
 		launch_data_dict_iterate(ld, to_json_dict, obj);
 		return obj;
+
+	case LAUNCH_DATA_FD:
+		asprintf(&txt, "<file descriptor %d>", launch_data_get_fd(ld));
+		return json_string(txt);
+
+	case LAUNCH_DATA_MACHPORT:
+		asprintf(&txt, "<mach port %d>", launch_data_get_fd(ld));
+		return json_string(txt);
 
 	default:
 		return json_null();
