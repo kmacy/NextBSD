@@ -45,22 +45,6 @@
 #include <sys/syscall.h>
 #include <dlfcn.h>
 
-#ifdef __LP64__
-/* workaround: 5723161 */
-#ifndef __DARWIN_ALIGN32
-#define	__DARWIN_ALIGN32(x)	(((size_t)(x) + 3) & ~3)
-#endif
-#undef	CMSG_DATA
-#define	CMSG_DATA(cmsg)	\
-	((uint8_t *)(cmsg) + __DARWIN_ALIGN32(sizeof(struct cmsghdr)))
-#undef	CMSG_SPACE
-#define	CMSG_SPACE(l)	\
-	(__DARWIN_ALIGN32(sizeof(struct cmsghdr)) + __DARWIN_ALIGN32(l))
-#undef	CMSG_LEN
-#define	CMSG_LEN(l)	\
-	(__DARWIN_ALIGN32(sizeof(struct cmsghdr)) + (l))
-#endif
-
 struct _launch_data {
 	uint64_t type;
 	union {
@@ -949,6 +933,7 @@ launchd_msg_send(launch_t lh, launch_data_t d)
 		mh.msg_control = cm;
 
 		memset(cm, 0, mh.msg_controllen);
+
 
 		cm->cmsg_len = CMSG_LEN(lh->sendfdcnt * sizeof(int));
 		cm->cmsg_level = SOL_SOCKET;
