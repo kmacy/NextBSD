@@ -231,6 +231,7 @@ launch_client_init(void)
 	char *where = getenv(LAUNCHD_SOCKET_ENV);
 	char *_launchd_fd = getenv(LAUNCHD_TRUSTED_FD_ENV);
 	int dfd, lfd = -1, cifd = -1;
+	kern_return_t kr;
 	name_t spath;
 
 	if (_launchd_fd) {
@@ -256,7 +257,8 @@ launch_client_init(void)
 	if (where && where[0] != '\0') {
 		strncpy(sun.sun_path, where, sizeof(sun.sun_path));
 	} else {
-		if (_vprocmgr_getsocket(spath) == 0) {
+		kr = _vprocmgr_getsocket(spath);
+		if (kr == 0) {
 			if ((getenv("SUDO_COMMAND") || getenv("__USE_SYSTEM_LAUNCHD")) && geteuid() == 0) {
 				/* Talk to the system launchd. */
 				strncpy(sun.sun_path, LAUNCHD_SOCK_PREFIX "/sock", sizeof(sun.sun_path));
@@ -268,7 +270,8 @@ launch_client_init(void)
 
 				strncpy(sun.sun_path, spath, min_len);
 			}
-		}
+		} else
+			fprintf(stderr, "_vprocmgr_getsocket(): 0x%x\n", kr);
 	}
 
 	launch_globals_t globals = _launch_globals();
