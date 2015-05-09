@@ -728,10 +728,6 @@ runtime_fork(mach_port_t bsport)
 		(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
 		(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &emptyset, NULL));
 		mig_init(NULL);
-		if (uflag == true) {
-			printf("%d sleeping 15 for attach\n", getpid());
-			sleep(15);
-		}
 	}
 
 	errno = saved_errno;
