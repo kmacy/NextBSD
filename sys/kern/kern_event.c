@@ -915,15 +915,20 @@ kevent64_copyout(void *arg, void *kevp, int count)
 static int
 kevent_copyout(void *arg, void *kevp, int count)
 {
+	struct kevent64_s *kev;
 	struct kevent_args *uap;
-	int error;
+	int error, i;
 
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
 	uap = (struct kevent_args *)arg;
+	kev = (struct kevent64_s *)kevp;
 
-	error = copyout(kevp, uap->eventlist, count * sizeof(struct kevent));
-	if (error == 0)
-		uap->eventlist += count;
+	for (i = 0; i < count; i++) {
+		error = copyout((const void *)&kev[i], uap->eventlist, sizeof(struct kevent));
+		if (error == 0)
+			uap->eventlist++;
+	}
+
 	return (error);
 }
 
