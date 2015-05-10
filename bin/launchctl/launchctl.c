@@ -200,10 +200,9 @@ create_socket(json_t *json)
 
 		hints.ai_socktype = st;
 		hints.ai_family = AF_INET;
-		
-		if (passive) {
+
+		if (passive)
 			hints.ai_flags |= AI_PASSIVE;
-		}
 
 		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_NODENAME)))
 			node = json_string_value(val);
@@ -215,25 +214,22 @@ create_socket(json_t *json)
 			if (json_typeof(val) == JSON_INTEGER) {
 				sprintf(servnbuf, "%ld", json_integer_value(val));
 				serv = servnbuf;
-			} else {
+			} else
 				serv = json_string_value(val);
-			}
 		}
 
 		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_FAMILY))) {
-			if (!strcasecmp(json_string_value(val), "IPv4")) {
+			if (!strcasecmp(json_string_value(val), "IPv4"))
 				hints.ai_family = AF_INET;
-			} else if (!strcasecmp(json_string_value(val), "IPv6")) {
+			else if (!strcasecmp(json_string_value(val), "IPv6"))
 				hints.ai_family = AF_INET6;
-			}
 		}
 
 		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PROTOCOL))) {
-			if (!strcasecmp(json_string_value(val), "TCP")) {
+			if (!strcasecmp(json_string_value(val), "TCP"))
 				hints.ai_protocol = IPPROTO_TCP;
-			} else if (!strcasecmp(json_string_value(val), "UDP")) {
+			else if (!strcasecmp(json_string_value(val), "UDP"))
 				hints.ai_protocol = IPPROTO_UDP;
-			}
 		}
 
 		if ((gerr = getaddrinfo(node, serv, &hints, &res0)) != 0)
