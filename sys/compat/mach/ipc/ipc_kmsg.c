@@ -265,6 +265,7 @@
 #include <vm/vm_kern.h>
 #endif
 
+#include <sys/syscallsubr.h>
 #include <sys/mach/ipc/port.h>
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_kmsg.h>
@@ -1269,7 +1270,7 @@ ipc_kmsg_copyin_header(
 		/* the entry might need to be deallocated */
 
 		if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
-			ipc_entry_dealloc(space, dest_name, entry);
+			kern_close(curthread, dest_name);
 
 		reply_port = (ipc_object_t)CAST_MACH_NAME_TO_PORT(reply_name);
 		reply_soright = IP_NULL;
