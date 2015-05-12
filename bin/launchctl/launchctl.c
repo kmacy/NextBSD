@@ -104,8 +104,8 @@ to_launchd_sockets(json_t *json)
 				break;
 
 			case JSON_ARRAY:
-				json_array_foreach(json, idx, val2) {
-					launch_data_array_set_index(result,
+				json_array_foreach(val, idx, val2) {
+					launch_data_array_set_index(arr,
 					    create_socket(val2), idx);
 				}
 				break;
