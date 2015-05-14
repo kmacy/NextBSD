@@ -38,13 +38,11 @@ mach_init(void)
 
 		pid = getpid();
 		mach_task_self_ = task_self_trap();
-        _task_reply_port = mach_reply_port();
+        	_task_reply_port = mach_reply_port();
 		if (pid != 1 && root_bootstrap == false) {
 			kr = task_get_special_port(mach_task_self_, TASK_BOOTSTRAP_PORT, &bootstrap_port);
-			if (kr != KERN_SUCCESS) {
-				fprintf(stderr, "failed to bootstrap\n");
-				abort();
-			}
+			if (kr != KERN_SUCCESS)
+				return;
 		}
 		mach_inited = true;
 	}
