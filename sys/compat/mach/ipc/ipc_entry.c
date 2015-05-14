@@ -354,6 +354,40 @@ ipc_entry_alloc_name(
 	is_write_lock(space);
 	return (kr);
 }
+
+void
+ipc_entry_close(
+	ipc_space_t space __unused,
+	mach_port_name_t name)
+{
+
+	kern_close(curthread, name);
+}
+
+int
+ipc_entry_refs(
+	ipc_entry_t entry)
+{
+
+	return (entry->ie_fp->f_count);
+}
+
+void
+ipc_entry_add_refs(
+	ipc_entry_t entry,
+	int delta)
+{
+
+	atomic_add_acq_int(&entry->ie_fp->f_count, delta);
+}
+
+void
+ipc_entry_hold(ipc_entry_t entry)
+{
+
+	fhold(entry->ie_fp);
+}
+
 /*
  *	Routine:	ipc_entry_dealloc
  *	Purpose:
@@ -371,13 +405,18 @@ ipc_entry_dealloc(
 {
 	mach_port_index_t idx;
 	ipc_entry_t entryp;
+	ipc_entry_bits_t bits;
+	int has_entry;
 
 	assert(space->is_active);
 	assert(entry->ie_object == IO_NULL);
 	assert(entry->ie_request == 0);
 
+	bits = entry->ie_bits;
+	has_entry = ((bits & (MACH_PORT_TYPE_DEAD_NAME | MACH_PORT_TYPE_SEND)) ==
+				 MACH_PORT_TYPE_SEND);
 	idx = entry->ie_index;
-	if (idx < space->is_table_size) {
+	if (has_entry && idx < space->is_table_size) {
 		entryp = space->is_table[idx];
 		assert(entryp);
 
@@ -393,181 +432,8 @@ ipc_entry_dealloc(
 			}
 		}
 	}
-	kern_close(curthread, name);
-}
 
-/*
- *	Routine:	ipc_entry_grow_table
- *	Purpose:
- *		Grows the table in a space.
- *	Conditions:
- *		The space must be write-locked and active before.
- *		If successful, it is also returned locked.
- *		Allocates memory.
- *	Returns:
- *		KERN_SUCCESS		Grew the table.
- *		KERN_SUCCESS		Somebody else grew the table.
- *		KERN_SUCCESS		The space died.
- *		KERN_NO_SPACE		Table has maximum size already.
- *		KERN_RESOURCE_SHORTAGE	Couldn't allocate a new table.
- */
-
-kern_return_t
-ipc_entry_grow_table(
-	ipc_space_t	space,
-	int		target_size)
-{
-	ipc_entry_num_t osize, size, nsize, psize;
-
-	do {
-		ipc_entry_t *otable, *table;
-		ipc_table_size_t oits, its, nits;
-		mach_port_index_t i;
-
-		assert(space->is_active);
-
-		if (space->is_growing) {
-			/*
-			 *	Somebody else is growing the table.
-			 *	We just wait for them to finish.
-			 */
-			assert_wait((event_t) space, FALSE);
-			is_write_unlock(space);
-			thread_block();
-			is_write_lock(space);
-			return KERN_SUCCESS;
-		}
-
-		otable = space->is_table;
-		
-		its = space->is_table_next;
-		size = its->its_size;
-		
-		/*
-		 * Since is_table_next points to the next natural size
-		 * we can identify the current size entry.
-		 */
-		oits = its - 1;
-		osize = oits->its_size;
-		
-		/*
-		 * If there is no target size, then the new size is simply
-		 * specified by is_table_next.  If there is a target
-		 * size, then search for the next entry.
-		 */
-		if (target_size != ITS_SIZE_NONE) {
-			if (target_size <= osize) {
-				is_write_unlock(space);
-				return KERN_SUCCESS;
-			}
-
-			psize = osize;
-			while ((psize != size) && (target_size > size)) {
-				psize = size;
-				its++;
-				size = its->its_size;
-			}
-			if (psize == size) {
-				is_write_unlock(space);
-				return KERN_NO_SPACE;
-			}
-		}
-		nits = its + 1;
-		nsize = nits->its_size;
-
-		if (osize == size) {
-			is_write_unlock(space);
-			return KERN_NO_SPACE;
-		}
-
-		assert((osize < size) && (size <= nsize));
-
-		/*
-		 *	OK, we'll attempt to grow the table.
-		 *	The realloc requires that the old table
-		 *	remain in existence.
-		 */
-
-		space->is_growing = TRUE;
-		is_write_unlock(space);
-		if (it_entries_reallocable(oits))
-			table = it_entries_realloc(oits, otable, its);
-		else
-			table = it_entries_alloc(its);
-		is_write_lock(space);
-		space->is_growing = FALSE;
-
-		/*
-		 *	We need to do a wakeup on the space,
-		 *	to rouse waiting threads.  We defer
-		 *	this until the space is unlocked,
-		 *	because we don't want them to spin.
-		 */
-
-		if (table == NULL) {
-			is_write_unlock(space);
-#ifdef notyet
-			thread_wakeup((event_t) space);
-			/* XXX cv_signal */
-#endif			
-			return KERN_RESOURCE_SHORTAGE;
-		}
-
-		if (!space->is_active) {
-			/*
-			 *	The space died while it was unlocked.
-			 */
-
-			is_write_unlock(space);
-#ifdef notyet
-			thread_wakeup((event_t) space);
-			/* XXX cv_signal */
-#endif
-			it_entries_free(its, table);
-			is_write_lock(space);
-			return KERN_SUCCESS;
-		}
-
-		assert(space->is_table == otable);
-		assert((space->is_table_next == its) ||
-		       (target_size != ITS_SIZE_NONE));
-		assert(space->is_table_size == osize);
-
-		space->is_table = table;
-		space->is_table_size = size;
-		space->is_table_next = nits;
-
-		/*
-		 *	If we did a realloc, it remapped the data.
-		 *	Otherwise we copy by hand first.  Then we have
-		 *	to clear the index fields in the old part and
-		 *	zero the new part.
-		 */
-
-		if (!it_entries_reallocable(oits))
-			(void) memcpy((void *) table, (const void *) otable,
-			      osize * sizeof(struct ipc_entry));
-
-		(void) memset((void *) (table + osize), 0,
-		      (size - osize) * sizeof(struct ipc_entry *));
-
-		/*
-		 *	Put old entries into the reverse hash table.
-		 */
-
-		for (i = 0; i < osize; i++) {
-			ipc_entry_t entry = table[i];
-
-			if (IE_BITS_TYPE(entry->ie_bits) ==
-						MACH_PORT_TYPE_SEND)
-				ipc_hash_insert(space, entry->ie_object,
-						      i, entry);
-		}
-	} while ((space->is_tree_small > 0) &&
-		 (((nsize - size) * sizeof(struct ipc_entry)) <
-		  (space->is_tree_small * sizeof(struct ipc_tree_entry))));
-
-	return KERN_SUCCESS;
+	ipc_entry_close(space, name);
 }
 
 

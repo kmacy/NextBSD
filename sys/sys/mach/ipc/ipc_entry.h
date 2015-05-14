@@ -218,6 +218,22 @@ extern void ipc_entry_dealloc(
 	mach_port_name_t	name,
 	ipc_entry_t	entry);
 
+extern int ipc_entry_refs(
+	ipc_entry_t entry);
+
+extern void ipc_entry_add_refs(
+	ipc_entry_t entry, int delta);
+
+extern void ipc_entry_hold(
+	ipc_entry_t entry);
+
+extern void ipc_entry_release(
+	ipc_entry_t entry);
+
+extern void ipc_entry_close(
+	ipc_space_t	space __unused,
+	mach_port_name_t	name);
+
 /* Grow the table in a space */
 extern kern_return_t ipc_entry_grow_table(
 	ipc_space_t	space,
