@@ -1110,11 +1110,7 @@ ipc_right_delta(
 			goto invalid_value;
 
 		if ((urefs + delta) == 0)
-<<<<<<< HEAD
-			ipc_entry_dealloc(space, name, entry);
-=======
 			ipc_entry_close(space, name);
->>>>>>> 3298ec8... Fully refactor kern_close() to ipc_entry_close().
 		else
 			ipc_entry_add_refs(entry, delta);
 
