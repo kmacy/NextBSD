@@ -133,7 +133,7 @@
 #include <sys/mach/host_priv_server.h>
 
 #define THR_ACT_NULL NULL
-#define VM_MAP_NULL NULL
+
 
 
 #define VERBOSE_DEBUGGING
