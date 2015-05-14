@@ -120,8 +120,6 @@
 #include <vm/vm_kern.h>
 #include <vm/vm_extern.h>
 
-#define kmem_free(a, b, c) kmem_free(kernel_arena, b, c)
-
 
 #define assert_static CTASSERT 
 #pragma clang diagnostic ignored "-Wuninitialized"
@@ -240,6 +238,8 @@ mach_port_names(
 	mach_port_type_t	**typesp,
 	mach_msg_type_number_t	*typesCnt)
 {
+	return KERN_NOT_SUPPORTED;
+#ifdef notyet
 	ipc_entry_t *table;
 	ipc_entry_num_t tsize;
 	mach_port_index_t index;
@@ -263,7 +263,6 @@ mach_port_names(
 		return KERN_INVALID_TASK;
 
 	size = 0;
-#ifdef notyet
 	for (;;) {
 		ipc_entry_num_t bound;
 		vm_size_t size_needed;
@@ -314,7 +313,7 @@ mach_port_names(
 				     VM_PROT_READ|VM_PROT_WRITE, FALSE);
 		assert(kr == KERN_SUCCESS);
 	}
-#endif	
+
 	/* space is read-locked and active */
 
 	names = (mach_port_name_t *) addr1;
@@ -349,7 +348,7 @@ mach_port_names(
 			kmem_free(ipc_kernel_map, addr2, size);
 		}
 	} else {
-#ifdef notyet			
+
 		vm_size_t size_used;
 		vm_size_t vm_size_used;
 
@@ -383,7 +382,6 @@ mach_port_names(
 			kmem_free(ipc_kernel_map,
 				  addr2 + vm_size_used, size - vm_size_used);
 		}
-#endif
 
 	}
 	*namesp = (mach_port_name_t *) memory1;
@@ -391,6 +389,7 @@ mach_port_names(
 	*typesp = (mach_port_type_t *) memory2;
 	*typesCnt = actual;
 	return KERN_SUCCESS;
+#endif
 }
 
 /*
@@ -995,7 +994,7 @@ mach_port_gst_helper(
  *		KERN_INVALID_RIGHT	Name doesn't denote a port set.
  *		KERN_RESOURCE_SHORTAGE	Couldn't allocate memory.
  */
-
+#define vm_map_copyin(a, b, c, d, e) (0)
 kern_return_t
 mach_port_get_set_status(
 	ipc_space_t			space,
@@ -1008,8 +1007,11 @@ mach_port_get_set_status(
 	kern_return_t kr;
 
 	vm_size_t size;		/* size of allocated memory */
-	vm_offset_t addr;	/* allocated memory */
+	caddr_t addr;	/* allocated memory */
 	vm_map_copy_t memory;	/* copied-in memory */
+
+
+	return KERN_NOT_SUPPORTED; /* XXX temporary */
 
 	if (space == IS_NULL)
 		return KERN_INVALID_TASK;
@@ -1023,35 +1025,27 @@ mach_port_get_set_status(
 		mach_port_name_t *names;
 		ipc_pset_t pset;
 
-		kr = vm_allocate(ipc_kernel_map, &addr, size, TRUE);
-		if (kr != KERN_SUCCESS)
+		addr = malloc(size, M_MACH_TMP, M_NOWAIT);
+		if (addr == NULL)
 			return KERN_RESOURCE_SHORTAGE;
 
-		/* can't fault while we hold locks */
-#if 0
-		kr = vm_map_wire(ipc_kernel_map, addr, addr + size,
-				     VM_PROT_READ|VM_PROT_WRITE, FALSE);
-		assert(kr == KERN_SUCCESS);
-#endif
 		kr = ipc_right_lookup_read(space, name, &entry);
 		if (kr != KERN_SUCCESS) {
-			kmem_free(ipc_kernel_map, addr, size);
+			free(addr, M_MACH_TMP);
 			return kr;
 		}
 		/* space is read-locked and active */
 
 		if (IE_BITS_TYPE(entry->ie_bits) != MACH_PORT_TYPE_PORT_SET) {
 			is_read_unlock(space);
-			kmem_free(ipc_kernel_map, addr, size);
+			free(addr, M_MACH_TMP);
 			return KERN_INVALID_RIGHT;
 		}
 
 		pset = (ipc_pset_t) entry->ie_object;
 		assert(pset != IPS_NULL);
 		/* the port set must be active */
-#ifdef notyet
-		names = (mach_port_t *) addr;
-#endif		
+		names = (mach_port_name_t *) addr;
 		maxnames = size / sizeof(mach_port_t);
 		actual = 0;
 
@@ -1059,18 +1053,19 @@ mach_port_get_set_status(
 		tsize = space->is_table_size;
 
 		for (index = 0; index < tsize; index++) {
-			ipc_entry_t ientry = table[index];
-			ipc_entry_bits_t bits = ientry->ie_bits;
+			ipc_entry_t ientry;
+			ipc_entry_bits_t bits;
 
-			if (bits & MACH_PORT_TYPE_RECEIVE) {
-				ipc_port_t port =
-					(ipc_port_t) ientry->ie_object;
-
-				mach_port_gst_helper(pset, port,
-				maxnames, names, &actual);
+			for (ientry = table[index]; ientry != NULL; ientry = ientry->ie_link) {
+				bits = ientry->ie_bits;
+				if (bits & MACH_PORT_TYPE_RECEIVE) {
+					ipc_port_t port =
+						(ipc_port_t) ientry->ie_object;
+					mach_port_gst_helper(pset, port,
+										 maxnames, names, &actual);
+				}
 			}
 		}
-
 		is_read_unlock(space);
 
 		if (actual <= maxnames)
@@ -1078,42 +1073,29 @@ mach_port_get_set_status(
 
 		/* didn't have enough memory; allocate more */
 
-		kmem_free(ipc_kernel_map, addr, size);
+		free(addr, M_MACH_TMP);
 		size = round_page(actual * sizeof(mach_port_t)) + PAGE_SIZE;
 	}
 
 	if (actual == 0) {
 		memory = VM_MAP_COPY_NULL;
 
-		kmem_free(ipc_kernel_map, addr, size);
+		free(addr, M_MACH_TMP);
 	} else {
 		vm_size_t size_used;
-		vm_size_t vm_size_used;
 
 		size_used = actual * sizeof(mach_port_t);
-		vm_size_used = round_page(size_used);
 
 		/*
 		 *	Make used memory pageable and get it into
 		 *	copied-in form.  Free any unused memory.
 		 */
-#if 0
-		kr = vm_map_unwire(ipc_kernel_map,
-				     addr, addr + vm_size_used, FALSE);
-		assert(kr == KERN_SUCCESS);
-#endif
 		kr = vm_map_copyin(ipc_kernel_map, addr, size_used,
 				   TRUE, &memory);
 		assert(kr == KERN_SUCCESS);
-
-		if (vm_size_used != size)
-			kmem_free(ipc_kernel_map,
-				  addr + vm_size_used, size - vm_size_used);
 	}
 
-#ifdef notyet	
-	*members = (mach_port_t *) memory;
-#endif	
+	*members = (mach_port_name_t *) memory;
 	*membersCnt = actual;
 	return KERN_SUCCESS;
 }
@@ -1199,19 +1181,9 @@ task_set_port_space(
  	ipc_space_t	space,
  	int		table_entries)
 {
-	kern_return_t kr;
-	
-	is_write_lock(space);
 
-	if (!space->is_active) {
-		is_write_unlock(space);
-		return KERN_INVALID_TASK;
-	}
-
-	kr = ipc_entry_grow_table(space, table_entries);
-	if (kr == KERN_SUCCESS)
-		is_write_unlock(space);
-	return kr;
+	/* file descriptor code handles all of this */
+	return KERN_SUCCESS;
 }
 
 /*
