@@ -4,7 +4,7 @@ SRCS= kqueue_tests.c
 
 MK_MAN=no
 CFLAGS+= -g
-CFLAGS+= -I. -I../../../../apsl/include -DTARGET_CPU_X86=1 -D__APPLE__ -O0
+CFLAGS+= -I. -I../../../../apsl/include -D__APPLE__ -O0
 LDADD+= -lmach -pthread
 
 .include <bsd.prog.mk>
