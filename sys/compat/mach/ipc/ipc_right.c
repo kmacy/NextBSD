@@ -627,7 +627,7 @@ ipc_right_destroy(
 		assert(entry->ie_request == 0);
 		assert(entry->ie_object == IO_NULL);
 
-		kern_close(curthread, name);
+		ipc_entry_dealloc(space, name, entry);
 		is_write_unlock(space);
 		break;
 
@@ -761,7 +761,10 @@ ipc_right_dealloc(
 		assert(entry->ie_request == 0);
 		assert(entry->ie_object == IO_NULL);
 
-		kern_close(curthread, name); /* decrement urefs */
+		if (entry->ie_fp->f_count == 1)
+			ipc_entry_dealloc(space, name, entry);
+		else
+			kern_close(curthread, name); /* decrement urefs */
 
 		is_write_unlock(space);
 		break;
@@ -1111,7 +1114,7 @@ ipc_right_delta(
 			goto invalid_value;
 
 		if ((urefs + delta) == 0)
-			kern_close(curthread, name);
+			ipc_entry_dealloc(space, name, entry);
 		else
 			atomic_add_acq_int(&entry->ie_fp->f_count, delta);
 
