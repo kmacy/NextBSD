@@ -151,8 +151,6 @@
 #define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
 #endif
 /* drop reference */
-#define vm_allocate(a, b, c, d) 0
-#define vm_deallocate(map, pa, size) 0
 #define vm_map_copyin_page_list(map, addr, length, options, etc0, etc1) 0
 #define vm_map_deallocate(map)
 #define vm_object_pager_wakeup(map)
@@ -163,7 +161,6 @@
 #define task_name_deallocate(task)
 #define assert_wait(a, b)
 #define cpu_number() curcpu
-#define vm_map_copy_overwrite(a, b, c, d) 0
 #define copyoutmap(a, b, c, d) 0
 #define copyinmap(a, b, c, d) 0
 
