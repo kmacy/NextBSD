@@ -286,7 +286,6 @@
 #include <sys/mach/thread.h>
 
 
-#define vm_deallocate(map, pa, size) 0
 #define vm_map_copy_overwrite(a, b, c, d) 0
 #define vm_map_copyin(a, b, c, d, e) 0
 #define vm_map_copyout(a, b, c) 0

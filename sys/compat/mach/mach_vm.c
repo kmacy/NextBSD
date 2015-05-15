@@ -1075,6 +1075,15 @@ vm_map_copy_discard(
 	uma_zfree(vm_map_copy_zone, copy);
 }
 
+kern_return_t
+vm_map_copy_overwrite(vm_map_t                dst_map,
+					  vm_map_address_t        dst_addr,
+					  vm_map_copy_t           copy,
+					  boolean_t               interruptible)
+{
+	return (KERN_NOT_SUPPORTED);
+}
+
 int
 mach_vm_behavior_set(vm_map_t target_task, mach_vm_address_t address, mach_vm_size_t size, vm_behavior_t new_behavior)
 {
