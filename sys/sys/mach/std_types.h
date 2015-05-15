@@ -164,8 +164,6 @@
 #define assert_wait(a, b)
 #define cpu_number() curcpu
 #define vm_map_copy_overwrite(a, b, c, d) 0
-#define vm_map_copyin(a, b, c, d, e) 0
-#define vm_map_copyout(a, b, c) 0
 #define copyoutmap(a, b, c, d) 0
 #define copyinmap(a, b, c, d) 0
 
