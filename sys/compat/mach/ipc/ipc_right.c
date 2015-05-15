@@ -623,7 +623,7 @@ ipc_right_destroy(
 		assert(entry->ie_request == 0);
 		assert(entry->ie_object == IO_NULL);
 
-		ipc_entry_dealloc(space, name, entry);
+		ipc_entry_close(space, name);
 		is_write_unlock(space);
 		break;
 
@@ -1110,7 +1110,11 @@ ipc_right_delta(
 			goto invalid_value;
 
 		if ((urefs + delta) == 0)
+<<<<<<< HEAD
 			ipc_entry_dealloc(space, name, entry);
+=======
+			ipc_entry_close(space, name);
+>>>>>>> 3298ec8... Fully refactor kern_close() to ipc_entry_close().
 		else
 			ipc_entry_add_refs(entry, delta);
 
