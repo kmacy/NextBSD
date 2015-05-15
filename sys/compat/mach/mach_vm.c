@@ -59,6 +59,27 @@ __FBSDID("$FreeBSD$");
 #include <sys/mach/host_priv_server.h>
 
 #include <compat/mach/mach_vm.h>
+
+static kern_return_t
+vm_map_copyout_internal(
+	register vm_map_t	dst_map,
+	vm_offset_t		*dst_addr,	/* OUT */
+	register vm_map_copy_t	copy,
+	boolean_t consume_on_success,
+	vm_prot_t cur_protection,
+	vm_prot_t max_protection,
+	vm_inherit_t inheritance);
+
+
+#ifdef INVARIANTS
+static int
+first_free_is_valid(vm_map_t map)
+{
+	return TRUE;
+}
+#endif	
+
+
 /*
  * Like copyin(), but operates on an arbitrary process.
  */
@@ -66,13 +87,6 @@ __FBSDID("$FreeBSD$");
 
 static int
 copyin_vm_map(vm_map_t map __unused, const void *uaddr __unused, void *kaddr __unused, size_t len __unused)
-{
-
-	return (0);
-}
-
-static int
-copyout_vm_map(vm_map_t map __unused, const void *kaddr __unused, void *uaddr __unused, size_t len __unused)
 {
 
 	return (0);
@@ -117,57 +131,6 @@ copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
 		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
 	}
 	error = copyin(uaddr, kaddr, len);
-	if (p != mycp) {
-		mycp->p_vmspace = myvm;
-		vmspace_free(tmpvm);
-		/* Activate the old mapping. */
-		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
-	}
-	return (error);
-}
-
-/*
- * Like copyout(), but operates on an arbitrary process.
- */
-int
-copyout_proc(struct proc *p, const void *kaddr, void *uaddr, size_t len)
-{
-	struct proc *mycp;
-	struct vmspace *myvm, *tmpvm;
-	struct thread *td = curthread;
-	int error;
-
-	/* XXX need to suspend other threads in curproc if we're in a user
-	 * context
-	 */
-
-	/*
-	 * Local copies of curproc (cp) and vmspace (myvm)
-	 */
-	mycp = td->td_proc;
-	myvm = mycp->p_vmspace;
-
-	/*
-	 * Connect to process address space for user program.
-	 */
-	if (p != mycp) {
-		/*
-		 * Save the current address space that we are
-		 * connected to.
-		 */
-		tmpvm = mycp->p_vmspace;
-
-		/*
-		 * Point to the new user address space, and
-		 * refer to it.
-		 */
-		mycp->p_vmspace = p->p_vmspace;
-		atomic_add_int(&mycp->p_vmspace->vm_refcnt, 1);
-
-		/* Activate the new mapping. */
-		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
-	}
-	error = copyout(kaddr, uaddr, len);
 	if (p != mycp) {
 		mycp->p_vmspace = myvm;
 		vmspace_free(tmpvm);
@@ -626,36 +589,24 @@ mach_vm_read(vm_map_t map, mach_vm_address_t addr, mach_vm_size_t size,
 	return (0);
 }
 
-int
-mach_vm_write(vm_map_t target_task, mach_vm_address_t address, vm_offset_t data,
-	mach_msg_type_number_t dataCnt)
+
+/*
+ * mach_vm_write -
+ * Overwrite the specified address range with the data provided
+ * (from the current map).
+ */
+kern_return_t
+mach_vm_write(
+	vm_map_t			map,
+	mach_vm_address_t		address,
+	vm_offset_t			data,
+	mach_msg_type_number_t	size __unused)
 {
-	size_t size = dataCnt;
-	char *tbuf;
-	int error;
+	if (map == VM_MAP_NULL)
+		return KERN_INVALID_ARGUMENT;
 
-	/*
-	 * Copy the data from the current process to the target process
-	 * This is reasonable for small chunk of data, but we should
-	 * remap COW for areas bigger than a page.
-	 */
-	tbuf = malloc(size, M_MACH_TMP, M_WAITOK);
-
-	if ((error = copyin((void *)address, tbuf, size)) != 0) {
-		printf("copyin error = %d\n", error);
-		free(tbuf, M_MACH_TMP);
-		return (KERN_PROTECTION_FAILURE);
-	}
-
-	if ((error = copyout_vm_map(target_task, tbuf, (void *)data, size)) != 0) {
-		printf("copyout_proc error = %d\n", error);
-		free(tbuf, M_MACH_TMP);
-		return (KERN_PROTECTION_FAILURE);
-	}
-
-	free(tbuf, M_MACH_TMP);
-
-	return (0);
+	return vm_map_copy_overwrite(map, (vm_map_address_t)address,
+		(vm_map_copy_t) data, FALSE /* interruptible XXX */);
 }
 
 int
@@ -739,6 +690,348 @@ _vm_map_entry_dispose(
 }
 
 
+/*
+ *	Routine:	vm_map_copyout
+ *
+ *	Description:
+ *		Copy out a copy chain ("copy") into newly-allocated
+ *		space in the destination map.
+ *
+ *		If successful, consumes the copy object.
+ *		Otherwise, the caller is responsible for it.
+ */
+
+
+kern_return_t
+vm_map_copyout(
+	vm_map_t		dst_map,
+	vm_map_address_t	*dst_addr,	/* OUT */
+	vm_map_copy_t		copy)
+{
+	return KERN_NOT_SUPPORTED;
+#if 0
+	return vm_map_copyout_internal(dst_map, dst_addr, copy,
+				       TRUE, /* consume_on_success */
+				       VM_PROT_DEFAULT,
+				       VM_PROT_ALL,
+				       VM_INHERIT_DEFAULT);
+#endif
+
+}
+
+#if 0
+static kern_return_t
+vm_map_copyout_internal(
+	register vm_map_t	dst_map,
+	vm_offset_t		*dst_addr,	/* OUT */
+	register vm_map_copy_t	copy,
+	boolean_t consume_on_success,
+	vm_prot_t cur_protection,
+	vm_prot_t max_protection,
+	vm_inherit_t inheritance)
+{
+	vm_size_t	size;
+	vm_size_t	adjustment;
+	vm_offset_t	start;
+	vm_offset_t	vm_copy_start;
+	vm_map_entry_t	last;
+	vm_map_entry_t	entry;
+
+	/*
+	 *	Check for null copy object.
+	 */
+
+	if (copy == VM_MAP_COPY_NULL) {
+		*dst_addr = 0;
+		return(KERN_SUCCESS);
+	}
+
+	/*
+	 *	Check for special copy object, created
+	 *	by vm_map_copyin_object.
+	 */
+
+	if (copy->type == VM_MAP_COPY_OBJECT) {
+		vm_object_t object = copy->cpy_object;
+		kern_return_t kr;
+		vm_size_t offset;
+
+		offset = trunc_page(copy->offset);
+		size = round_page(copy->size + copy->offset - offset);
+		*dst_addr = 0;
+		kr = vm_map_enter(dst_map, dst_addr, size,
+				  (vm_offset_t) 0, TRUE,
+				  object, offset, FALSE,
+				  VM_PROT_DEFAULT, VM_PROT_ALL,
+				  VM_INHERIT_DEFAULT);
+		if (kr != KERN_SUCCESS)
+			return(kr);
+		/* Account for non-pagealigned copy object */
+		*dst_addr += copy->offset - offset;
+		uma_zfree(vm_map_copy_zone, copy);
+		return(KERN_SUCCESS);
+	}
+
+	/*
+	 *	Check for special kernel buffer allocated
+	 *	by new_ipc_kmsg_copyin.
+	 */
+
+	if (copy->type == VM_MAP_COPY_KERNEL_BUFFER) {
+		return(vm_map_copyout_kernel_buffer(dst_map, dst_addr, 
+						    copy, FALSE));
+	}
+
+	/*
+	 *	Find space for the data
+	 */
+
+	vm_copy_start = trunc_page(copy->offset);
+	size =	round_page(copy->offset + copy->size) - vm_copy_start;
+
+ StartAgain: ;
+
+	vm_map_lock(dst_map);
+	assert(first_free_is_valid(dst_map));
+	start = ((last = dst_map->first_free) == vm_map_to_entry(dst_map)) ?
+		vm_map_min(dst_map) : last->vme_end;
+
+	while (TRUE) {
+		vm_map_entry_t	next = last->vme_next;
+		vm_offset_t	end = start + size;
+
+		if ((end > dst_map->max_offset) || (end < start)) {
+			if (dst_map->wait_for_space) {
+				if (size <= (dst_map->max_offset - dst_map->min_offset)) {
+					assert_wait((event_t) dst_map, TRUE);
+					vm_map_unlock(dst_map);
+					thread_block((void (*)(void))0);
+					goto StartAgain;
+				}
+			}
+			vm_map_unlock(dst_map);
+			return(KERN_NO_SPACE);
+		}
+
+		if ((next == vm_map_to_entry(dst_map)) ||
+		    (next->vme_start >= end))
+			break;
+
+		last = next;
+		start = last->vme_end;
+	}
+
+	/*
+	 *	Since we're going to just drop the map
+	 *	entries from the copy into the destination
+	 *	map, they must come from the same pool.
+	 */
+
+	if (copy->cpy_hdr.entries_pageable != dst_map->hdr.entries_pageable) {
+	    /*
+	     * Mismatches occur when dealing with the default
+	     * pager.
+	     */
+	    zone_t		old_zone;
+	    vm_map_entry_t	next, new;
+
+	    /*
+	     * Find the zone that the copies were allocated from
+	     */
+	    old_zone = (copy->cpy_hdr.entries_pageable)
+			? vm_map_entry_zone
+			: vm_map_kentry_zone;
+	    entry = vm_map_copy_first_entry(copy);
+
+	    /*
+	     * Reinitialize the copy so that vm_map_copy_entry_link
+	     * will work.
+	     */
+	    copy->cpy_hdr.nentries = 0;
+	    copy->cpy_hdr.entries_pageable = dst_map->hdr.entries_pageable;
+	    vm_map_copy_first_entry(copy) =
+	     vm_map_copy_last_entry(copy) =
+		vm_map_copy_to_entry(copy);
+
+	    /*
+	     * Copy each entry.
+	     */
+	    while (entry != vm_map_copy_to_entry(copy)) {
+		new = vm_map_copy_entry_create(copy);
+		vm_map_entry_copy_full(new, entry);
+		vm_map_copy_entry_link(copy,
+				vm_map_copy_last_entry(copy),
+				new);
+		next = entry->vme_next;
+		uma_zfree(old_zone, entry);
+		entry = next;
+	    }
+	}
+
+	/*
+	 *	Adjust the addresses in the copy chain, and
+	 *	reset the region attributes.
+	 */
+
+	adjustment = start - vm_copy_start;
+	for (entry = vm_map_copy_first_entry(copy);
+	     entry != vm_map_copy_to_entry(copy);
+	     entry = entry->vme_next) {
+		entry->vme_start += adjustment;
+		entry->vme_end += adjustment;
+
+		entry->inheritance = VM_INHERIT_DEFAULT;
+		entry->protection = VM_PROT_DEFAULT;
+		entry->max_protection = VM_PROT_ALL;
+		entry->behavior = VM_BEHAVIOR_DEFAULT;
+
+		/*
+		 * If the entry is now wired,
+		 * map the pages into the destination map.
+		 */
+		if (entry->wired_count != 0) {
+		    register vm_offset_t va;
+		    vm_offset_t		 offset;
+		    register vm_object_t object;
+
+		    object = entry->object.vm_object;
+		    offset = entry->offset;
+		    va = entry->vme_start;
+
+		    pmap_pageable(dst_map->pmap,
+				  entry->vme_start,
+				  entry->vme_end,
+				  TRUE);
+
+		    while (va < entry->vme_end) {
+			register vm_page_t	m;
+
+			/*
+			 * Look up the page in the object.
+			 * Assert that the page will be found in the
+			 * top object:
+			 * either
+			 *	the object was newly created by
+			 *	vm_object_copy_slowly, and has
+			 *	copies of all of the pages from
+			 *	the source object
+			 * or
+			 *	the object was moved from the old
+			 *	map entry; because the old map
+			 *	entry was wired, all of the pages
+			 *	were in the top-level object.
+			 *	(XXX not true if we wire pages for
+			 *	 reading)
+			 */
+			vm_object_lock(object);
+			vm_object_paging_begin(object);
+
+			m = vm_page_lookup(object, offset);
+			if (m == VM_PAGE_NULL || m->wire_count == 0 ||
+			    m->absent)
+			    panic("vm_map_copyout: wiring 0x%x", m);
+
+			m->busy = TRUE;
+			vm_object_unlock(object);
+
+			PMAP_ENTER(dst_map->pmap, va, m,
+				   entry->protection, TRUE);
+
+			vm_object_lock(object);
+			PAGE_WAKEUP_DONE(m);
+			/* the page is wired, so we don't have to activate */
+			vm_object_paging_end(object);
+			vm_object_unlock(object);
+
+			offset += PAGE_SIZE;
+			va += PAGE_SIZE;
+		    }
+		}
+		else if (size <= vm_map_aggressive_enter_max) {
+
+			register vm_offset_t	va;
+			vm_offset_t		offset;
+			register vm_object_t	object;
+			vm_prot_t		prot;
+
+			object = entry->object.vm_object;
+			if (object != VM_OBJECT_NULL) {
+
+				offset = entry->offset;
+				va = entry->vme_start;
+				while (va < entry->vme_end) {
+					register vm_page_t	m;
+				    
+					/*
+					 * Look up the page in the object.
+					 * Assert that the page will be found
+					 * in the top object if at all...
+					 */
+					vm_object_lock(object);
+					vm_object_paging_begin(object);
+
+					if (((m = vm_page_lookup(object,
+								 offset))
+					     != VM_PAGE_NULL) &&
+					    !m->busy && !m->fictitious &&
+					    !m->absent && !m->error) {
+						m->busy = TRUE;
+						vm_object_unlock(object);
+
+						/* honor cow obligations */
+						prot = entry->protection;
+						if (entry->needs_copy)
+							prot &= ~VM_PROT_WRITE;
+
+						PMAP_ENTER(dst_map->pmap, va, 
+							   m, prot, FALSE);
+
+						vm_object_lock(object);
+						vm_page_lock_queues();
+						if (!m->active && !m->inactive)
+							vm_page_activate(m);
+						vm_page_unlock_queues();
+						PAGE_WAKEUP_DONE(m);
+					}
+					vm_object_paging_end(object);
+					vm_object_unlock(object);
+
+					offset += PAGE_SIZE;
+					va += PAGE_SIZE;
+				}
+			}
+		}
+	}
+
+	/*
+	 *	Correct the page alignment for the result
+	 */
+
+	*dst_addr = start + (copy->offset - vm_copy_start);
+
+	/*
+	 *	Update the hints and the map size
+	 */
+
+	SAVE_HINT(dst_map, vm_map_copy_last_entry(copy));
+
+	dst_map->size += size;
+
+	/*
+	 *	Link in the copy
+	 */
+
+	vm_map_copy_insert(dst_map, last, copy);
+
+	vm_map_unlock(dst_map);
+
+	/*
+	 * XXX	If wiring_required, call vm_map_pageable
+	 */
+
+	return(KERN_SUCCESS);
+}
+#endif
 /*
  *	Routine:	vm_map_copy_discard
  *

@@ -50,6 +50,7 @@ struct vm_map_copy {
 #define cpy_kalloc_size		c_u.c_k.kalloc_size
 
 #define	VM_MAP_COPY_NULL	((vm_map_copy_t) 0)
+#define	VM_MAP_NULL		((vm_map_t) 0)
 
 #define vm_map_copy_to_entry(copy)		\
 		((struct vm_map_entry *) &(copy)->cpy_hdr.links)
@@ -60,6 +61,20 @@ struct vm_map_copy {
 
 typedef struct vm_map_copy *vm_map_copy_t;
 
-void vm_map_copy_discard(vm_map_copy_t copy);
+/* Overwrite existing memory with a copy */
+extern kern_return_t	vm_map_copy_overwrite(
+				vm_map_t                dst_map,
+				vm_map_address_t        dst_addr,
+				vm_map_copy_t           copy,
+				boolean_t               interruptible);
+
+/* Place a copy into a map */
+extern kern_return_t	vm_map_copyout(
+				vm_map_t		dst_map,
+				vm_map_address_t	*dst_addr,	/* OUT */
+				vm_map_copy_t		copy);
+
+extern void vm_map_copy_discard(
+				vm_map_copy_t copy);
 
 #endif /* MACH_VM_H_ */
