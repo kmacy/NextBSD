@@ -29,5 +29,8 @@
 #define _UUID_T
 typedef        char    __darwin_uuid_string_t[37];
 typedef        unsigned char   __darwin_uuid_t[16];
+#ifndef _UUID_T_DEFINED
+#define _UUID_T_DEFINED
 typedef __darwin_uuid_t	uuid_t;
+#endif /* _UUID_T_DEFINED */
 #endif /* _UUID_T */
