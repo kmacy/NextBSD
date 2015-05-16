@@ -261,15 +261,6 @@
 #include <sys/mach/kern_return.h>
 #include <sys/mach/message.h>
 #include <sys/mach/port.h>
-#if 0
-#include <sys/mach/mach_server.h>
-
-#include <kern/assert.h>
-#include <kern/kalloc.h>
-#include <vm/vm_map.h>
-#include <vm/vm_object.h>
-#include <vm/vm_kern.h>
-#endif
 
 #include <sys/mach/ipc/port.h>
 #include <sys/mach/ipc/ipc_entry.h>
@@ -2518,16 +2509,17 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 {
 	vm_offset_t			rcv_addr;
 	vm_map_copy_t map_copy;
-	mach_msg_copy_options_t		copy_option;
+	mach_msg_copy_options_t		copy_options;
 	mach_msg_size_t size;
 	kern_return_t kr;
+	mach_msg_ool_descriptor_t *user_ool_dsc;
 
 	//SKIP_PORT_DESCRIPTORS(sstart, send);
 
 	assert(dsc->copy != MACH_MSG_KALLOC_COPY_T);
 	assert(dsc->copy != MACH_MSG_PAGE_LIST_COPY_T);
 
-	copy_option = dsc->copy;
+	copy_options = dsc->copy;
 	size = dsc->size;
 	rcv_addr = 0;
 
@@ -2547,7 +2539,7 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 			dsc->copy = MACH_MSG_ALLOCATE;
 		}
 
-		if (copy_option == MACH_MSG_PHYSICAL_COPY &&
+		if (copy_options == MACH_MSG_PHYSICAL_COPY &&
 			    size < msg_ool_size_small) {
 			// MACH_MSG_ALLOCATE obsolete?
 			/*
@@ -2611,6 +2603,15 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
      * visible size.  There is already space allocated for
      * this in what naddr points to.
      */
+	user_ool_dsc = (mach_msg_ool_descriptor_t *)user_dsc;
+	user_ool_dsc--;
+	user_ool_dsc->address = (void *)rcv_addr;
+	user_ool_dsc->size = size;
+	user_ool_dsc->type = dsc->type;
+	user_ool_dsc->copy = copy_options;
+	user_ool_dsc->deallocate = (copy_options == MACH_MSG_VIRTUAL_COPY) ? TRUE : FALSE;
+	user_dsc = (mach_msg_descriptor_t *)user_ool_dsc;
+
 	return (user_dsc);
 }
 
@@ -2625,6 +2626,67 @@ ipc_kmsg_copyout_ool_ports_descriptor(mach_msg_ool_ports_descriptor_t *dsc,
 									  mach_msg_return_t *mr)
 {
 	return (NULL);
+#if 0
+		vm_offset_t            		addr;
+		mach_port_t            		*objects;
+		mach_msg_type_number_t 		j;
+    		vm_size_t           		length;
+		mach_msg_ool_ports_descriptor_t	*dsc;
+
+		SKIP_PORT_DESCRIPTORS(sstart, send);
+
+		dsc = &saddr->ool_ports;
+
+		length = dsc->count * sizeof(mach_port_t);
+
+		if (length != 0) {
+		    if (sstart != MACH_MSG_DESCRIPTOR_NULL &&
+			sstart->ool_ports.copy == MACH_MSG_OVERWRITE) {
+
+			/*
+			 * There is an overwrite descriptor specified in the
+			 * scatter list for this ool data.  The descriptor
+			 * has already been verified
+			 */
+			addr = (vm_offset_t) sstart->out_of_line.address;
+			dsc->copy = MACH_MSG_OVERWRITE;
+		    } 
+		    else {
+#if	MACH_RT			    
+			/*
+			 * The MACH_MSG_ALLOCATE option is not
+			 * compatible with RT behavior.
+			 */
+			if (rt) {
+			    mr |= MACH_MSG_INVALID_RT_DESCRIPTOR;
+			    ipc_kmsg_clean_body(kmsg,
+						body->msgh_descriptor_count);
+			    dsc->address = 0;
+			    INCREMENT_SCATTER(sstart);
+			    break;
+		        }
+#endif	/* MACH_RT */
+
+		   	/*
+			 * Dynamically allocate the region
+			 */
+			dsc->copy = MACH_MSG_ALLOCATE;
+		    	if ((kr = vm_allocate(map, &addr, length, TRUE)) !=
+		    						KERN_SUCCESS) {
+			    ipc_kmsg_clean_body(kmsg,
+						body->msgh_descriptor_count);
+			    dsc->address = 0;
+
+			    if (kr == KERN_RESOURCE_SHORTAGE){
+			    	mr |= MACH_MSG_VM_KERNEL;
+			    } else {
+			    	mr |= MACH_MSG_VM_SPACE;
+			    }
+			    INCREMENT_SCATTER(sstart);
+			    break;
+		    	}
+		    }
+#endif
 }
 
 
