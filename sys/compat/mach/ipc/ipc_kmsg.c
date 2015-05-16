@@ -255,6 +255,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/limits.h>
 #include <sys/syslog.h>
 
 #include <sys/mach/kern_return.h>
@@ -338,7 +339,7 @@ extern vm_size_t	ipc_kmsg_max_vm_space;
 extern vm_size_t	ipc_kmsg_max_body_space;
 extern vm_size_t	msg_ool_size_small;
 
-#define MSG_OOL_SIZE_SMALL(rt)	msg_ool_size_small
+#define MSG_OOL_SIZE_SMALL	msg_ool_size_small
 #define DESC_SIZE_ADJUSTMENT	((mach_msg_size_t)(sizeof(mach_msg_ool_descriptor64_t) - \
 				 sizeof(mach_msg_ool_descriptor32_t)))
 /*
@@ -640,7 +641,7 @@ ipc_kmsg_clean_body(
 		    assert(dsc->address == (void *) 0);
 		} else {
 		    if (dsc->copy == MACH_MSG_PHYSICAL_COPY &&
-			    dsc->size < MSG_OOL_SIZE_SMALL(rt)) {
+			    dsc->size < MSG_OOL_SIZE_SMALL) {
 			    KFREE((vm_offset_t)dsc->address,
 				  (vm_size_t)dsc->size,
 				  rt);
@@ -1521,6 +1522,250 @@ ipc_kmsg_copyin_port_descriptor(
     return (mach_msg_descriptor_t *)(user_dsc_in+1);
 }
 
+mach_msg_descriptor_t * ipc_kmsg_copyin_ool_descriptor(
+	mach_msg_ool_descriptor_t *dsc,
+	mach_msg_descriptor_t *user_dsc,
+	int is_64bit,
+	vm_offset_t *paddr,
+	vm_map_copy_t *copy,
+	vm_size_t *space_needed,
+	vm_map_t map,
+	mach_msg_return_t *mr);
+mach_msg_descriptor_t *
+ipc_kmsg_copyin_ool_descriptor(
+	mach_msg_ool_descriptor_t *dsc,
+	mach_msg_descriptor_t *user_dsc,
+	int is_64bit,
+	vm_offset_t *paddr,
+	vm_map_copy_t *copy,
+	vm_size_t *space_needed,
+	vm_map_t map,
+	mach_msg_return_t *mr)
+{
+	vm_size_t            		length;
+	boolean_t            		dealloc;
+	vm_offset_t          		addr;
+	mach_msg_copy_options_t		copy_options;
+	mach_msg_descriptor_type_t	dsc_type;
+
+#if defined(__LP64__)
+	mach_msg_ool_descriptor64_t *user_ool_dsc = (mach_msg_ool_descriptor64_t *)user_dsc;
+
+	addr = user_ool_dsc->address;
+	length = user_ool_dsc->size;
+	dealloc = user_ool_dsc->deallocate;
+	copy_options = user_ool_dsc->copy;
+	dsc_type = user_ool_dsc->type;
+
+	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
+#else
+	mach_msg_ool_descriptor32_t *user_ool_dsc = (mach_msg_ool_descriptor32_t *)user_dsc;
+
+	addr = user_ool_dsc->address;
+	length = user_ool_dsc->size;
+	dealloc = user_ool_dsc->deallocate;
+	copy_options = user_ool_dsc->copy;
+	dsc_type = user_ool_dsc->type;
+
+	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
+#endif
+	dsc->size = length;
+	dsc->deallocate = dealloc;
+	dsc->copy = copy_options;
+	dsc->type = dsc_type;
+
+	if (length == 0) {
+		dsc->address = NULL;
+	} else if ((length >= MSG_OOL_SIZE_SMALL) &&
+			   (copy_options == MACH_MSG_PHYSICAL_COPY) && !dealloc) {
+
+		/*
+		 * If the request is a physical copy and the source
+		 * is not being deallocated, then allocate space
+		 * in the kernel's pageable ipc copy map and copy
+		 * the data in.  The semantics guarantee that the
+		 * data will have been physically copied before
+		 * the send operation terminates.  Thus if the data
+		 * is not being deallocated, we must be prepared
+		 * to page if the region is sufficiently large.
+		 */
+		if (copyin((const char *) addr, (char *) paddr,
+				   length)) {
+			*mr = MACH_SEND_INVALID_MEMORY;
+			return NULL;
+		}
+
+		/*
+		 * The kernel ipc copy map is marked no_zero_fill.
+		 * If the transfer is not a page multiple, we need
+		 * to zero fill the balance.
+		 */
+		if (!page_aligned(length)) {
+			(void) memset((void *) (paddr + length), 0,
+						  round_page(length) - length);
+		}
+		if (vm_map_copyin(ipc_kernel_copy_map, paddr, length,
+						  TRUE, &copy) != KERN_SUCCESS) {
+			*mr = MACH_MSG_VM_KERNEL;
+			return NULL;
+		}
+		paddr += round_page(length);
+		space_needed -= round_page(length);
+	} else {
+		/*
+		 * Make a virtual copy of the of the data if requested
+		 * or if a physical copy was requested but the source
+		 * is being deallocated.  This is an invalid
+		 * path if RT.
+		 */
+		if (vm_map_copyin(map, addr, length,
+						  dealloc, &copy) != KERN_SUCCESS) {
+			*mr = MACH_SEND_INVALID_MEMORY;
+			return NULL;
+		}
+		dsc->address = (void *) copy;
+	}
+	return user_dsc;
+}
+
+
+mach_msg_descriptor_t * ipc_kmsg_copyin_ool_ports_descriptor(
+	mach_msg_ool_ports_descriptor_t *dsc,
+	mach_msg_descriptor_t *user_dsc,
+	int is_64bit,
+	vm_map_t map,
+	ipc_space_t space,
+	ipc_object_t dest,
+	ipc_kmsg_t kmsg,
+	mach_msg_return_t *mr);
+mach_msg_descriptor_t *
+ipc_kmsg_copyin_ool_ports_descriptor(
+	mach_msg_ool_ports_descriptor_t *dsc,
+	mach_msg_descriptor_t *user_dsc,
+	int is_64bit,
+	vm_map_t map,
+	ipc_space_t space,
+	ipc_object_t dest,
+	ipc_kmsg_t kmsg,
+	mach_msg_return_t *mr)
+{
+	vm_size_t            		plength, pnlength;
+	kern_return_t          		kr;
+	boolean_t            		dealloc;
+	vm_offset_t          		addr;
+	mach_msg_copy_options_t		copy_options;
+	mach_msg_descriptor_type_t	typename;
+	mach_msg_type_name_t		user_disp, result_disp;
+	ipc_object_t            		*objects;
+	void						*data;
+	int					count, j;
+
+#if defined(__LP64__)
+	mach_msg_ool_ports_descriptor64_t *user_ool_dsc = (mach_msg_ool_ports_descriptor64_t *)user_dsc;
+
+	addr = user_ool_dsc->address;
+	count = user_ool_dsc->count;
+	dealloc = user_ool_dsc->deallocate;
+	copy_options = user_ool_dsc->copy;
+	/* this is really the type SEND, SEND_ONCE, etc. */
+	typename = user_ool_dsc->type;
+	user_disp = user_ool_dsc->disposition;
+
+	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
+#else
+	mach_msg_ool_ports_descriptor32_t *user_ool_dsc = (mach_msg_ool_ports_descriptor32_t *)user_dsc;
+
+	addr = user_ool_dsc->address;
+	count = user_ool_dsc->count;
+	dealloc = user_ool_dsc->deallocate;
+	copy_options = user_ool_dsc->copy;
+	typename = user_ool_dsc->type;
+	user_disp = user_ool_dsc->disposition;
+
+	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
+#endif
+
+	dsc->deallocate = dealloc;
+	dsc->copy = copy_options;
+	dsc->type = typename;
+	dsc->count = count;
+	dsc->address = NULL;
+
+	result_disp = ipc_object_copyin_type(user_disp);
+	dsc->disposition = result_disp;
+
+	if (count == 0)
+		return user_dsc;
+
+	if (count > (INT_MAX / sizeof(mach_port_t))) {
+        *mr = MACH_SEND_TOO_LARGE;
+        return NULL;
+    }
+
+	plength = count * sizeof(mach_port_t);
+    pnlength = count * sizeof(mach_port_name_t);
+
+	data = malloc(plength, M_MACH_TMP, M_NOWAIT);
+
+	if (data == NULL) {
+		*mr = MACH_SEND_NO_BUFFER;
+		return NULL;
+	}
+#ifdef __LP64__
+    mach_port_name_t *names = &((mach_port_name_t *)data)[count];
+#else
+    mach_port_name_t *names = ((mach_port_name_t *)data);
+#endif
+
+	if (copyinmap(map, addr, names, pnlength)) {
+		free(data, M_MACH_TMP);
+		*mr = MACH_SEND_INVALID_MEMORY;
+		return (NULL);
+	}
+
+	if (dsc->deallocate) {
+		(void) mach_vm_deallocate(map, addr, plength);
+	}
+
+	dsc->address = (void *) data;
+	objects = (ipc_object_t *) data;
+
+	for (j = 0; j < count; j++) {
+		mach_port_name_t name;
+		ipc_object_t object;
+
+		name = names[j];
+		if (!MACH_PORT_NAME_VALID(name)) {
+			objects[j] = (ipc_object_t)CAST_MACH_NAME_TO_PORT(name);
+			continue;
+		}
+
+		kr = ipc_object_copyin(space, name, user_disp, &object);
+
+		if (kr != KERN_SUCCESS) {
+			int k;
+
+			for(k = 0; k < j; k++) {
+				object = objects[k];
+				if (IPC_OBJECT_VALID(object))
+					ipc_object_destroy(object, result_disp);
+			}
+			free(data, M_MACH_TMP);
+			dsc->address = NULL;
+			*mr = MACH_SEND_INVALID_RIGHT;
+			return NULL;
+		}
+
+		if ((dsc->disposition == MACH_MSG_TYPE_PORT_RECEIVE) &&
+			ipc_port_check_circularity(
+				(ipc_port_t) object,
+				(ipc_port_t) dest))
+			kmsg->ikm_header->msgh_bits |= MACH_MSGH_BITS_CIRCULAR;
+
+		objects[j] = object;
+	}
+	return user_dsc;
+}
 
 /*
  *	Routine:	ipc_kmsg_copyin_body
@@ -1556,12 +1801,13 @@ ipc_kmsg_copyin_body(
     mach_msg_body_t		*body;
     mach_msg_descriptor_t	*naddr, *daddr;
 	mach_msg_descriptor_t	*user_addr, *kern_addr;
+    vm_map_copy_t		copy = VM_MAP_COPY_NULL;
     boolean_t 			complex;
-    int				i, dsc_count;
+    int				i, dsc_count, is_task_64bit;
     vm_size_t			space_needed = 0;
     vm_offset_t			paddr = 0;
     kern_return_t		mr = 0;
-	vm_size_t           descriptor_size = 0;
+	vm_size_t           size, descriptor_size = 0;
 
     /*
      * Determine if the target is a kernel port.
@@ -1573,6 +1819,15 @@ ipc_kmsg_copyin_body(
     dsc_count = body->msgh_descriptor_count;
     if (dsc_count == 0)
 		return MACH_MSG_SUCCESS;
+    /*
+     * Make an initial pass to determine kernal VM space requirements for
+     * physical copies.
+     */
+#if defined(__LP64__)
+	is_task_64bit = 1;
+#else
+	is_task_64bit = 0;
+#endif
 	for (i = 0; i < dsc_count; i++) {
 		daddr = naddr;
 
@@ -1583,11 +1838,6 @@ ipc_kmsg_copyin_body(
 	    case MACH_MSG_OOL_PORTS_DESCRIPTOR:
 		    descriptor_size += 16;
             naddr = (mach_msg_descriptor_t *)((vm_offset_t)daddr + 16);
-
-			/* XXX */
-			printf("OOL descriptor type: %d not supported yet\n", daddr->type.type);
-			ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
-			return MACH_SEND_INVALID_TYPE;
             break;
 	    default:
 		    descriptor_size += 12;
@@ -1598,18 +1848,51 @@ ipc_kmsg_copyin_body(
         descriptor_size += 12;
         naddr = (mach_msg_descriptor_t *)((vm_offset_t)daddr + 12);
 #endif
+    /* make sure the message does not ask for more msg descriptors
+     * than the message can hold.
+     */
 		if (naddr > (mach_msg_descriptor_t *)
 			((vm_offset_t)kmsg->ikm_header + kmsg->ikm_header->msgh_size)) {
 			ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
 			mr = MACH_SEND_MSG_TOO_SMALL;
 			goto out;
 		}
-	}
 
-	/* XXX we don't support OOL descriptors yet */
+		switch (daddr->type.type) {
+		case MACH_MSG_OOL_DESCRIPTOR:
+		case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
+#if defined(__LP64__)
+			size = ((mach_msg_ool_descriptor64_t *)daddr)->size;
+#else
+			size = daddr->out_of_line.size;
+#endif
+			if (daddr->out_of_line.copy != MACH_MSG_PHYSICAL_COPY &&
+				daddr->out_of_line.copy != MACH_MSG_VIRTUAL_COPY) {
+				ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
+				mr = MACH_SEND_INVALID_TYPE;
+				goto out;
+			}
+			if ((size >= MSG_OOL_SIZE_SMALL) &&
+				(daddr->out_of_line.copy == MACH_MSG_PHYSICAL_COPY) &&
+				!(daddr->out_of_line.deallocate)) {
+				space_needed += size;
+				if (space_needed > ipc_kmsg_max_vm_space) {
+					ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
+					mr = MACH_MSG_VM_KERNEL;
+					goto out;
+				}
+			}
+		}
+	}
+	if (space_needed && (paddr = (vm_offset_t)malloc(space_needed, M_MACH_TMP, M_NOWAIT| M_NODUMP)) == 0) {
+		ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
+		mr = MACH_MSG_VM_KERNEL;
+		goto out;
+	}
 
 	/* user_addr = just after base as it was copied in */
     user_addr = (mach_msg_descriptor_t *)((vm_offset_t)kmsg->ikm_header + sizeof(mach_msg_base_t));
+
     /* Shift the mach_msg_base_t down to make room for dsc_count*16bytes of descriptors */
     if(descriptor_size != KERN_DESC_SIZE*dsc_count) {
         vm_offset_t dsc_adjust = KERN_DESC_SIZE*dsc_count - descriptor_size;
@@ -1623,7 +1906,8 @@ ipc_kmsg_copyin_body(
 
     /* kern_addr = just after base after it has been (conditionally) moved */
     kern_addr = (mach_msg_descriptor_t *)((vm_offset_t)kmsg->ikm_header + sizeof(mach_msg_base_t));
-    /* handle the OOL regions and port descriptors. */
+
+	/* handle the OOL regions and port descriptors. */
     for(i=0;i<dsc_count;i++) {
         switch (user_addr->type.type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
@@ -1633,21 +1917,19 @@ ipc_kmsg_copyin_body(
 			kern_addr++;
 			complex = TRUE;
 			break;
-#ifdef notyet
-            case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
-            case MACH_MSG_OOL_DESCRIPTOR:
-                user_addr = ipc_kmsg_copyin_ool_descriptor((mach_msg_ool_descriptor_t *)kern_addr,
-                        user_addr, is_task_64bit, &paddr, &copy, &space_needed, map, &mr);
-                kern_addr++;
-                complex = TRUE;
-                break;
-            case MACH_MSG_OOL_PORTS_DESCRIPTOR:
+		case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
+		case MACH_MSG_OOL_DESCRIPTOR:
+			user_addr = ipc_kmsg_copyin_ool_descriptor((mach_msg_ool_descriptor_t *)kern_addr,
+													   user_addr, is_task_64bit, &paddr, &copy, &space_needed, map, &mr);
+			kern_addr++;
+			complex = TRUE;
+			break;
+		case MACH_MSG_OOL_PORTS_DESCRIPTOR:
                 user_addr = ipc_kmsg_copyin_ool_ports_descriptor((mach_msg_ool_ports_descriptor_t *)kern_addr,
                         user_addr, is_task_64bit, map, space, dest, kmsg, &mr);
                 kern_addr++;
                 complex = TRUE;
                 break;
-#endif
 		default:
 			printf("bad descriptor type: %d idx: %d\n", user_addr->type.type, i);
                 /* Invalid descriptor */
@@ -1668,401 +1950,6 @@ ipc_kmsg_copyin_body(
 
  out:
     return (mr);
-
-#if 0
-#ifdef notyet
-    use_page_lists = ipc_kobject_vm_page_list(ip_kotype((ipc_port_t)dest));
-    steal_pages = ipc_kobject_vm_page_steal(ip_kotype((ipc_port_t)dest));
-#else
-	use_page_lists = steal_pages = FALSE;
-#endif
-    saddr = (mach_msg_descriptor_t *) (body + 1);
-    eaddr = saddr + body->msgh_descriptor_count;
-    /* make sure the message does not ask for more msg descriptors
-     * than the message can hold.
-     */
-    
-    if (eaddr <= saddr || eaddr > (mach_msg_descriptor_t *) (kmsg->ikm_header +
-			    kmsg->ikm_header->msgh_size)) {
-		ipc_kmsg_clean_partial(kmsg,0, NULL, 0,0);
-		return MACH_SEND_MSG_TOO_SMALL;
-    }
-    
-    /*
-     * Make an initial pass to determine kernal VM space requirements for
-     * physical copies.
-     */
-    for (sstart = saddr; sstart <  eaddr; sstart++) {
-
-	if (sstart->type.type == MACH_MSG_OOL_DESCRIPTOR ||
-	    sstart->type.type == MACH_MSG_OOL_VOLATILE_DESCRIPTOR) {
-
-		assert(!(sstart->out_of_line.copy == MACH_MSG_PHYSICAL_COPY &&
-		       (use_page_lists || steal_pages)));
-
-		if (sstart->out_of_line.copy != MACH_MSG_PHYSICAL_COPY &&
-		    sstart->out_of_line.copy != MACH_MSG_VIRTUAL_COPY) {
-		    /*
-		     * Invalid copy option
-		     */
-		    ipc_kmsg_clean_partial(kmsg,0, NULL, 0,0);
-		    return MACH_SEND_INVALID_TYPE;
-		}
-		if (sstart->out_of_line.copy == MACH_MSG_PHYSICAL_COPY && 
-		    sstart->out_of_line.size >= MSG_OOL_SIZE_SMALL(rt) &&
-		    !sstart->out_of_line.deallocate) {
-
-		     	/*
-		      	 * Out-of-line memory descriptor, accumulate kernel
-		      	 * memory requirements
-		      	 */
-		    	space_needed += round_page(sstart->out_of_line.size);
-		    	if (space_needed > ipc_kmsg_max_vm_space) {
-
-			    	/*
-			     	 * Per message kernel memory limit exceeded
-			     	 */
-					ipc_kmsg_clean_partial(kmsg,0, NULL, 0,0);
-		            	return MACH_MSG_VM_KERNEL;
-		    	}
-	        }
-	}
-    }
-
-    /*
-     * Allocate space in the pageable kernel ipc copy map for all the
-     * ool data that is to be physically copied.  Map is marked wait for
-     * space.
-     */
-    if (space_needed) {
-		if (vm_allocate(ipc_kernel_copy_map, &paddr, space_needed, 
-						TRUE) != KERN_SUCCESS) {
-			ipc_kmsg_clean_partial(kmsg,0, NULL, 0,0);
-			return MACH_MSG_VM_KERNEL;
-		}
-    }
-
-    /* 
-     * handle the OOL regions and port descriptors.
-     * the check for complex messages was done earlier.
-     */
-    
-    for (i = 0, sstart = saddr; sstart <  eaddr; sstart++) {
-	
-		switch (sstart->type.type) {
-	    
-	    case MACH_MSG_PORT_DESCRIPTOR: {
-			mach_msg_type_name_t 		typename;
-			ipc_object_t 			object;
-			mach_msg_port_descriptor_t 	*dsc;
-			mach_port_name_t name;
-		
-			dsc = &sstart->port;
-		
-			/* this is really the type SEND, SEND_ONCE, etc. */
-			typename = dsc->disposition;
-			name = CAST_MACH_PORT_TO_NAME(dsc->name);
-			dsc->disposition = ipc_object_copyin_type(typename);
-		
-			if (!MACH_PORT_NAME_VALID(name)) {
-				complex = TRUE;
-				break;
-			}
-			kr = ipc_object_copyin(space, name, typename, &object);
-			if (kr != KERN_SUCCESS) {
-				ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
-				ERIGHTLOG;
-				return MACH_SEND_INVALID_RIGHT;
-			}
-			if ((dsc->disposition == MACH_MSG_TYPE_PORT_RECEIVE) &&
-				ipc_port_check_circularity((ipc_port_t) object,
-										   (ipc_port_t) dest)) {
-				kmsg->ikm_header->msgh_bits |= MACH_MSGH_BITS_CIRCULAR;
-			}
-			dsc->name = (mach_port_t)object;
-			complex = TRUE;
-			break;
-	    }
-	    case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
-	    case MACH_MSG_OOL_DESCRIPTOR: {
-			vm_size_t            		length;
-			boolean_t            		dealloc;
-			vm_offset_t          		addr;
-			vm_offset_t          		kaddr;
-			mach_msg_ool_descriptor_t 	*dsc;
-		
-			dsc = &sstart->out_of_line;
-			dealloc = dsc->deallocate;
-			addr = (vm_offset_t) dsc->address;
-		
-			length = dsc->size;
-			if (length == 0) {
-				dsc->address = 0;
-			} else if (use_page_lists) {
-				int	options;
-				/*
-				 * Use page list copy mechanism if specified. Since the
-				 * destination is a kernel port, no RT handling is
-				 * necessary. 
-				 */
-				if (steal_pages == FALSE) {
-					/*
-					 * XXX Temporary Hackaround.
-					 * XXX Because the same page
-					 * XXX might be in more than one
-					 * XXX out of line region, steal
-					 * XXX (busy) pages from previous
-					 * XXX region so that this copyin
-					 * XXX won't block (permanently).
-					 */
-					if (copy != VM_MAP_COPY_NULL)
-						vm_map_copy_steal_pages(copy);
-				}
-				/*
-				 *	Set up options for copying in page list.
-				 *  If deallocating, steal pages to prevent
-				 *  vm code from lazy evaluating deallocation.
-				 */
-				options = VM_PROT_READ;
-				if (dealloc) {
-					options |= VM_MAP_COPYIN_OPT_SRC_DESTROY |
-		    			VM_MAP_COPYIN_OPT_STEAL_PAGES;
-				}
-				else if (steal_pages) {
-					options |= VM_MAP_COPYIN_OPT_STEAL_PAGES;
-				}
-#if 0
-				if (vm_map_copyin_page_list(map, addr, length, options,
-											&copy, FALSE)
-					!= KERN_SUCCESS) {
-
-					ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
-					ERIGHTLOG;
-					return MACH_SEND_INVALID_MEMORY;
-				}
-#endif
-				dsc->address = (void *) copy;
-				dsc->copy = MACH_MSG_PAGE_LIST_COPY_T;
-			} else if (length < MSG_OOL_SIZE_SMALL(rt) &&
-					   dsc->copy == MACH_MSG_PHYSICAL_COPY) {
-
-				/*
-				 * If the data is 'small' enough, always kalloc space for
-				 * it and copy it in.  The data will be copied out
-				 * on the  message receive.  This is a performance
-				 * optimization that assumes the cost of VM operations
-				 * dominates the copyin/copyout overhead for 'small'
-				 * regions.
-				 * If the kernel is the message target, a consistent data
-				 * repesentation is needed for ool data since kernel
-				 * functions may deallocate the ool data.  In this case
-				 * a vm_map_copy_t is allocated along with the space for
-				 * the data as an optimization.  No RT handling is needed.
-				 */
-				if (is_ipc_kobject(ip_kotype((ipc_port_t)dest))) {
-					vm_map_copy_t copy;
-					vm_size_t kalloc_size = sizeof(struct vm_map_copy) +
-						length;
-
-					copy = (vm_map_copy_t) kalloc(kalloc_size);
-					if (copy == VM_MAP_COPY_NULL) {
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr,
-											   space_needed);
-						return MACH_MSG_VM_KERNEL;
-					}
-					copy->type = VM_MAP_COPY_KERNEL_BUFFER;
-					if (copyin((const char *) addr, (char *) (copy + 1),
-							   length)) {
-						kfree((vm_offset_t) copy, kalloc_size);
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr,
-											   space_needed);
-						return MACH_SEND_INVALID_MEMORY;
-					}
-					dsc->address = (void *) copy;
-					dsc->copy = MACH_MSG_KALLOC_COPY_T;
-					copy->size = length;
-					copy->offset = 0;
-					copy->cpy_kdata = (vm_offset_t) (copy + 1);
-					copy->cpy_kalloc_size = kalloc_size;
-				} else {
-					if ((kaddr = KALLOC(length, rt)) == (vm_offset_t) 0) {
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr,
-											   space_needed);
-						return MACH_MSG_VM_KERNEL;
-					}
-
-					if (copyin((const char *) addr, (char *) kaddr, 
-							   length)) {
-						KFREE(kaddr, length, rt);
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr,
-											   space_needed);
-						return MACH_SEND_INVALID_MEMORY;
-					}	
-					dsc->address = (void *) kaddr;
-				}
-				if (dealloc) {
-	    	        (void) vm_map_remove(map, trunc_page(addr), 
-										 round_page(addr + length));
-#if 0						
-					VM_MAP_REMOVE_WAIT_FOR_KWIRE|
-						VM_MAP_REMOVE_INTERRUPTIBLE);
-#endif			
-		    }
-		} else {
-				if ((dsc->copy == MACH_MSG_PHYSICAL_COPY) && !dealloc) {
-
-					/*
-					 * If the request is a physical copy and the source
-					 * is not being deallocated, then allocate space
-					 * in the kernel's pageable ipc copy map and copy
-					 * the data in.  The semantics guarantee that the
-					 * data will have been physically copied before
-					 * the send operation terminates.  Thus if the data
-					 * is not being deallocated, we must be prepared
-					 * to page if the region is sufficiently large.
-					 */
-					if (copyin((const char *) addr, (char *) paddr,
-							   length)) {
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr,
-											   space_needed);
-						return MACH_SEND_INVALID_MEMORY;
-					}
-
-					/*
-					 * The kernel ipc copy map is marked no_zero_fill.
-					 * If the transfer is not a page multiple, we need
-					 * to zero fill the balance.
-					 */
-					if (!page_aligned(length)) {
-						(void) memset((void *) (paddr + length), 0,
-									  round_page(length) - length);
-					}
-					if (vm_map_copyin(ipc_kernel_copy_map, paddr, length,
-									  TRUE, &copy) != KERN_SUCCESS) {
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr,
-											   space_needed);
-						return MACH_MSG_VM_KERNEL;
-					}
-					paddr += round_page(length);
-					space_needed -= round_page(length);
-				} else {
-					/*
-					 * Make a virtual copy of the of the data if requested
-					 * or if a physical copy was requested but the source
-					 * is being deallocated.  This is an invalid
-					 * path if RT.
-					 */
-					if (vm_map_copyin(map, addr, length,
-									  dealloc, &copy) != KERN_SUCCESS) {
-						ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, 
-											   space_needed);
-						return MACH_SEND_INVALID_MEMORY;
-					}
-				}
-				dsc->address = (void *) copy;
-			}
-			complex = TRUE;
-			break;
-	    }
-	case MACH_MSG_OOL_PORTS_DESCRIPTOR: {
-		vm_size_t 				length;
-		vm_offset_t             		data;
-		vm_offset_t             		addr;
-		ipc_object_t            		*objects;
-		int					j;
-		mach_msg_type_name_t    		typename;
-		mach_msg_ool_ports_descriptor_t 	*dsc;
-		
-		dsc = &sstart->ool_ports;
-		addr = (vm_offset_t) dsc->address;
-
-		/* calculate length of data in bytes, rounding up */
-		length = dsc->count * sizeof(mach_port_t);
-		
-		if (length == 0) {
-		    complex = TRUE;
-		    dsc->address = (void *) 0;
-		    break;
-		}
-
-		data = KALLOC(length, rt);
-
-		if (data == 0) {
-		    ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
-		    return MACH_SEND_NO_BUFFER;
-		}
-		
-		if (copyinmap(map, addr, data, length)) {
-		    KFREE(data, length, rt);
-		    ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc,paddr, space_needed);
-		    return MACH_SEND_INVALID_MEMORY;
-		}
-
-		if (dsc->deallocate) {
-			(void) vm_deallocate(map, addr, length);
-		}
-		
-		dsc->address = (void *) data;
-		
-		/* this is really the type SEND, SEND_ONCE, etc. */
-		typename = dsc->disposition;
-		dsc->disposition = ipc_object_copyin_type(typename);
-		
-		objects = (ipc_object_t *) data;
-		
-		for ( j = 0; j < dsc->count; j++) {
-		    mach_port_name_t name;
-		    ipc_object_t object;
-		    
-		    if (!MACH_PORT_VALID((mach_port_t)objects[j]))
-				continue;
-			name = CAST_MACH_PORT_TO_NAME(objects[j]);
-		    kr = ipc_object_copyin(space, name, typename, &object);
-
-		    if (kr != KERN_SUCCESS) {
-				int k;
-
-				for(k = 0; k < j; k++) {
-					object = objects[k];
-					if (!MACH_PORT_VALID((mach_port_t)objects[k]))
-						continue;
-
-		    	    ipc_object_destroy(object, dsc->disposition);
-				}
-				KFREE(data, length, rt);
-				ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
-				return MACH_SEND_INVALID_RIGHT;
-		    }
-		    
-		    if ((dsc->disposition == MACH_MSG_TYPE_PORT_RECEIVE) &&
-				ipc_port_check_circularity(
-					(ipc_port_t) object,
-					(ipc_port_t) dest))
-				kmsg->ikm_header->msgh_bits |= MACH_MSGH_BITS_CIRCULAR;
-		    
-		    objects[j] = object;
-		}
-		
-		complex = TRUE;
-		break;
-	}
-	default: {
-		mach_msg_ool_ports_descriptor_t 	*dsc =  &sstart->ool_ports;
-		/*
-		 * Invalid descriptor
-		 */
-
-		ipc_kmsg_clean_partial(kmsg, i, (mach_msg_descriptor_t *)dsc, paddr, space_needed);
-		return MACH_SEND_INVALID_TYPE;
-	}
-	}
-	i++ ;
-}
-
-    if (!complex)
-		kmsg->ikm_header->msgh_bits &= ~MACH_MSGH_BITS_COMPLEX;
-return MACH_MSG_SUCCESS;
-#endif
 }
 
 

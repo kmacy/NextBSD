@@ -26,6 +26,11 @@
 #ifndef	_IPC_TYPES_H_
 #define	_IPC_TYPES_H_
 #ifdef _KERNEL
+#define IPC_OBJECT_NULL		((ipc_object_t) 0)
+#define IPC_OBJECT_DEAD		((ipc_object_t)~0)
+#define IPC_OBJECT_VALID(io)	(((io) != IPC_OBJECT_NULL) && \
+				 ((io) != IPC_OBJECT_DEAD))
+
 #endif
 typedef mach_port_name_t mach_port_index_t;
 #endif	/* _IPC_TYPES_H_ */
