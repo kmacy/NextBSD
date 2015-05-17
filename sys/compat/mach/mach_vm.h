@@ -39,7 +39,6 @@
 #include <sys/mach/mach_types.h>
 #include <compat/mach/mach_message.h>
 
-int mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags);
 
 int copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len);
 

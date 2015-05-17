@@ -78,6 +78,7 @@ extern void vm_map_copy_discard(
 				vm_map_copy_t copy);
 
 
+int mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags);
 int mach_vm_deallocate(vm_map_t target __unused, mach_vm_address_t addr, mach_vm_size_t len);
 
 #endif /* MACH_VM_H_ */

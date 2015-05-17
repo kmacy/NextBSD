@@ -2619,76 +2619,79 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 static mach_msg_descriptor_t *
 ipc_kmsg_copyout_ool_ports_descriptor(mach_msg_ool_ports_descriptor_t *dsc,
         mach_msg_descriptor_t *user_dsc,
-        int is_64bit,
+        int is_64bit __unused,
         vm_map_t map,
         ipc_space_t space,
         ipc_kmsg_t kmsg,
-									  mach_msg_return_t *mr)
+		mach_msg_return_t *mr)
 {
-	return (NULL);
-#if 0
-		vm_offset_t            		addr;
-		mach_port_t            		*objects;
-		mach_msg_type_number_t 		j;
-    		vm_size_t           		length;
-		mach_msg_ool_ports_descriptor_t	*dsc;
+	vm_offset_t            		addr;
+	mach_port_t            		*objects;
+	mach_port_name_t            *names;
+	mach_msg_type_number_t 		j, count;
+	mach_msg_type_name_t 		disp;
+	vm_size_t           		plength, pnlength;
+	mach_msg_ool_ports_descriptor_t *user_ool_dsc;
+	kern_return_t kr;
 
-		SKIP_PORT_DESCRIPTORS(sstart, send);
+	disp = dsc->disposition;
+	count = dsc->count;
+	plength = count * sizeof(mach_port_t);
+	pnlength = count * sizeof(mach_port_name_t);
 
-		dsc = &saddr->ool_ports;
+	if (plength != 0 && dsc->address != 0) {
+		/*
+		 * Dynamically allocate the region
+		 */
+		dsc->copy = MACH_MSG_ALLOCATE;
+		if ((kr = mach_vm_allocate(map, &addr, pnlength, VM_FLAGS_ANYWHERE)) !=
+			KERN_SUCCESS) {
+			/* check that the memory has been freed */
+			ipc_kmsg_clean_body(kmsg, 1, (mach_msg_descriptor_t *)dsc);
+			dsc->address = 0;
 
-		length = dsc->count * sizeof(mach_port_t);
+			if (kr == KERN_RESOURCE_SHORTAGE){
+				*mr |= MACH_MSG_VM_KERNEL;
+			} else {
+				*mr |= MACH_MSG_VM_SPACE;
+			}
+		}
+		if (addr != 0) {
+			objects = (mach_port_t *) dsc->address;
+            names = (mach_port_name_t *) dsc->address;
 
-		if (length != 0) {
-		    if (sstart != MACH_MSG_DESCRIPTOR_NULL &&
-			sstart->ool_ports.copy == MACH_MSG_OVERWRITE) {
+            /* copyout port rights carried in the message */
 
-			/*
-			 * There is an overwrite descriptor specified in the
-			 * scatter list for this ool data.  The descriptor
-			 * has already been verified
-			 */
-			addr = (vm_offset_t) sstart->out_of_line.address;
-			dsc->copy = MACH_MSG_OVERWRITE;
-		    } 
-		    else {
-#if	MACH_RT			    
-			/*
-			 * The MACH_MSG_ALLOCATE option is not
-			 * compatible with RT behavior.
-			 */
-			if (rt) {
-			    mr |= MACH_MSG_INVALID_RT_DESCRIPTOR;
-			    ipc_kmsg_clean_body(kmsg,
-						body->msgh_descriptor_count);
-			    dsc->address = 0;
-			    INCREMENT_SCATTER(sstart);
-			    break;
-		        }
-#endif	/* MACH_RT */
+            for ( j = 0; j < count ; j++) {
+                ipc_object_t object = (ipc_object_t)objects[j];
 
-		   	/*
-			 * Dynamically allocate the region
-			 */
-			dsc->copy = MACH_MSG_ALLOCATE;
-		    	if ((kr = vm_allocate(map, &addr, length, TRUE)) !=
-		    						KERN_SUCCESS) {
-			    ipc_kmsg_clean_body(kmsg,
-						body->msgh_descriptor_count);
-			    dsc->address = 0;
+                *mr |= ipc_kmsg_copyout_object(space, object,
+                        disp, &names[j]);
+            }
 
-			    if (kr == KERN_RESOURCE_SHORTAGE){
-			    	mr |= MACH_MSG_VM_KERNEL;
-			    } else {
-			    	mr |= MACH_MSG_VM_SPACE;
-			    }
-			    INCREMENT_SCATTER(sstart);
-			    break;
-		    	}
-		    }
-#endif
+            /* copyout to memory allocated above */
+            void *data = dsc->address;
+            if (copyoutmap(map, data, addr, nlength) != KERN_SUCCESS)
+                *mr |= MACH_MSG_VM_SPACE;
+            free(data, M_MACH_TMP);
+		}
+	} else
+		addr = 0;
+
+	user_ool_dsc = (mach_msg_ool_ports_descriptor_t *)user_dsc;
+	user_ool_dsc--;
+
+	user_ool_dsc->address = (void *)addr;
+	user_ool_dsc->deallocate = TRUE;
+	user_ool_dsc->copy = MACH_MSG_VIRTUAL_COPY;
+	user_ool_dsc->type = MACH_MSG_OOL_PORTS_DESCRIPTOR;
+	user_ool_dsc->disposition = disp;
+	user_ool_dsc->count = count;
+
+	user_dsc = (mach_msg_descriptor_t *)user_ool_dsc;
+
+	return user_dsc;
 }
-
 
 /*
  *	Routine:	ipc_kmsg_copyout_body
