@@ -4,6 +4,3 @@
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/mach_types.h>
-#ifndef _KERNEL
-#include <sys/mach/host_priv.h>
-#endif
