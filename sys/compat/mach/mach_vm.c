@@ -689,6 +689,17 @@ _vm_map_entry_dispose(
 	uma_zfree(zone, entry);
 }
 
+kern_return_t	vm_map_copyin(
+				vm_map_t			src_map,
+				vm_map_address_t	src_addr,
+				vm_map_size_t		len,
+				boolean_t			src_destroy,
+				vm_map_copy_t		*copy_result)
+{
+
+	return KERN_NOT_SUPPORTED;
+}
+
 
 /*
  *	Routine:	vm_map_copyout

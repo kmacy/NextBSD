@@ -61,6 +61,10 @@ struct vm_map_copy {
 
 typedef struct vm_map_copy *vm_map_copy_t;
 
+/* Discard a copy without using it */
+extern void		vm_map_copy_discard(
+				vm_map_copy_t		copy);
+
 /* Overwrite existing memory with a copy */
 extern kern_return_t	vm_map_copy_overwrite(
 				vm_map_t                dst_map,
@@ -73,6 +77,31 @@ extern kern_return_t	vm_map_copyout(
 				vm_map_t		dst_map,
 				vm_map_address_t	*dst_addr,	/* OUT */
 				vm_map_copy_t		copy);
+
+extern kern_return_t	vm_map_copyin(
+				vm_map_t			src_map,
+				vm_map_address_t	src_addr,
+				vm_map_size_t		len,
+				boolean_t			src_destroy,
+				vm_map_copy_t		*copy_result);	/* OUT */
+
+extern kern_return_t	vm_map_copyin_common(
+				vm_map_t		src_map,
+				vm_map_address_t	src_addr,
+				vm_map_size_t		len,
+				boolean_t		src_destroy,
+				boolean_t		src_volatile,
+				vm_map_copy_t		*copy_result,	/* OUT */
+				boolean_t		use_maxprot);
+
+extern kern_return_t	vm_map_copy_extract(
+	vm_map_t		src_map,
+	vm_map_address_t	src_addr,
+	vm_map_size_t		len,
+	vm_map_copy_t		*copy_result,	/* OUT */
+	vm_prot_t		*cur_prot,	/* OUT */
+	vm_prot_t		*max_prot);
+
 
 extern void vm_map_copy_discard(
 				vm_map_copy_t copy);

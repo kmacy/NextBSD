@@ -278,11 +278,6 @@
 #include <sys/mach/thread.h>
 
 
-#define vm_map_copy_overwrite(a, b, c, d) 0
-#define vm_map_copyin(a, b, c, d, e) 0
-#define vm_map_copyout(a, b, c) 0
-
-
 #pragma pack(4)
 
 typedef	struct
@@ -1526,7 +1521,7 @@ mach_msg_descriptor_t *
 ipc_kmsg_copyin_ool_descriptor(
 	mach_msg_ool_descriptor_t *dsc,
 	mach_msg_descriptor_t *user_dsc,
-	int is_64bit,
+	int is_64bit __unused,
 	vm_offset_t *paddr,
 	vm_map_copy_t *copy,
 	vm_size_t *space_needed,
@@ -1538,28 +1533,17 @@ ipc_kmsg_copyin_ool_descriptor(
 	vm_offset_t          		addr;
 	mach_msg_copy_options_t		copy_options;
 	mach_msg_descriptor_type_t	dsc_type;
+	mach_msg_ool_descriptor_t *user_ool_dsc;
 
-#if defined(__LP64__)
-	mach_msg_ool_descriptor64_t *user_ool_dsc = (mach_msg_ool_descriptor64_t *)user_dsc;
-
-	addr = user_ool_dsc->address;
+	user_ool_dsc = (mach_msg_ool_descriptor_t *)user_dsc;
+	addr = (vm_offset_t)user_ool_dsc->address;
 	length = user_ool_dsc->size;
 	dealloc = user_ool_dsc->deallocate;
 	copy_options = user_ool_dsc->copy;
 	dsc_type = user_ool_dsc->type;
 
 	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
-#else
-	mach_msg_ool_descriptor32_t *user_ool_dsc = (mach_msg_ool_descriptor32_t *)user_dsc;
 
-	addr = user_ool_dsc->address;
-	length = user_ool_dsc->size;
-	dealloc = user_ool_dsc->deallocate;
-	copy_options = user_ool_dsc->copy;
-	dsc_type = user_ool_dsc->type;
-
-	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
-#endif
 	dsc->size = length;
 	dsc->deallocate = dealloc;
 	dsc->copy = copy_options;
@@ -1580,28 +1564,19 @@ ipc_kmsg_copyin_ool_descriptor(
 		 * is not being deallocated, we must be prepared
 		 * to page if the region is sufficiently large.
 		 */
-		if (copyin((const char *) addr, (char *) paddr,
+		if (copyin((const char *) addr, (char *) *paddr,
 				   length)) {
 			*mr = MACH_SEND_INVALID_MEMORY;
 			return NULL;
 		}
 
-		/*
-		 * The kernel ipc copy map is marked no_zero_fill.
-		 * If the transfer is not a page multiple, we need
-		 * to zero fill the balance.
-		 */
-		if (!page_aligned(length)) {
-			(void) memset((void *) (paddr + length), 0,
-						  round_page(length) - length);
-		}
-		if (vm_map_copyin(ipc_kernel_copy_map, paddr, length,
-						  TRUE, &copy) != KERN_SUCCESS) {
+		if (vm_map_copyin(ipc_kernel_copy_map, *paddr, length,
+						  TRUE, copy) != KERN_SUCCESS) {
 			*mr = MACH_MSG_VM_KERNEL;
 			return NULL;
 		}
-		paddr += round_page(length);
-		space_needed -= round_page(length);
+		*paddr += round_page(length);
+		*space_needed -= round_page(length);
 	} else {
 		/*
 		 * Make a virtual copy of the of the data if requested
@@ -1610,7 +1585,7 @@ ipc_kmsg_copyin_ool_descriptor(
 		 * path if RT.
 		 */
 		if (vm_map_copyin(map, addr, length,
-						  dealloc, &copy) != KERN_SUCCESS) {
+						  dealloc, copy) != KERN_SUCCESS) {
 			*mr = MACH_SEND_INVALID_MEMORY;
 			return NULL;
 		}
@@ -1650,11 +1625,10 @@ ipc_kmsg_copyin_ool_ports_descriptor(
 	ipc_object_t            		*objects;
 	void						*data;
 	int					count, j;
+	mach_msg_ool_ports_descriptor_t *user_ool_dsc;
 
-#if defined(__LP64__)
-	mach_msg_ool_ports_descriptor64_t *user_ool_dsc = (mach_msg_ool_ports_descriptor64_t *)user_dsc;
-
-	addr = user_ool_dsc->address;
+	user_ool_dsc = (mach_msg_ool_ports_descriptor_t *)user_dsc;
+	addr = (vm_offset_t) user_ool_dsc->address;
 	count = user_ool_dsc->count;
 	dealloc = user_ool_dsc->deallocate;
 	copy_options = user_ool_dsc->copy;
@@ -1663,18 +1637,6 @@ ipc_kmsg_copyin_ool_ports_descriptor(
 	user_disp = user_ool_dsc->disposition;
 
 	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
-#else
-	mach_msg_ool_ports_descriptor32_t *user_ool_dsc = (mach_msg_ool_ports_descriptor32_t *)user_dsc;
-
-	addr = user_ool_dsc->address;
-	count = user_ool_dsc->count;
-	dealloc = user_ool_dsc->deallocate;
-	copy_options = user_ool_dsc->copy;
-	typename = user_ool_dsc->type;
-	user_disp = user_ool_dsc->disposition;
-
-	user_dsc = (mach_msg_descriptor_t *)(user_ool_dsc + 1);
-#endif
 
 	dsc->deallocate = dealloc;
 	dsc->copy = copy_options;
@@ -1875,7 +1837,7 @@ ipc_kmsg_copyin_body(
 			}
 		}
 	}
-	if (space_needed && (paddr = (vm_offset_t)malloc(space_needed, M_MACH_TMP, M_NOWAIT| M_NODUMP)) == 0) {
+	if (space_needed && (paddr = (vm_offset_t)malloc(space_needed, M_MACH_TMP, M_NOWAIT| M_NODUMP | M_ZERO)) == 0) {
 		ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
 		mr = MACH_MSG_VM_KERNEL;
 		goto out;
@@ -2524,65 +2486,13 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 	rcv_addr = 0;
 
 	if ((map_copy = (vm_map_copy_t) dsc->address) != VM_MAP_COPY_NULL) {
-#if 0
-		if (sstart != MACH_MSG_DESCRIPTOR_NULL &&
-			sstart->out_of_line.copy == MACH_MSG_OVERWRITE) {
-
-			/*
-			 * There is an overwrite descriptor specified in the
-			 * scatter list for this ool data.  The descriptor
-			 * has already been verified
-			 */
-			rcv_addr = (vm_offset_t) sstart->out_of_line.address;
-			dsc->copy = MACH_MSG_OVERWRITE;
-		} else {
-			dsc->copy = MACH_MSG_ALLOCATE;
-		}
-
-		if (copy_options == MACH_MSG_PHYSICAL_COPY &&
-			    size < msg_ool_size_small) {
-			// MACH_MSG_ALLOCATE obsolete?
-			/*
-			 * Sufficiently 'small' data was copied into a kalloc'ed
-			 * buffer copy was requested.  Just copy it out and
-			 * free the buffer.
-			 */
-			if (dsc->copy == MACH_MSG_ALLOCATE) {
-			    /*
-			     * If there is no overwrite region, allocate
-			     * space in receiver's address space for the
-			     * data
-			     */
-			    if ((kr = vm_allocate(map, &rcv_addr, size,
-									  TRUE)) != KERN_SUCCESS) {
-					if (kr == KERN_RESOURCE_SHORTAGE)
-				        mr |= MACH_MSG_VM_KERNEL;
-					else
-				        mr |= MACH_MSG_VM_SPACE;
-			        KFREE(snd_addr, size, rt);
-			        dsc->address = (void *) 0;
-					INCREMENT_SCATTER(sstart);
-			        break;
-			    }
-			}
-		}
-		(void) copyoutmap(map, snd_addr, rcv_addr, size);
-		KFREE(snd_addr, size, rt);
-		/* } else {} */
-#endif
-
 		/*
 		 * Whether the data was virtually or physically
 		 * copied we have a vm_map_copy_t for it.
 		 * If there's an overwrite region specified
 		 * overwrite it, otherwise do a virtual copy out.
 		 */
-		if (dsc->copy == MACH_MSG_OVERWRITE && rcv_addr != 0) {
-			/* NOT REACHED */
-			kr = vm_map_copy_overwrite(map, rcv_addr, map_copy, TRUE);
-		} else {
-			kr = vm_map_copyout(map, &rcv_addr, map_copy);
-		}
+		kr = vm_map_copyout(map, &rcv_addr, map_copy);
 		if (kr != KERN_SUCCESS) {
 			if (kr == KERN_RESOURCE_SHORTAGE)
 				*mr |= MACH_MSG_VM_KERNEL;
@@ -2594,7 +2504,6 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 		}
 
 	} else {
-		rcv_addr = 0;
 		size = 0;
 	}
     /*
