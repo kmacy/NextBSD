@@ -43,7 +43,11 @@ vm_map.h vm_mapUser.c: ${DEFS}/vm_map.defs
 mach_vm.h mach_vmUser.c: ${DEFS}/mach_vm.defs
 	mig ${CFLAGS} -server /dev/null ${DEFS}/mach_vm.defs
 	cp mach_vm.h ${H}/mach_vm.h
+clock.h clockUser.c: ${DEFS}/clock.defs
+	mig ${CFLAGS} -server /dev/null ${DEFS}/clock.defs
+	cp clock.h ${H}/clock.h
 SRCS=					\
+	clockUser.c			\
 	mach_portUser.c		\
 	taskUser.c			\
 	host_privUser.c		\
