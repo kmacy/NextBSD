@@ -1,32 +1,3 @@
-/*-
- * Copyright (c) 2002-2003, 2008 The NetBSD Foundation, Inc.
- * All rights reserved.
- *
- * This code is derived from software contributed to The NetBSD Foundation
- * by Emmanuel Dreyfus
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -53,12 +24,22 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_extern.h>
 
 #include <sys/mach/mach_types.h>
-
+#include <sys/mach/mach_vm.h>
 #include <sys/mach/mach_vm_server.h>
 #include <sys/mach/vm_map_server.h>
 #include <sys/mach/host_priv_server.h>
 
-#include <compat/mach/mach_vm.h>
+
+int mach_vm_map_page_query(vm_map_t target_map, vm_offset_t offset, integer_t *disposition, integer_t *ref_count);
+int mach_vm_mapped_pages_info(vm_map_t task, page_address_array_t *pages, mach_msg_type_number_t *pagesCnt);
+int mach_vm_wire_32(
+	host_priv_t host_priv,
+	vm_map_t task,
+	vm_address_t address,
+	vm_size_t size,
+	vm_prot_t desired_access
+	);
+
 
 static kern_return_t
 vm_map_copyout_internal(
@@ -79,67 +60,6 @@ first_free_is_valid(vm_map_t map)
 }
 #endif	
 
-
-/*
- * Like copyin(), but operates on an arbitrary process.
- */
-
-
-static int
-copyin_vm_map(vm_map_t map __unused, const void *uaddr __unused, void *kaddr __unused, size_t len __unused)
-{
-
-	return (0);
-}
-
-int
-copyin_proc(struct proc *p, const void *uaddr, void *kaddr, size_t len)
-{
-	struct proc *mycp;
-	struct vmspace *myvm, *tmpvm;
-	struct thread *td = curthread;
-	int error;
-
-	/* XXX need to suspend other threads in curproc if we're in a user
-	 * context
-	 */
-
-	/*
-	 * Local copies of curproc (cp) and vmspace (myvm)
-	 */
-	mycp = td->td_proc;
-	myvm = mycp->p_vmspace;
-
-	/*
-	 * Connect to process address space for user program.
-	 */
-	if (p != mycp) {
-		/*
-		 * Save the current address space that we are
-		 * connected to.
-		 */
-		tmpvm = mycp->p_vmspace;
-
-		/*
-		 * Point to the new user address space, and
-		 * refer to it.
-		 */
-		mycp->p_vmspace = p->p_vmspace;
-		atomic_add_int(&mycp->p_vmspace->vm_refcnt, 1);
-
-		/* Activate the new mapping. */
-		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
-	}
-	error = copyin(uaddr, kaddr, len);
-	if (p != mycp) {
-		mycp->p_vmspace = myvm;
-		vmspace_free(tmpvm);
-		/* Activate the old mapping. */
-		pmap_activate(FIRST_THREAD_IN_PROC(mycp));
-	}
-	return (error);
-}
-
 int
 mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
 			mach_vm_offset_t _mask, int _flags, mem_entry_name_port_t object __unused,
@@ -152,7 +72,7 @@ mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
 	int docow, error, find_space;
 
 	/* XXX Darwin fails on mapping a page at address 0 */
-	if ((_flags & MACH_VM_FLAGS_ANYWHERE) == 0 && *address == 0)
+	if ((_flags & VM_FLAGS_ANYWHERE) == 0 && *address == 0)
 		return (ENOMEM);
 
 	size = round_page(_size);
@@ -163,23 +83,23 @@ mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
 
 	find_space = _mask ? VMFS_ALIGNED_SPACE(ffs(_mask)) : VMFS_ANY_SPACE;
 	flags = MAP_ANON;
-	if ((_flags & MACH_VM_FLAGS_ANYWHERE) == 0) {
+	if ((_flags & VM_FLAGS_ANYWHERE) == 0) {
 		flags |= MAP_FIXED;
 		addr = trunc_page(*address);
 	} else
 		addr = 0;
 
 	switch(inh) {
-	case MACH_VM_INHERIT_SHARE:
+	case VM_INHERIT_SHARE:
 		flags |= MAP_INHERIT_SHARE;
 		break;
-	case MACH_VM_INHERIT_COPY:
+	case VM_INHERIT_COPY:
 		flags |= MAP_COPY_ON_WRITE;
 		docow = 1;
 		break;
-	case MACH_VM_INHERIT_NONE:
+	case VM_INHERIT_NONE:
 		break;
-	case MACH_VM_INHERIT_DONATE_COPY:
+	case VM_INHERIT_DONATE_COPY:
 	default:
 		uprintf("mach_vm_map: unsupported inheritance flag %d\n", inh);
 		break;
@@ -215,7 +135,7 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 
 	daddr = trunc_page(*addr);
 	vm_map_lock(map);
-	if ((flags & MACH_VM_FLAGS_ANYWHERE) &&
+	if ((flags & VM_FLAGS_ANYWHERE) &&
 		(vm_map_findspace(map, 0, size, &daddr))) {
 	  err = ENOMEM;
 	  goto error;
@@ -331,160 +251,6 @@ mach_make_memory_entry_64(vm_map_t target_task, memory_object_size_t *size,
 }
 
 
-#ifdef notyet
-int
-mach_make_memory_entry(vm_map_t target_task, memory_object_size_t *size,
-					   memory_object_offset_t offset, vm_prot_t permission,
-					   mem_entry_name_port_t *object_handle,
-					   mem_entry_name_port_t parent_handle)
-{
-	struct mach_port *mp;
-	struct mach_right *mr;
-	struct mach_memory_entry *mme;
-
-	printf("mach_make_memory_entry_64, offset 0x%lx, size 0x%lx\n",
-	    (u_long)req->req_offset, (u_long)req->req_size);
-
-	mp = mach_port_get();
-	mp->mp_flags |= (MACH_MP_INKERNEL | MACH_MP_DATA_ALLOCATED);
-	mp->mp_datatype = MACH_MP_MEMORY_ENTRY;
-	
-	mme = malloc(sizeof(*mme), M_MACH_MEMORY_ENTRY, M_WAITOK);
-	mme->mme_proc = td->td_proc;
-	mme->mme_offset = req->req_offset;
-	mme->mme_size = req->req_size;
-	mp->mp_data = mme;
-	
-	mr = mach_right_get(mp, td, MACH_PORT_TYPE_SEND, 0);
-
-	*msglen = sizeof(*rep);
-	mach_set_header(rep, req, *msglen);
-	mach_add_port_desc(rep, mr->mr_name);
-
-	rep->rep_size = req->req_size;
-	
-	mach_set_trailer(rep, *msglen);
-
-	return (0);
-}
-
-int
-mach_vm_region(struct mach_trap_args *args)
-{
-	mach_vm_region_request_t *req = args->smsg;
-	mach_vm_region_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
-	struct mach_vm_region_basic_info *rbi;
-	struct vm_map *map;
-	struct vm_map_entry *vme;
-	int error;
-
-	/* Sanity check req_count */
-	if (req->req_count > 9)
-		return (KERN_FAILURE);
-
-	/*
-	 * MACH_VM_REGION_BASIC_INFO is the only
-	 * supported flavor in Darwin.
-	 */
-	if (req->req_flavor != MACH_VM_REGION_BASIC_INFO)
-		return (mach_msg_error(args, EINVAL));
-	if (req->req_count != (sizeof(*rbi) / sizeof(int))) /* This is 8 */
-		return (mach_msg_error(args, EINVAL));
-	*msglen = sizeof(*rep) + ((req->req_count - 9) * sizeof(int));
-
-	map = &ttd->td_proc->p_vmspace->vm_map;
-
-	vm_map_lock(map);
-	error = vm_map_lookup_entry(map, req->req_addr, &vme);
-	vm_map_unlock(map);
-
-	if (error == 0)
-		return (mach_msg_error(args, ENOMEM));
-
-	mach_set_header(rep, req, *msglen);
-	mach_add_port_desc(rep, 0); /* XXX Why this null name */
-
-	rep->rep_addr = vme->start;
-	rep->rep_size = vme->end - vme->start;
-	rep->rep_count = req->req_count;
-
-	rbi = (struct mach_vm_region_basic_info *)&rep->rep_info[0];
-	rbi->protection = vme->protection;
-	rbi->inheritance = 1; /* vme->inheritance */
-	rbi->shared = 0; /* XXX how can we know? */
-	rbi->offset = vme->offset;
-	rbi->behavior = MACH_VM_BEHAVIOR_DEFAULT; /* XXX What is it? */
-	rbi->user_wired_count = vme->wired_count;
-
-	/* XXX Why this? */
-	*(short *)((u_long)&rbi->user_wired_count + sizeof(short)) = 1;
-
-	mach_set_trailer(rep, *msglen);
-
-	return (0);
-}
-
-
-int
-mach_vm_region_64(struct mach_trap_args *args)
-{
-	mach_vm_region_64_request_t *req = args->smsg;
-	mach_vm_region_64_reply_t *rep = args->rmsg;
-	size_t *msglen = args->rsize;
-	struct thread *ttd = args->ttd;
-	struct mach_vm_region_basic_info_64 *rbi;
-	struct vm_map *map;
-	struct vm_map_entry *vme;
-	int error;
-
-	/* Sanity check req_count */
-	if (req->req_count > 10)
-		return (mach_msg_error(args, EINVAL));
-
-	/*
-	 * MACH_VM_REGION_BASIC_INFO is the only
-	 * supported flavor in Darwin.
-	 */
-	if (req->req_flavor != MACH_VM_REGION_BASIC_INFO)
-		return (mach_msg_error(args, EINVAL));
-	if (req->req_count != (sizeof(*rbi) / sizeof(int))) /* This is 8 */
-		return (mach_msg_error(args, EINVAL));
-	*msglen = sizeof(*rep) + ((req->req_count - 9) * sizeof(int));
-
-	map = &ttd->td_proc->p_vmspace->vm_map;
-
-	vm_map_lock(map);
-	error = vm_map_lookup_entry(map, req->req_addr, &vme);
-	vm_map_unlock(map);
-
-	if (error == 0)
-		return (mach_msg_error(args, ENOMEM));
-
-	mach_set_header(rep, req, *msglen);
-	mach_add_port_desc(rep, 0);	/* XXX null port ? */
-
-	rep->rep_size = PAGE_SIZE; /* XXX Why? */
-	rep->rep_count = req->req_count;
-
-	rbi = (struct mach_vm_region_basic_info_64 *)&rep->rep_info[0];
-	rbi->protection = vme->protection;
-	rbi->inheritance = 1; /* vme->inheritance */
-	rbi->shared = 0; /* XXX how can we know? */
-	rbi->offset = vme->offset;
-	rbi->behavior = MACH_VM_BEHAVIOR_DEFAULT; /* XXX What is it? */
-	rbi->user_wired_count = vme->wired_count;
-	
-	/* XXX Why this? */
-	*(short *)((u_long)&rbi->user_wired_count + sizeof(short)) = 1;
-
-	mach_set_trailer(rep, *msglen);
-
-	return (0);
-}
-#endif
-
 int
 mach_vm_msync(vm_map_t target_task __unused, mach_vm_address_t addr, mach_vm_size_t size,
 		vm_sync_t flags)
@@ -495,11 +261,11 @@ mach_vm_msync(vm_map_t target_task __unused, mach_vm_address_t addr, mach_vm_siz
 	cup.addr = (void *)addr;
 	cup.len = size;
 	cup.flags = 0;
-	if (flags & MACH_VM_SYNC_ASYNCHRONOUS)
+	if (flags & VM_SYNC_ASYNCHRONOUS)
 		cup.flags |= MS_ASYNC;
-	if (flags & MACH_VM_SYNC_SYNCHRONOUS)
+	if (flags & VM_SYNC_SYNCHRONOUS)
 		cup.flags |= MS_SYNC;
-	if (flags & MACH_VM_SYNC_INVALIDATE)
+	if (flags & VM_SYNC_INVALIDATE)
 		cup.flags |= MS_INVALIDATE;
 	error = sys_msync(curthread, &cup);
 	
@@ -542,7 +308,6 @@ mach_vm_copy(vm_map_t target_task, mach_vm_address_t src, mach_vm_size_t size,
 		size -= PAGE_SIZE;
 	} while (size > 0);
 
-
 	free(tmpbuf, M_TEMP);
 	return (0);
 
@@ -572,13 +337,13 @@ mach_vm_read(vm_map_t map, mach_vm_address_t addr, mach_vm_size_t size,
 	 * remap COW for areas bigger than a page.
 	 */
 	tbuf = malloc(size, M_MACH_TMP, M_WAITOK);
-
+#ifdef notyet
 	if ((error = copyin_vm_map(map, (caddr_t)addr, tbuf, size)) != 0) {
 		printf("copyin_proc error = %d, addr = %lx, size = %zx\n", error, addr, size);
 		free(tbuf, M_MACH_TMP);
 		return (KERN_PROTECTION_FAILURE);
 	}
-
+#endif
 	if ((error = copyout(tbuf, (void *)dstaddr, size)) != 0) {
 		printf("copyout error = %d\n", error);
 		free(tbuf, M_MACH_TMP);
@@ -616,18 +381,20 @@ mach_vm_machine_attribute(vm_map_t target_task, mach_vm_address_t addr, mach_vm_
 	int error = 0;
 	vm_machine_attribute_val_t value;
 
-
+	
 	if ((error = copyin(valuep, &value, sizeof(value))))
 		return (KERN_PROTECTION_FAILURE);
 
 	switch (attribute) {
-	case MACH_MATTR_CACHE:
+	case MATTR_CACHE:
 		switch(value) {
-		case MACH_MATTR_VAL_CACHE_FLUSH:
-		case MACH_MATTR_VAL_DCACHE_FLUSH:
-		case MACH_MATTR_VAL_ICACHE_FLUSH:
-		case MACH_MATTR_VAL_CACHE_SYNC:
+		case MATTR_VAL_CACHE_FLUSH:
+		case MATTR_VAL_DCACHE_FLUSH:
+		case MATTR_VAL_ICACHE_FLUSH:
+		case MATTR_VAL_CACHE_SYNC:
+#ifdef notyet
 			error = cpu_mach_vm_machine_attribute(target_task, addr, size, &value);
+#endif
 			break;
 		default:
 #ifdef DEBUG_MACH
@@ -638,8 +405,8 @@ mach_vm_machine_attribute(vm_map_t target_task, mach_vm_address_t addr, mach_vm_
 		}
 		break;
 
-	case MACH_MATTR_MIGRATE:
-	case MACH_MATTR_REPLICATE:
+	case MATTR_MIGRATE:
+	case MATTR_REPLICATE:
 	default:
 #ifdef DEBUG_MACH
 		printf("unimplemented attribute %d\n", attribute);
@@ -1179,6 +946,11 @@ mach_vm_region(
 	mach_port_t *object_name
 	)
 {
+	/*
+	 * MACH_VM_REGION_BASIC_INFO is the only
+	 * supported flavor in Darwin.
+	 */
+
 	return (KERN_NOT_SUPPORTED);
 }
 

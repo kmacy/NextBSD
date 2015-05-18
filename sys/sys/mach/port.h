@@ -239,7 +239,6 @@ typedef mach_port_t			*mach_port_array_t;
 
 
 #include <sys/mach/ipc/port.h>
-#include <sys/mach/std_types.h>
 /*
  *  These are the different rights a task may have for a port.
  *  The MACH_PORT_RIGHT_* definitions are used as arguments

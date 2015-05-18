@@ -120,8 +120,9 @@ extern kern_return_t	clock_get_res(mach_port_t,
 extern kern_return_t	clock_set_res(mach_port_t,
 				      clock_res_t);
 
-extern kern_return_t	clock_sleep(mach_port_t,
-				    int,
-				    tvalspec_t,
+extern kern_return_t	clock_sleep(mach_port_name_t,
+									mach_sleep_type_t,
+									int,
+									int,
 				    tvalspec_t *);
 #endif	/* _MACH_H_ */

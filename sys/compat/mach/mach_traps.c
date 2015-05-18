@@ -52,9 +52,8 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/mach/mach_init.h>
 
-#include <compat/mach/mach_clock.h>
-#include <compat/mach/mach_thread.h>
-#include <compat/mach/mach_vm.h>
+#include <sys/mach/mach_vm.h>
+#include <sys/mach/mach.h>
 
 
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -63,7 +62,7 @@ int
 sys_clock_sleep_trap(struct thread *td __unused, struct clock_sleep_trap_args *uap)
 {
 
-	td->td_retval[0] = mach_clock_sleep(uap->clock_name, uap->sleep_type, uap->sleep_sec, uap->sleep_nsec, uap->wakeup_time);
+	td->td_retval[0] = clock_sleep(uap->clock_name, uap->sleep_type, uap->sleep_sec, uap->sleep_nsec, uap->wakeup_time);
 	return (0);
 }
 
@@ -124,18 +123,29 @@ sys_thread_switch(struct thread *td __unused, struct thread_switch_args *uap)
 	return (mach_thread_switch(uap->thread_name, uap->option, uap->option_time));
 }	
 
-int
-sys_swtch_pri(struct thread *td, struct swtch_pri_args *uap)
+static int
+_swtch_pri(struct thread *td)
 {
-
-	return (mach_swtch_pri(td, uap->pri));
+	thread_lock(td);
+	if (td->td_state == TDS_RUNNING)
+		td->td_proc->p_stats->p_cru.ru_nivcsw++;        /* XXXSMP */
+	mi_switch(SW_VOL, NULL);
+	thread_unlock(td);
+	return (0);
 }
 
 int
-sys_swtch(struct thread *td, struct swtch_args *v)
+sys_swtch_pri(struct thread *td, struct swtch_pri_args *uap __unused)
+{
+	
+	return (_swtch_pri(td));
+}
+
+int
+sys_swtch(struct thread *td, struct swtch_args *v __unused)
 {
 
-	return (mach_swtch_pri(td, 0));
+	return (_swtch_pri(td));
 }
 
 int

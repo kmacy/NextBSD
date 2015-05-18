@@ -179,8 +179,8 @@
 #include <sys/mach/host_info.h>
 #include <sys/mach/machine.h>
 #include <machine/mach/vm_types.h>
-#include <sys/mach/exception_types.h>
 #include <sys/mach/memory_object.h>
+#include <sys/mach/exception_types.h>
 #include <sys/mach/port.h>
 #include <sys/mach/processor_info.h>
 #include <sys/mach/task_info.h>

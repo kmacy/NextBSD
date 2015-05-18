@@ -107,7 +107,7 @@
 /*
  * Types for device interface.
  */
-#include <mach/std_types.h>
+#include <sys/mach/std_types.h>
 
 /*
  * I/O completion queues
@@ -217,6 +217,7 @@ typedef struct io_done_result {
 #define qd_data		qd_control.qd_data
 #define qd_count	qd_control.qd_count
 
+#if 0
 #ifdef	MACH_KERNEL
 /*
  * Get kernel-only type definitions.
@@ -230,6 +231,7 @@ typedef struct io_done_result {
 typedef	mach_port_t	device_t;
 
 #endif	/* MACH_KERNEL */
+#endif
 
 #endif	/* DEVICE_TYPES_H */
 

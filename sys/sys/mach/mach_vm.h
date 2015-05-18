@@ -110,4 +110,10 @@ extern void vm_map_copy_discard(
 int mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags);
 int mach_vm_deallocate(vm_map_t target __unused, mach_vm_address_t addr, mach_vm_size_t len);
 
+int
+mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
+			mach_vm_offset_t _mask, int _flags, mem_entry_name_port_t object __unused,
+			memory_object_offset_t offset __unused, boolean_t copy __unused,
+			vm_prot_t cur_protection, vm_prot_t max_protection, vm_inherit_t inh);
+
 #endif /* MACH_VM_H_ */

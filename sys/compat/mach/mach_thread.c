@@ -27,8 +27,6 @@ __FBSDID("$FreeBSD$");
 
 #define MT_SETRUNNABLE 0x1
 
-int mach_swtch_pri(int pri);
-
 #ifdef notyet
 /*
  * Am assuming that Mach lacks the concept of uninterruptible
@@ -101,22 +99,6 @@ mach_thread_switch(mach_port_name_t thread_name, int option, mach_msg_timeout_t 
        }
        return (0);
 }
-
-int
-mach_swtch_pri(int pri)
-{
-	struct thread *td = curthread;
-	
-	thread_lock(td);
-	if (td->td_state == TDS_RUNNING)
-		td->td_proc->p_stats->p_cru.ru_nivcsw++;        /* XXXSMP */
-	mi_switch(SW_VOL, NULL);
-	thread_unlock(td);
-
-	return (0);
-}
-
-
 
 void
 thread_go(thread_t thread)

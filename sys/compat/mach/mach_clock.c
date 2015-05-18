@@ -42,8 +42,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
 #include <sys/mach/mach_port.h>
-#include <compat/mach/mach_clock.h>
+#include <sys/mach/mach.h>
 
+#include <sys/mach/clock_types.h>
 #include <sys/mach/clock_server.h>
 
 #define timespecsub_netbsd(tsp, usp, vsp)                               \
@@ -58,8 +59,8 @@ __FBSDID("$FreeBSD$");
 
 
 
-int
-mach_clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, int sleep_nsec, mach_timespec_t *wakeup_time)
+kern_return_t
+clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, int sleep_nsec, mach_timespec_t *wakeup_time)
 {
 	struct timespec mts, cts, tts;
 	mach_timespec_t mcts;
@@ -72,7 +73,7 @@ mach_clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_
 	mts.tv_sec = sleep_sec;
 	mts.tv_nsec = sleep_nsec;
 
-	if (type == MACH_TIME_ABSOLUTE) {
+	if (type == TIME_ABSOLUTE) {
 		nanotime(&cts);
 		timespecsub_netbsd(&mts, &cts, &tts);
 	} else {

@@ -111,34 +111,5 @@ static moduledata_t mach_moduledata = {
 
 DECLARE_MODULE(mach, mach_moduledata, SI_SUB_KLD, SI_ORDER_ANY);
 
-/* MD mach functions */
-#include <compat/mach/mach_vm.h>
-#include <compat/mach/mach_thread.h>
 
-int
-cpu_mach_create_thread(void *arg)
-{
 
-	return (EINVAL);
-}
-
-int
-cpu_mach_thread_get_state(struct thread *td, int flavor, void *state, int *size)
-{
-
-	return (EINVAL);
-}
-
-int
-cpu_mach_thread_set_state(struct thread *td, int flavor, void *state)
-{
-
-	return (EINVAL);
-}
-
-int
-cpu_mach_vm_machine_attribute(vm_map_t map, vm_offset_t addr, size_t size, int *valp)
-{
-
-	return (EINVAL);
-}
