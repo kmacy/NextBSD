@@ -26,8 +26,6 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_extern.h>
 
 #include <sys/mach/mach_types.h>
-#include <compat/mach/mach_message.h>
-#include <compat/mach/mach_clock.h>
 
 #include <sys/mach/task_server.h>
 

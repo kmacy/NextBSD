@@ -12,7 +12,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 
 #include <sys/mach/mach_types.h>
-#include <compat/mach/mach_clock.h>
 
 
 #include <sys/mach/host_special_ports.h>

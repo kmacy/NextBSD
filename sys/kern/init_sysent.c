@@ -14,7 +14,6 @@
 #include <vm/vm.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
-#include <sys/mach/mach_port.h>
 #include <sys/mach/mach_time.h>
 #include <sys/mach/port.h>
 #include <sys/mach/clock_server.h>
