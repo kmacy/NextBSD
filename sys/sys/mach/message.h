@@ -598,6 +598,8 @@ typedef natural_t mach_msg_type_number_t;
  *  are not transferred, just the port name.)
  */
 
+#define MACH_MSG_TYPE_PORT_NONE		0
+
 #define MACH_MSG_TYPE_PORT_NAME		15
 #define MACH_MSG_TYPE_PORT_RECEIVE	MACH_MSG_TYPE_MOVE_RECEIVE
 #define MACH_MSG_TYPE_PORT_SEND		MACH_MSG_TYPE_MOVE_SEND

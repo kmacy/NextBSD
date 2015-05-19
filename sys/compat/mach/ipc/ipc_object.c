@@ -416,20 +416,22 @@ ipc_object_copyin_type(
 		return 0;
 
 	    case MACH_MSG_TYPE_MOVE_RECEIVE:
-		return MACH_MSG_TYPE_PORT_RECEIVE;
+			return MACH_MSG_TYPE_PORT_RECEIVE;
 
 	    case MACH_MSG_TYPE_MOVE_SEND_ONCE:
 	    case MACH_MSG_TYPE_MAKE_SEND_ONCE:
-		return MACH_MSG_TYPE_PORT_SEND_ONCE;
+			return MACH_MSG_TYPE_PORT_SEND_ONCE;
 
 	    case MACH_MSG_TYPE_MOVE_SEND:
 	    case MACH_MSG_TYPE_MAKE_SEND:
 	    case MACH_MSG_TYPE_COPY_SEND:
-		return MACH_MSG_TYPE_PORT_SEND;
+			return MACH_MSG_TYPE_PORT_SEND;
 
-	    default:
-		panic("ipc_object_copyin_type: strange rights");
-		return (mach_msg_type_name_t) 0; /* Shut up the compiler */
+	    case MACH_MSG_TYPE_DISPOSE_RECEIVE:
+	    case MACH_MSG_TYPE_DISPOSE_SEND:
+	    case MACH_MSG_TYPE_DISPOSE_SEND_ONCE:
+	default:
+			return MACH_MSG_TYPE_PORT_NONE;
 	}
 }
 
