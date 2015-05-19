@@ -52,7 +52,9 @@ extern "C" {
 
 void uuid_clear(uuid_t uu);
 
+#if 0
 int uuid_compare(const uuid_t uu1, const uuid_t uu2);
+#endif
 
 void uuid_copy(uuid_t dst, const uuid_t src);
 
