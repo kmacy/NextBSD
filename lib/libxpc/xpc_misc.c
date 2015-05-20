@@ -453,6 +453,7 @@ xpc_pipe_receive(mach_port_t local, mach_port_t *remote, xpc_object_t *result,
 	if (kr != 0)
 		LOG("mach_msg_receive returned %d\n", kr);
 	*remote = request->msgh_remote_port;
+	*id = message.id;
 	data_size = message.size;
 	LOG("unpacking data_size=%d", data_size);
 	xo = xpc_unpack(&message.data, data_size);

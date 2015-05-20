@@ -244,6 +244,8 @@ xpc_connection_recv_message(void *context)
 	if (kr != KERN_SUCCESS)
 		return;
 
+	debugf("message=%p, id=%d, remote=<%d>", result, id, remote);
+
 	if (conn->xc_flags & XPC_CONNECTION_MACH_SERVICE_LISTENER) {
 		TAILQ_FOREACH(peer, &conn->xc_peers, xc_link) {
 			if (remote == peer->xc_remote_port) {
@@ -254,7 +256,7 @@ xpc_connection_recv_message(void *context)
 			}
 		}
 
-		debugf("new peeer on port <%u>", remote);
+		debugf("new peer on port <%u>", remote);
 
 		/* New peer */
 		peer = xpc_connection_create(NULL, NULL);
@@ -274,6 +276,9 @@ xpc_connection_recv_message(void *context)
 			if (call->xp_id == id) {
 				dispatch_async(conn->xc_queue, ^{
 					call->xp_handler(result);
+					TAILQ_REMOVE(&conn->xc_pending, call,
+					    xp_link);
+					free(call);
 				});
 				return;
 			}
