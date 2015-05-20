@@ -706,7 +706,7 @@ ipc_object_copyout(
 	is_write_lock(space);
 done:
 	kr = ipc_right_copyout(space, name, entry,
-			       msgt_name, overflow, object);
+			       msgt_name, object);
 	is_write_unlock(space);
 	if (kr == KERN_SUCCESS)
 		*namep = name;
@@ -726,8 +726,6 @@ done:
  *		KERN_INVALID_TASK	The space is dead.
  *		KERN_INVALID_CAPABILITY	The object is dead.
  *		KERN_RESOURCE_SHORTAGE	No memory available.
- *		KERN_UREFS_OVERFLOW	Urefs limit exceeded
- *			and overflow wasn't specified.
  *		KERN_RIGHT_EXISTS	Space has rights under another name.
  *		KERN_NAME_EXISTS	Name is already used.
  */
@@ -791,7 +789,7 @@ ipc_object_copyout_name(
 	/* space is write-locked and active, object is locked and active */
 
 	kr = ipc_right_copyout(space, name, entry,
-			       msgt_name, overflow, object);
+			       msgt_name, object);
 	/* object is unlocked */
 	is_write_unlock(space);
 	return kr;

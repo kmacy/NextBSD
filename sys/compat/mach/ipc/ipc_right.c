@@ -260,8 +260,6 @@ ipc_right_reverse(
  *		KERN_INVALID_RIGHT	Name doesn't denote port/dead rights.
  *		KERN_INVALID_ARGUMENT	Name denotes dead name, but
  *			immediate is FALSE or notify is IP_NULL.
- *		KERN_UREFS_OVERFLOW	Name denotes dead name, but
- *			generating immediate notif. would overflow urefs.
  *		KERN_RESOURCE_SHORTAGE	Couldn't allocate memory.
  */
 
@@ -911,7 +909,6 @@ ipc_right_dealloc(
  *		KERN_SUCCESS		Count was modified.
  *		KERN_INVALID_RIGHT	Entry has wrong type.
  *		KERN_INVALID_VALUE	Bad delta for the right.
- *		KERN_UREFS_OVERFLOW	OK delta, except would overflow.
  */
 
 kern_return_t
@@ -1850,20 +1847,13 @@ ipc_right_copyin_two(
  *		Always succeeds when given a newly-allocated entry,
  *		because user-reference overflow isn't a possibility.
  *
- *		If copying out the object would cause the user-reference
- *		count in the entry to overflow, and overflow is TRUE,
- *		then instead the user-reference count is left pegged
- *		to its maximum value and the copyout succeeds anyway.
  *	Conditions:
  *		The space is write-locked and active.
  *		The object is locked and active.
  *		The object is unlocked; the space isn't.
  *	Returns:
  *		KERN_SUCCESS		Copied out capability.
- *		KERN_UREFS_OVERFLOW	User-refs would overflow;
- *			guaranteed not to happen with a fresh entry
- *			or if overflow=TRUE was specified.
- */
+  */
 
 kern_return_t
 ipc_right_copyout(
@@ -1871,7 +1861,6 @@ ipc_right_copyout(
 	mach_port_name_t		name,
 	ipc_entry_t		entry,
 	mach_msg_type_name_t	msgt_name,
-	boolean_t		overflow,
 	ipc_object_t		object)
 {
 	ipc_entry_bits_t bits = entry->ie_bits;
@@ -1892,7 +1881,7 @@ ipc_right_copyout(
 		/* transfer send-once right and ref to entry */
 		ip_unlock(port);
 
-		entry->ie_bits = bits | (MACH_PORT_TYPE_SEND_ONCE | 1);
+		entry->ie_bits = bits | (MACH_PORT_TYPE_SEND_ONCE);
 		break;
 
 	    case MACH_MSG_TYPE_PORT_SEND:
@@ -1923,8 +1912,8 @@ ipc_right_copyout(
 			ipc_hash_insert(space, (ipc_object_t) port,
 					name, entry);
 		}
-
-		entry->ie_bits = (bits | MACH_PORT_TYPE_SEND) + 1;
+		ipc_entry_hold(entry);
+		entry->ie_bits = (bits | MACH_PORT_TYPE_SEND);
 		break;
 
 	    case MACH_MSG_TYPE_PORT_RECEIVE: {

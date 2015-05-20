@@ -2264,7 +2264,7 @@ ipc_kmsg_copyout_header(
 
 		mtx_assert(&reply->port_comm.rcd_io_lock_data, MA_OWNED);
 		kr = ipc_right_copyout(space, reply_name, entry,
-				       reply_type, TRUE, (ipc_object_t) reply);
+				       reply_type, (ipc_object_t) reply);
 		/* reply port is unlocked */
 		assert(kr == KERN_SUCCESS);
 

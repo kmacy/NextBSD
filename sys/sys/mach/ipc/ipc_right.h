@@ -201,7 +201,6 @@ extern kern_return_t ipc_right_copyout(
 	mach_port_name_t		name,
 	ipc_entry_t		entry,
 	mach_msg_type_name_t	msgt_name,
-	boolean_t		overflow,
 	ipc_object_t		object);
 
 /* Reanme a capability */
