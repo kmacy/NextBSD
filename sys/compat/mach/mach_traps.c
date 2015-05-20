@@ -175,15 +175,8 @@ sys_task_self_trap(struct thread *td, struct task_self_trap_args *uap)
 int
 sys_host_self_trap(struct thread *td, struct host_self_trap_args *uap)
 {
-	ipc_port_t port;
-	kern_return_t kr;
 
-	if ((kr = task_get_host_port(current_task(), &port)) != KERN_SUCCESS)
-		goto done;
-	kr = ipc_port_copyout_send(port, current_task()->itk_space);
-
-done:
-	td->td_retval[0] = kr;
+	td->td_retval[0] = mach_host_self();
 	return (0);
 }
 
