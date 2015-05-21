@@ -994,7 +994,7 @@ mach_port_gst_helper(
  *		KERN_INVALID_RIGHT	Name doesn't denote a port set.
  *		KERN_RESOURCE_SHORTAGE	Couldn't allocate memory.
  */
-#define vm_map_copyin(a, b, c, d, e) (0)
+
 kern_return_t
 mach_port_get_set_status(
 	ipc_space_t			space,
@@ -1090,7 +1090,7 @@ mach_port_get_set_status(
 		 *	Make used memory pageable and get it into
 		 *	copied-in form.  Free any unused memory.
 		 */
-		kr = vm_map_copyin(ipc_kernel_map, addr, size_used,
+		kr = vm_map_copyin(kernel_map, (vm_offset_t)addr, size_used,
 				   TRUE, &memory);
 		assert(kr == KERN_SUCCESS);
 	}

@@ -463,8 +463,37 @@ kern_return_t	vm_map_copyin(
 				boolean_t			src_destroy,
 				vm_map_copy_t		*copy_result)
 {
+	/*
+	 * three possibilities:
+	 * - len is less than  MSG_OOL_SIZE_SMALL:
+	 *   allocate memory and copyin with header
+	 * - len is greater but src_map is the special copy map:
+	 *   allocate just a header and point at src_addr
+	 * - len is greater:
+	 *     lookup entry
+	 *     while entry does not cover full range && entry changed:
+	 *       simplify entry
+	 *     if entry edges extend outside of range:
+	 *       clip
+	 *     if no object:
+	 *       add object
+	 *     reference object
+	 *     if src_destroy is not true:
+	 *       mark entry needs COW && NEEDS_COPY
+	 *       pmap_protect range
+	 *       create shadow object
+	 *     else:
+	 *       split object
+	 *       delete entry from source map
+	 *     create map copy object w/ object
+	 */
 
+
+	/* neither mach nor osx does anything to prevent information leakage
+	 * in unaligned sends
+	 */
 	return KERN_NOT_SUPPORTED;
+
 }
 
 
@@ -847,7 +876,7 @@ vm_map_copy_discard(
 		 * allocated by a single call to kalloc(), i.e. the
 		 * vm_map_copy_t was not allocated out of the zone.
 		 */
-		kfree((vm_offset_t) copy, copy->cpy_kalloc_size);
+		free(copy, M_MACH_TMP);
 		return;
 	}
 	uma_zfree(vm_map_copy_zone, copy);

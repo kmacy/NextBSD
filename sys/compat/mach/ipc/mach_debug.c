@@ -116,18 +116,6 @@
 #include <vm/vm.h>
 #include <vm/vm_kern.h>
 #include <vm/vm_extern.h>
-#define kmem_free(a, b, c) kmem_free(kernel_arena, b, c)
-#define ipc_kernel_map kernel_arena
-#define vm_map_copyin(a, b, c, d, e) 0
-#define vm_map_unwire(a, b, c, d) 0
-
-
-static int
-kmem_alloc(void *arg __unused, vm_offset_t *result, size_t size)
-{
-	*result = kmem_malloc(kernel_arena, size, M_WAITOK);
-	return (0);
-}
 
 /*
  *	Routine:	mach_port_get_srights [kernel call]
@@ -237,7 +225,7 @@ host_ipc_hash_info(
 		if (used != size)
 			kmem_free(ipc_kernel_map, addr + used, size - used);
 
-		kr = vm_map_copyin(ipc_kernel_map, addr, used,
+		kr = vm_map_copyin(kernel_map, addr, used,
 				   TRUE, &copy);
 		assert(kr == KERN_SUCCESS);
 
@@ -271,6 +259,7 @@ mach_port_space_info(
 	ipc_info_tree_name_array_t	*treep,
 	mach_msg_type_number_t 		*treeCntp)
 {
+#if 0
 	ipc_info_name_t *table_info;
 	unsigned int table_potential, table_actual;
 	vm_offset_t table_addr;
@@ -299,11 +288,9 @@ mach_port_space_info(
 		if (!space->is_active) {
 			is_read_unlock(space);
 			if (table_info != *tablep)
-				kmem_free(ipc_kernel_map,
-					  table_addr, table_size);
+				free(table_addr, M_MACH_TMP);
 			if (tree_info != *treep)
-				kmem_free(ipc_kernel_map,
-					  tree_addr, tree_size);
+				free(tree_addr, tree_);
 			return KERN_INVALID_TASK;
 		}
 
@@ -460,7 +447,7 @@ mach_port_space_info(
 		*treep = (ipc_info_tree_name_t *) copy;
 		*treeCntp = tree_actual;
 	}
-
+#endif
 	return KERN_SUCCESS;
 }
 
