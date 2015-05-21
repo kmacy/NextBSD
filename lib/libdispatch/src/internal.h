@@ -675,7 +675,8 @@ extern bool _dispatch_safe_fork, _dispatch_child_of_unsafe_fork;
 #define _dispatch_hardware_crash() \
 		__asm__(""); __builtin_trap() // <rdar://problem/17464981>
 
-#define _dispatch_set_crash_log_message(msg)
+#define _dispatch_set_crash_log_message(msg) \
+		fprintf(stderr, "%s\n", msg);
 
 #if HAVE_MACH
 // MIG_REPLY_MISMATCH means either:
