@@ -276,7 +276,7 @@ typedef unsigned int mach_msg_descriptor_type_t;
 
 typedef struct
 {
-  void*				pad1;
+  natural_t         pad1;
   mach_msg_size_t		pad2;
   unsigned int			pad3 : 24;
   mach_msg_descriptor_type_t	type : 8;
@@ -285,17 +285,17 @@ typedef struct
 typedef struct
 {
 	mach_port_t			name;
-#if !defined(_KERNEL) && defined(__LP64__)
+#if !(defined(_KERNEL) && defined(__LP64__))
 	mach_msg_size_t		pad1;
 	unsigned int			pad2 : 16;
 #else
-	mach_msg_size_t		pad1 :8;
+	mach_msg_size_t		pad1 : 8;
 	unsigned int			pad2 : 8;
 #endif
 	mach_msg_type_name_t		disposition : 8;
 	mach_msg_descriptor_type_t	type : 8;
 #if defined(_KERNEL)
-	uint32_t			pad_end;
+  uint32_t      pad_end;
 #endif
 } mach_msg_port_descriptor_t;
 
