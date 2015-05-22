@@ -182,6 +182,14 @@ struct dispatch_queue_s _dispatch_main_q = {
 	.dq_serialnum = 1,
 };
 
+struct dispatch_queue_attr_s _dispatch_queue_attr_concurrent = {
+	.do_vtable = DISPATCH_VTABLE(queue_attr),
+	.do_ref_cnt = DISPATCH_OBJECT_GLOBAL_REFCNT,
+	.do_xref_cnt = DISPATCH_OBJECT_GLOBAL_REFCNT,
+	.do_next = DISPATCH_OBJECT_LISTLESS,
+	.dqa_concurrent = 1,
+};
+
 #pragma mark -
 #pragma mark dispatch_queue_attr_t
 
