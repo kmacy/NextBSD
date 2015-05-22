@@ -22,12 +22,16 @@ __FBSDID("$FreeBSD$");
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
+#include <vm/vm_kern.h>
 
 #include <sys/mach/mach_types.h>
 #include <sys/mach/mach_vm.h>
 #include <sys/mach/mach_vm_server.h>
 #include <sys/mach/vm_map_server.h>
 #include <sys/mach/host_priv_server.h>
+
+
+extern vm_size_t	msg_ool_size_small;
 
 
 int mach_vm_map_page_query(vm_map_t target_map, vm_offset_t offset, integer_t *disposition, integer_t *ref_count);
@@ -456,6 +460,67 @@ _vm_map_entry_dispose(
 	uma_zfree(zone, entry);
 }
 
+/*
+ *	Routine: vm_map_copyin_internal [internal use only]
+ *
+ *	Description:
+ *		Copy in data to a kernel buffer from space in the
+ *		source map. The original space may be optionally
+ *		deallocated.
+ *
+ *		If successful, returns a new copy object.
+ */
+static kern_return_t
+vm_map_copyin_internal(
+	vm_map_t	src_map,
+	vm_map_offset_t	src_addr,
+	vm_map_size_t	len,
+	boolean_t	src_destroy,
+	vm_map_copy_t	*copy_result)
+{
+	kern_return_t kr;
+	vm_map_copy_t copy;
+	vm_size_t size;
+
+	if ((vm_size_t) len != len) {
+		/* "len" is too big and doesn't fit in a "vm_size_t" */
+		return KERN_RESOURCE_SHORTAGE;
+	}
+	if (src_map == kernel_map)
+		size = (vm_size_t) sizeof(struct vm_map_copy);
+	else
+		size =  (vm_size_t) (sizeof(struct vm_map_copy) + len);
+	copy = (vm_map_copy_t) malloc(size, M_MACH_VM, M_NOWAIT);
+	if (copy == VM_MAP_COPY_NULL) {
+		return KERN_RESOURCE_SHORTAGE;
+	}
+	copy->type = VM_MAP_COPY_KERNEL_BUFFER;
+	copy->size = len;
+	copy->offset = 0;
+	copy->cpy_kalloc_size = size;
+	if (src_map == kernel_map) {
+		copy->cpy_kdata = src_addr;
+		copy->type = VM_MAP_COPY_OBJECT_PREALLOC;
+	} else {
+		copy->cpy_kdata = (vm_offset_t) (copy + 1);
+
+		kr = copyinmap(src_map, src_addr, copy->cpy_kdata, (vm_size_t) len);
+		if (kr != KERN_SUCCESS) {
+			free(copy, M_MACH_VM);
+			return kr;
+		}
+		if (src_destroy) {
+			(void) vm_map_remove(
+				src_map,
+				trunc_page(src_addr),
+				round_page(src_addr));
+		}
+	}
+	*copy_result = copy;
+	return KERN_SUCCESS;
+}
+
+
 kern_return_t	vm_map_copyin(
 				vm_map_t			src_map,
 				vm_map_address_t	src_addr,
@@ -463,6 +528,8 @@ kern_return_t	vm_map_copyin(
 				boolean_t			src_destroy,
 				vm_map_copy_t		*copy_result)
 {
+	vm_offset_t src_end;
+
 	/*
 	 * three possibilities:
 	 * - len is less than  MSG_OOL_SIZE_SMALL:
@@ -485,8 +552,24 @@ kern_return_t	vm_map_copyin(
 	 *     else:
 	 *       split object
 	 *       delete entry from source map
+	 *       if data is not aligned copy edge pages and insert
+	 *         into source map
 	 *     create map copy object w/ object
 	 */
+
+
+	if (len == 0) {
+		*copy_result = VM_MAP_COPY_NULL;
+		return(KERN_SUCCESS);
+	}
+
+	src_end = src_addr + len;
+	if (src_end < src_addr)
+		return KERN_INVALID_ADDRESS;
+
+	if (len < msg_ool_size_small || src_map == kernel_map)
+		return vm_map_copyin_internal(src_map, src_addr, len,
+										   src_destroy, copy_result);
 
 
 	/* neither mach nor osx does anything to prevent information leakage
@@ -495,6 +578,7 @@ kern_return_t	vm_map_copyin(
 	return KERN_NOT_SUPPORTED;
 
 }
+
 
 
 /*

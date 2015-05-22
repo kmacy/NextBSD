@@ -28,6 +28,7 @@ struct vm_map_copy {
 	int			type;
 #define VM_MAP_COPY_ENTRY_LIST		1
 #define VM_MAP_COPY_OBJECT		2
+#define VM_MAP_COPY_OBJECT_PREALLOC 3
 #define VM_MAP_COPY_KERNEL_BUFFER	4
 	vm_offset_t		offset;
 	vm_size_t		size;

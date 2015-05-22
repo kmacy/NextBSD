@@ -257,6 +257,11 @@
 #include <sys/param.h>
 #include <sys/limits.h>
 #include <sys/syslog.h>
+#include <sys/proc.h>
+
+#include <vm/vm.h>
+#include <vm/vm_extern.h>
+#include <vm/vm_kern.h>
 
 #include <sys/mach/kern_return.h>
 #include <sys/mach/message.h>
@@ -319,7 +324,6 @@ typedef union
 #define LEGACY_HEADER_SIZE_DELTA ((mach_msg_size_t)(sizeof(mach_msg_header_t) - sizeof(mach_msg_legacy_header_t)))
 
 
-extern vm_map_t		ipc_kernel_copy_map;
 extern vm_size_t	ipc_kmsg_max_space;
 extern vm_size_t	ipc_kmsg_max_vm_space;
 extern vm_size_t	ipc_kmsg_max_body_space;
@@ -711,7 +715,7 @@ ipc_kmsg_clean_partial(
 		ipc_object_destroy(object, MACH_MSGH_BITS_LOCAL(mbits));
 
 	if (paddr) {
-		(void) vm_deallocate(ipc_kernel_copy_map, paddr, length);
+		free((void *)paddr, M_MACH_TMP);
 	}
 
 	ipc_kmsg_clean_body(kmsg, number, desc);
@@ -1570,7 +1574,7 @@ ipc_kmsg_copyin_ool_descriptor(
 			return NULL;
 		}
 
-		if (vm_map_copyin(ipc_kernel_copy_map, *paddr, length,
+		if (vm_map_copyin(kernel_map, *paddr, length,
 						  TRUE, copy) != KERN_SUCCESS) {
 			*mr = MACH_MSG_VM_KERNEL;
 			return NULL;
