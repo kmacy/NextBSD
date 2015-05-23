@@ -53,7 +53,7 @@ MALLOC_DEFINE(M_MACH_IPC_KMSG, "mach kmsg", "mach compatibility subsystem kmsg")
 MALLOC_DEFINE(M_MACH_IPC_ENTRY, "mach entry", "mach compatibility subsystem ipc_entry");
 MALLOC_DEFINE(M_MACH_IPC_TABLE, "mach table", "mach compatibility subsystem ipc_table");
 MALLOC_DEFINE(M_MACH_KALLOC, "mach kalloc", "mach compatibility subsystem kalloc");
-
+MALLOC_DEFINE(M_MACH_VM, "mach vm", "mach compatibility subsystem vm");
 
 
 int
