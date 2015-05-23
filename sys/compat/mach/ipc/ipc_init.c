@@ -267,10 +267,7 @@ ipc_init(void)
 		msg_ool_size_small = MSG_OOL_SIZE_SMALL;
 	}
 #endif
-#ifdef notyet
-	/* XXX allocate initial host ports etc */
-	ipc_host_init();
-#endif	
+
 }
 
 /* before SI_SUB_INTRINSIC and after SI_SUB_EVENTHANDLER */

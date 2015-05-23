@@ -1577,6 +1577,7 @@ ipc_kmsg_copyin_ool_descriptor(
 			*mr = MACH_MSG_VM_KERNEL;
 			return NULL;
 		}
+		dsc->address = (void *) *copy;
 		*paddr += round_page(length);
 		*space_needed -= round_page(length);
 	} else {
@@ -1591,7 +1592,7 @@ ipc_kmsg_copyin_ool_descriptor(
 			*mr = MACH_SEND_INVALID_MEMORY;
 			return NULL;
 		}
-		dsc->address = (void *) copy;
+		dsc->address = (void *) *copy;
 	}
 	return user_dsc;
 }
