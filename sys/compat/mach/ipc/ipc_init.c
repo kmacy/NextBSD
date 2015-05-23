@@ -224,7 +224,7 @@ ipc_bootstrap_sysinit(void *arg __unused)
 /* 
  * XXX tunable, belongs in mach.message.h 
  */
-#define MSG_OOL_SIZE_SMALL 2049
+#define MSG_OOL_SIZE_SMALL 16385
 vm_size_t msg_ool_size_small;
 
 /*
