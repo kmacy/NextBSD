@@ -26,6 +26,8 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/mach/mach_types.h>
 #include <sys/mach/mach_vm.h>
+#include <sys/mach/ipc/ipc_kmsg.h>
+#include <sys/mach/thread.h>
 #include <sys/mach/mach_vm_server.h>
 #include <sys/mach/vm_map_server.h>
 #include <sys/mach/host_priv_server.h>
@@ -442,7 +444,6 @@ MACRO_END
 	_vm_map_entry_dispose(&(copy)->cpy_hdr, (entry))
 
 static uma_zone_t vm_map_entry_zone;
-static uma_zone_t vm_map_copy_zone;
 static uma_zone_t vm_map_kentry_zone;
 
 static void
@@ -520,6 +521,81 @@ vm_map_copyin_internal(
 	return KERN_SUCCESS;
 }
 
+/*
+ *	Routine:	vm_map_copyout_kernel_buffer
+ *
+ *	Description:
+ *		Copy out data from a kernel buffer into space in the
+ *		destination map. The space may be otpionally dynamically
+ *		allocated.
+ *
+ *		If successful, consumes the copy object.
+ *		Otherwise, the caller is responsible for it.
+ */
+static kern_return_t
+vm_map_copyout_kernel_buffer(
+	vm_map_t	map,
+	vm_offset_t	*addr,	/* IN/OUT */
+	vm_map_copy_t	copy,
+	boolean_t	overwrite)
+{
+	kern_return_t kr = KERN_SUCCESS;
+#if 0
+	thread_act_t thr_act = current_act();
+#endif
+	if (!overwrite) {
+
+		/*
+		 * Allocate space in the target map for the data
+		 */
+		*addr = 0;
+		kr = mach_vm_allocate(map, addr, round_page(copy->size), VM_FLAGS_ANYWHERE);
+		if (kr != KERN_SUCCESS)
+			return(kr);
+	}
+
+	/*
+	 * Copyout the data from the kernel buffer to the target map.
+	 */
+	if (current_map() == map) {
+		/*
+		 * If the target map is the current map, just do
+		 * the copy.
+		 */
+		if (copyout((char *)copy->cpy_kdata, (char *)*addr,
+				copy->size)) {
+			kr = KERN_INVALID_ADDRESS;
+		}
+	}
+	else {
+#if 0
+		vm_map_t oldmap;
+
+		/*
+		 * If the target map is another map, assume the
+		 * target's address space identity for the duration
+		 * of the copy.
+		 */
+		vm_map_reference(map);
+		oldmap = vm_map_switch(map);
+
+		if (copyout((char *)copy->cpy_kdata, (char *)*addr,
+				copy->size)) {
+			kr = KERN_INVALID_ADDRESS;
+		}
+
+		(void) vm_map_switch(oldmap);
+		vm_map_deallocate(map);
+#endif
+		kr = KERN_NOT_SUPPORTED;
+	}
+
+	if (copy->type == VM_MAP_COPY_OBJECT_PREALLOC)
+		free((void *)copy->cpy_kdata, M_MACH_VM);
+	free(copy, M_MACH_VM);
+
+	return(kr);
+}
 
 kern_return_t	vm_map_copyin(
 				vm_map_t			src_map,
@@ -599,6 +675,16 @@ vm_map_copyout(
 	vm_map_address_t	*dst_addr,	/* OUT */
 	vm_map_copy_t		copy)
 {
+
+/*
+	 *	Check for special kernel buffer allocated
+	 *	by new_ipc_kmsg_copyin.
+	 */
+
+	if (copy->type == VM_MAP_COPY_KERNEL_BUFFER || copy->type == VM_MAP_COPY_OBJECT_PREALLOC) {
+		return(vm_map_copyout_kernel_buffer(dst_map, dst_addr,
+						    copy, FALSE));
+	}
 	return KERN_NOT_SUPPORTED;
 #if 0
 	return vm_map_copyout_internal(dst_map, dst_addr, copy,
@@ -607,7 +693,6 @@ vm_map_copyout(
 				       VM_PROT_ALL,
 				       VM_INHERIT_DEFAULT);
 #endif
-
 }
 
 #if 0
@@ -938,32 +1023,9 @@ vm_map_copy_discard(
 	if (copy == VM_MAP_COPY_NULL)
 		return;
 
-	switch (copy->type) {
-	case VM_MAP_COPY_ENTRY_LIST:
-		while (vm_map_copy_first_entry(copy) !=
-			   vm_map_copy_to_entry(copy)) {
-			vm_map_entry_t	entry = vm_map_copy_first_entry(copy);
-#ifdef notyet
-			vm_map_copy_entry_unlink(copy, entry);
-#endif
-			vm_object_deallocate(entry->object.vm_object);
-			vm_map_copy_entry_dispose(copy, entry);
-		}
-		break;
-	case VM_MAP_COPY_OBJECT:
-		vm_object_deallocate(copy->cpy_object);
-		break;
-	case VM_MAP_COPY_KERNEL_BUFFER:
-
-		/*
-		 * The vm_map_copy_t and possibly the data buffer were
-		 * allocated by a single call to kalloc(), i.e. the
-		 * vm_map_copy_t was not allocated out of the zone.
-		 */
-		free(copy, M_MACH_TMP);
-		return;
-	}
-	uma_zfree(vm_map_copy_zone, copy);
+	if (copy->type == VM_MAP_COPY_OBJECT_PREALLOC)
+		free((void *)copy->cpy_kdata, M_MACH_VM);
+	free(copy, M_MACH_VM);
 }
 
 kern_return_t

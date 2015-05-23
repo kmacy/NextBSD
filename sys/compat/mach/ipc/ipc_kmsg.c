@@ -632,9 +632,7 @@ ipc_kmsg_clean_body(
 		} else {
 		    if (dsc->copy == MACH_MSG_PHYSICAL_COPY &&
 			    dsc->size < MSG_OOL_SIZE_SMALL) {
-			    KFREE((vm_offset_t)dsc->address,
-				  (vm_size_t)dsc->size,
-				  rt);
+			    free(dsc->address, M_MACH_VM);
 		    } else {
 		    	vm_map_copy_discard((vm_map_copy_t) dsc->address);
 		    }
@@ -1841,7 +1839,7 @@ ipc_kmsg_copyin_body(
 			}
 		}
 	}
-	if (space_needed && (paddr = (vm_offset_t)malloc(space_needed, M_MACH_TMP, M_NOWAIT| M_NODUMP | M_ZERO)) == 0) {
+	if (space_needed && (paddr = (vm_offset_t)malloc(space_needed, M_MACH_VM, M_NOWAIT| M_NODUMP | M_ZERO)) == 0) {
 		ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
 		mr = MACH_MSG_VM_KERNEL;
 		goto out;
