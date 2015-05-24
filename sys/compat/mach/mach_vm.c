@@ -568,6 +568,7 @@ vm_map_copyout_kernel_buffer(
 		}
 	}
 	else {
+		panic("unexpected map %p", map);
 #if 0
 		vm_map_t oldmap;
 
