@@ -1578,8 +1578,8 @@ ipc_kmsg_copyin_ool_descriptor(
 			return NULL;
 		}
 		dsc->address = (void *) *copy;
-		*paddr += round_page(length);
-		*space_needed -= round_page(length);
+		*paddr += length;
+		*space_needed -= length;
 	} else {
 		/*
 		 * Make a virtual copy of the of the data if requested

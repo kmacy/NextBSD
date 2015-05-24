@@ -540,9 +540,7 @@ vm_map_copyout_kernel_buffer(
 	boolean_t	overwrite)
 {
 	kern_return_t kr = KERN_SUCCESS;
-#if 0
-	thread_act_t thr_act = current_act();
-#endif
+
 	if (!overwrite) {
 
 		/*
