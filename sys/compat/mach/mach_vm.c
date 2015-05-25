@@ -34,6 +34,35 @@ __FBSDID("$FreeBSD$");
 
 
 extern vm_size_t	msg_ool_size_small;
+void _vm_map_clip_end(vm_map_t map, vm_map_entry_t entry, vm_offset_t end);
+void _vm_map_clip_start(vm_map_t map, vm_map_entry_t entry, vm_offset_t start);
+
+
+/*
+ *	vm_map_clip_start:	[ internal use only ]
+ *
+ *	Asserts that the given entry begins at or after
+ *	the specified address; if necessary,
+ *	it splits the entry into two.
+ */
+#define vm_map_clip_start(map, entry, startaddr) \
+{ \
+	if (startaddr > entry->start) \
+		_vm_map_clip_start(map, entry, startaddr); \
+}
+
+/*
+ *	vm_map_clip_end:	[ internal use only ]
+ *
+ *	Asserts that the given entry ends at or before
+ *	the specified address; if necessary,
+ *	it splits the entry into two.
+ */
+#define vm_map_clip_end(map, entry, endaddr) \
+{ \
+	if ((endaddr) < (entry->end)) \
+		_vm_map_clip_end((map), (entry), (endaddr)); \
+}
 
 
 int mach_vm_map_page_query(vm_map_t target_map, vm_offset_t offset, integer_t *disposition, integer_t *ref_count);
@@ -101,7 +130,7 @@ mach_vm_map(vm_map_t map, mach_vm_address_t *address, mach_vm_size_t _size,
 		break;
 	case VM_INHERIT_COPY:
 		flags |= MAP_COPY_ON_WRITE;
-		docow = 1;
+		docow = MAP_COPY_ON_WRITE;
 		break;
 	case VM_INHERIT_NONE:
 		break;
@@ -596,6 +625,40 @@ vm_map_copyout_kernel_buffer(
 	return(kr);
 }
 
+
+
+/*
+ *	vm_map_copyin_object:
+ *
+ *	Create a copy object from an object.
+ *	Our caller donates an object reference.
+ */
+
+static kern_return_t
+vm_map_copyin_object(
+	vm_object_t	object,
+	vm_offset_t	offset,		/* offset of region in object */
+	vm_size_t	size,		/* size of region in object */
+	vm_map_copy_t	*copy_result)	/* OUT */
+{
+	vm_map_copy_t	copy;		/* Resulting copy */
+
+	/*
+	 *	We drop the object into a special copy object
+	 *	that contains the object directly.
+	 */
+
+	copy = (vm_map_copy_t) malloc(sizeof(vm_map_copy_t), M_MACH_VM, M_WAITOK);
+	copy->type = VM_MAP_COPY_OBJECT;
+	copy->cpy_object = object;
+
+	copy->offset = offset;
+	copy->size = size;
+
+	*copy_result = copy;
+	return(KERN_SUCCESS);
+}
+
 kern_return_t	vm_map_copyin(
 				vm_map_t			src_map,
 				vm_map_address_t	src_addr,
@@ -603,7 +666,24 @@ kern_return_t	vm_map_copyin(
 				boolean_t			src_destroy,
 				vm_map_copy_t		*copy_result)
 {
+#if 1
+	vm_map_entry_t	tmp_entry;	/* Result of last map lookup --
+					 * in multi-level lookup, this
+					 * entry contains the actual
+					 * vm_object/offset.
+					 */
+#if 0
+	vm_map_entry_t	new_entry = NULL;	/* Map entry for copy */
+#endif
+	vm_object_t object;
+	vm_offset_t prev_end;
+
+#endif
+	vm_offset_t	src_start;	/* Start of current entry --
+					 * where copy is taking place now
+					 */
 	vm_offset_t src_end;
+	vm_offset_t offset;
 
 	/*
 	 * three possibilities:
@@ -638,6 +718,7 @@ kern_return_t	vm_map_copyin(
 		return(KERN_SUCCESS);
 	}
 
+	src_start = trunc_page(src_addr);
 	src_end = src_addr + len;
 	if (src_end < src_addr)
 		return KERN_INVALID_ADDRESS;
@@ -646,12 +727,50 @@ kern_return_t	vm_map_copyin(
 		return vm_map_copyin_internal(src_map, src_addr, len,
 										   src_destroy, copy_result);
 
+	/*
+	 *	Find the beginning of the region.
+	 */
+#if 1
+	vm_map_lock(src_map);
 
+	if (!vm_map_lookup_entry(src_map, src_start, &tmp_entry)) {
+		vm_map_lock(src_map);
+		return KERN_INVALID_ADDRESS;
+	}
+	prev_end = 0;
+	while (prev_end != tmp_entry->end  && tmp_entry->end < src_end) {
+		prev_end = tmp_entry->end;
+		vm_map_simplify_entry(src_map, tmp_entry);
+	}
+	/* only handle single map entry for now */
+	if (tmp_entry->end < src_end) {
+		vm_map_unlock(src_map);
+		return KERN_NOT_SUPPORTED;
+	}
+	object = tmp_entry->object.vm_object;
+	vm_object_reference(object);
+
+	if (src_destroy) {
+		offset = 0;
+		vm_map_clip_start(src_map, tmp_entry, src_start);
+		vm_map_clip_end(src_map, tmp_entry, src_end);
+		vm_object_split(tmp_entry);
+		object = tmp_entry->object.vm_object;
+		vm_map_delete(src_map, src_start, src_end);
+	} else {
+		offset = tmp_entry->offset;
+
+		vm_map_protect(src_map, src_start, src_end, tmp_entry->protection & ~VM_PROT_WRITE, 0);
+		tmp_entry->eflags |= MAP_ENTRY_NEEDS_COPY | MAP_ENTRY_COW;
+		vm_object_shadow(&object, &offset, src_end - src_start);
+	}
+#endif
+
+	vm_map_copyin_object(object, offset, src_end - src_start, copy_result);
 	/* neither mach nor osx does anything to prevent information leakage
 	 * in unaligned sends
 	 */
-	return KERN_NOT_SUPPORTED;
-
+	return KERN_SUCCESS;
 }
 
 
@@ -674,15 +793,22 @@ vm_map_copyout(
 	vm_map_address_t	*dst_addr,	/* OUT */
 	vm_map_copy_t		copy)
 {
+	int cow;
 
+	*dst_addr = 0;
 /*
 	 *	Check for special kernel buffer allocated
 	 *	by new_ipc_kmsg_copyin.
 	 */
 
 	if (copy->type == VM_MAP_COPY_KERNEL_BUFFER || copy->type == VM_MAP_COPY_OBJECT_PREALLOC) {
-		return(vm_map_copyout_kernel_buffer(dst_map, dst_addr,
+		return (vm_map_copyout_kernel_buffer(dst_map, dst_addr,
 						    copy, FALSE));
+	}
+	if (copy->type == VM_MAP_COPY_OBJECT) {
+		cow = copy->cpy_object->ref_count > 1 ? MAP_COPY_ON_WRITE : 0;
+		return vm_map_find(dst_map, copy->cpy_object, copy->offset, dst_addr, copy->size, 0,
+						   VMFS_ANY_SPACE, VM_PROT_READ|VM_PROT_WRITE, VM_PROT_READ|VM_PROT_WRITE, cow);
 	}
 	return KERN_NOT_SUPPORTED;
 #if 0
@@ -1024,6 +1150,8 @@ vm_map_copy_discard(
 
 	if (copy->type == VM_MAP_COPY_OBJECT_PREALLOC)
 		free((void *)copy->cpy_kdata, M_MACH_VM);
+	if (copy->type == VM_MAP_COPY_OBJECT)
+		vm_object_deallocate(copy->cpy_object);
 	free(copy, M_MACH_VM);
 }
 
