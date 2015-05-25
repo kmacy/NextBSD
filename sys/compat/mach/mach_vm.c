@@ -762,10 +762,9 @@ kern_return_t	vm_map_copyin(
 
 		vm_map_protect(src_map, src_start, src_end, tmp_entry->protection & ~VM_PROT_WRITE, 0);
 		tmp_entry->eflags |= MAP_ENTRY_NEEDS_COPY | MAP_ENTRY_COW;
-		vm_object_shadow(&object, &offset, src_end - src_start);
 	}
 #endif
-
+	vm_map_unlock(src_map);
 	vm_map_copyin_object(object, offset, src_end - src_start, copy_result);
 	/* neither mach nor osx does anything to prevent information leakage
 	 * in unaligned sends
