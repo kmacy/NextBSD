@@ -1701,6 +1701,7 @@ ipc_kmsg_copyin_ool_ports_descriptor(
 		if (kr != KERN_SUCCESS) {
 			int k;
 
+			printf("right: %d failed %x user_disp: %d\n", name, kr, user_disp);
 			for(k = 0; k < j; k++) {
 				object = objects[k];
 				if (IPC_OBJECT_VALID(object))
@@ -1711,7 +1712,10 @@ ipc_kmsg_copyin_ool_ports_descriptor(
 			*mr = MACH_SEND_INVALID_RIGHT;
 			return NULL;
 		}
-
+#ifdef INVARIANTS
+		else
+			printf("right: %d success\n", name);
+#endif
 		if ((dsc->disposition == MACH_MSG_TYPE_PORT_RECEIVE) &&
 			ipc_port_check_circularity(
 				(ipc_port_t) object,
