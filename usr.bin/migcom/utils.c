@@ -549,8 +549,6 @@ WriteTemplateKPD_port(FILE *file, argument_t *arg, boolean_t in)
   fprintf(file, "\tconst static %s %s = {\n", it->itKPDType, arg->argTTName);
   
   fprintf(file, "\t\t.name = MACH_PORT_NULL,\n");
-  fprintf(file, "\t\t.pad1 = 0,\n");
-  fprintf(file, "\t\t.pad2 = 0,\n");
   fprintf(file, "\t\t.disposition = %s,\n", in ? it->itInNameStr: it->itOutNameStr);
   fprintf(file, "\t\t.type = MACH_MSG_PORT_DESCRIPTOR,\n");
   
@@ -569,19 +567,18 @@ WriteTemplateKPD_ool(FILE *file, argument_t *arg, boolean_t in __unused)
   if (IS_MULTIPLE_KPD(it))
     it = it->itElement;
   
-  fprintf(file, "\t\t.addr = (void *)0,\n");
+  fprintf(file, "\t\t.address = (void *)0,\n");
   if (it->itVarArray)
     fprintf(file, "\t\t.size = 0,\n");
   else
 	fprintf(file, "\t\t.size = %d,\n",
 	    (it->itNumber * it->itSize + 7)/8);
-    fprintf(file, "\t\t.deal = %s,\n",
+    fprintf(file, "\t\t.deallocate = %s,\n",
 	(arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
   /* the d_MAYBE case will be fixed runtime */
     fprintf(file, "\t\t.copy = %s,\n",
 	(arg->argFlags & flPhysicalCopy) ? "MACH_MSG_PHYSICAL_COPY" : "MACH_MSG_VIRTUAL_COPY");
   /* the PHYSICAL COPY flag has not been established yet */
-  fprintf(file, "\t\t.pad2 = 0,\n");
   fprintf(file, "\t\t.type = MACH_MSG_OOL_DESCRIPTOR,\n");
   
   fprintf(file, "\t};\n");
@@ -599,7 +596,7 @@ WriteTemplateKPD_oolport(FILE *file, argument_t *arg, boolean_t in)
   if (IS_MULTIPLE_KPD(it))
     it = it->itElement;
   
-  fprintf(file, "\t\t.addr = void *)0,\n");
+  fprintf(file, "\t\t.address = (void *)0,\n");
   if (!it->itVarArray)
 	fprintf(file, "\t\t.count = %d,\n",
 	    it->itNumber);
