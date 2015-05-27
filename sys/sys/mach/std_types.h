@@ -161,8 +161,8 @@
 #define task_name_deallocate(task)
 #define assert_wait(a, b)
 #define cpu_number() curcpu
-#define copyoutmap(a, b, c, d) 0
-#define copyinmap(a, b, c, d) 0
+#define copyoutmap(a, b, c, d) copyout((const void *)b, (void *)c, d)
+#define copyinmap(a, b, c, d) copyin((const void *)b, (void *)c, d)
 
 #define vm_allocate mach_vm_allocate
 #define vm_deallocate mach_vm_deallocate

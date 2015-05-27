@@ -2587,7 +2587,7 @@ ipc_kmsg_copyout_ool_ports_descriptor(mach_msg_ool_ports_descriptor_t *dsc,
 
             /* copyout to memory allocated above */
             void *data = dsc->address;
-            if (copyoutmap(map, data, addr, nlength) != KERN_SUCCESS)
+            if (copyoutmap(map, data, addr, pnlength) != KERN_SUCCESS)
                 *mr |= MACH_MSG_VM_SPACE;
             free(data, M_MACH_TMP);
 		}
