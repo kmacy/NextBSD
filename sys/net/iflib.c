@@ -792,6 +792,10 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 		phys_addr = pmap_kextract((vm_offset_t)cl);
 #endif
 		rxsd->ifsd_flags |= RX_SW_DESC_INUSE;
+#ifdef INVARIANTS
+		MPASS(rxsd->ifsd_cl == NULL);
+		MPASS(rxsd->ifsd_m == NULL);
+#endif
 		rxsd->ifsd_cl = cl;
 		rxsd->ifsd_m = m;
 		fl->ifl_phys_addrs[i] = phys_addr;
@@ -1124,7 +1128,12 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 		bus_dmamap_unload(fl->ifl_rxq->ifr_desc_tag, sd->ifsd_map);
 		cl = sd->ifsd_cl;
 		m = sd->ifsd_m;
-
+		MPASS(cl != NULL);
+		MPASS(m	!= NULL);
+#ifdef INVARIANTS
+		sd->ifsd_cl = NULL;
+		sd->ifsd_m = NULL;
+#endif
 		if (sd->ifsd_mh == NULL)
 			flags |= M_PKTHDR;
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
