@@ -120,7 +120,7 @@ struct if_shared_ctx {
 
 	int (*isc_rxd_available) (if_shared_ctx_t, uint16_t qsidx, uint32_t pidx);
 	int (*isc_rxd_pkt_get) (if_shared_ctx_t sctx, if_rxd_info_t ri);
-	void (*isc_rxd_refill) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs, uint8_t count);
+	void (*isc_rxd_refill) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs, uint16_t count);
 	void (*isc_rxd_flush) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx);
 
 	iflib_ctx_t isc_ctx;

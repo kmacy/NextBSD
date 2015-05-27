@@ -66,7 +66,7 @@ static int ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32
 #endif /* DEV_NETMAP */
 
 static void ixl_isc_rxd_refill(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused,
-				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint8_t count);
+				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint16_t count);
 static void ixl_isc_rxd_flush(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx);
 static int ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx);
 static int ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri);
@@ -597,7 +597,7 @@ ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
  **********************************************************************/
 static void
 ixl_isc_rxd_refill(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused,
-				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint8_t count)
+				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint16_t count)
 
 {
 	struct ixl_vsi		*vsi = DOWNCAST(sctx);
