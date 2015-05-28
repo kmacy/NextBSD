@@ -9214,6 +9214,8 @@ job_mig_look_up2(job_t j, mach_port_t srp, name_t servicename, mach_port_t *serv
 		job_log(j, LOG_DEBUG, "%sMach service lookup: %s", per_pid_lookup ? "Per PID " : "", servicename);
 		*serviceportp = machservice_port(ms);
 
+		job_log(j, LOG_DEBUG, "Service port: <%d>\n", *serviceportp);
+
 		kr = BOOTSTRAP_SUCCESS;
 	} else if (strict_lookup && !privileged) {
 		/* Hack: We need to simulate XPC's desire not to establish a hierarchy.

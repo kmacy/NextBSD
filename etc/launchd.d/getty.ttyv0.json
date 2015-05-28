@@ -1,0 +1,10 @@
+{
+	"Label": "org.freebsd.getty.ttyv0",
+	"ProgramArguments": [
+		"/usr/libexec/getty",
+		"Pc",
+		"ttyv0"
+	],
+	"RunAtLoad": true,
+	"KeepAlive": true
+}

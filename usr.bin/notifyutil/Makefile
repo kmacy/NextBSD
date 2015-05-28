@@ -1,6 +1,5 @@
 .include <src.opts.mk>
-PROG= notifyd
-WARNS= 6
+PROG= notifyutil
 
 .PATH: .
 .PATH: ${.CURDIR}
@@ -21,6 +20,7 @@ CFLAGS+= -I${.CURDIR}/../../contrib/openbsm -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -DHAVE_INTTYPES_H
 
 DEBUG_FLAGS+= -g -O0
+CFLAGS+= ${DEBUG_FLAGS}
 
 LDFLAGS+= -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -pthread
@@ -31,7 +31,7 @@ notify_ipc.h notify_ipcServer.c: ${.CURDIR}/../../lib/libnotify/notify_ipc.defs
 notify_proc: notify_ipcServer.c
 
 LDADD+= -lutil -lauditd -lbsm -ldispatch -lmach -lBlocksRuntime -llaunch -losxsupport -lxpc -lnv -lsbuf -lnotify
-SRCS=notify_proc.c notifyd.c service.c timer.c	notify_ipcServer.c
+SRCS=notifyutil.c
 
 
 CLEANFILES+= *Server.c *User.c job.h helper.h job_reply.h job_forward.h notify.h \

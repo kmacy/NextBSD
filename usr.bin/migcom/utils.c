@@ -548,11 +548,9 @@ WriteTemplateKPD_port(FILE *file, argument_t *arg, boolean_t in)
   fprintf(file, "#if\tUseStaticTemplates\n");
   fprintf(file, "\tconst static %s %s = {\n", it->itKPDType, arg->argTTName);
   
-  fprintf(file, "\t\t/* name = */\t\tMACH_PORT_NULL,\n");
-  fprintf(file, "\t\t/* pad1 = */\t\t0,\n");
-  fprintf(file, "\t\t/* pad2 = */\t\t0,\n");
-  fprintf(file, "\t\t/* disp = */\t\t%s,\n", in ? it->itInNameStr: it->itOutNameStr);
-  fprintf(file, "\t\t/* type = */\t\tMACH_MSG_PORT_DESCRIPTOR,\n");
+  fprintf(file, "\t\t.name = MACH_PORT_NULL,\n");
+  fprintf(file, "\t\t.disposition = %s,\n", in ? it->itInNameStr: it->itOutNameStr);
+  fprintf(file, "\t\t.type = MACH_MSG_PORT_DESCRIPTOR,\n");
   
   fprintf(file, "\t};\n");
   fprintf(file, "#endif\t/* UseStaticTemplates */\n");
@@ -569,20 +567,19 @@ WriteTemplateKPD_ool(FILE *file, argument_t *arg, boolean_t in __unused)
   if (IS_MULTIPLE_KPD(it))
     it = it->itElement;
   
-  fprintf(file, "\t\t/* addr = */\t\t(void *)0,\n");
+  fprintf(file, "\t\t.address = (void *)0,\n");
   if (it->itVarArray)
-    fprintf(file, "\t\t/* size = */\t\t0,\n");
+    fprintf(file, "\t\t.size = 0,\n");
   else
-	fprintf(file, "\t\t/* size = */\t\t%d,\n",
+	fprintf(file, "\t\t.size = %d,\n",
 	    (it->itNumber * it->itSize + 7)/8);
-    fprintf(file, "\t\t/* deal = */\t\t%s,\n",
+    fprintf(file, "\t\t.deallocate = %s,\n",
 	(arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
   /* the d_MAYBE case will be fixed runtime */
-    fprintf(file, "\t\t/* copy = */\t\t%s,\n",
+    fprintf(file, "\t\t.copy = %s,\n",
 	(arg->argFlags & flPhysicalCopy) ? "MACH_MSG_PHYSICAL_COPY" : "MACH_MSG_VIRTUAL_COPY");
   /* the PHYSICAL COPY flag has not been established yet */
-  fprintf(file, "\t\t/* pad2 = */\t\t0,\n");
-  fprintf(file, "\t\t/* type = */\t\tMACH_MSG_OOL_DESCRIPTOR,\n");
+  fprintf(file, "\t\t.type = MACH_MSG_OOL_DESCRIPTOR,\n");
   
   fprintf(file, "\t};\n");
   fprintf(file, "#endif\t/* UseStaticTemplates */\n");
@@ -599,19 +596,19 @@ WriteTemplateKPD_oolport(FILE *file, argument_t *arg, boolean_t in)
   if (IS_MULTIPLE_KPD(it))
     it = it->itElement;
   
-  fprintf(file, "\t\t/* addr = */\t\t(void *)0,\n");
+  fprintf(file, "\t\t.address = (void *)0,\n");
   if (!it->itVarArray)
-	fprintf(file, "\t\t/* coun = */\t\t%d,\n",
+	fprintf(file, "\t\t.count = %d,\n",
 	    it->itNumber);
   else
-    fprintf(file, "\t\t/* coun = */\t\t0,\n");
-    fprintf(file, "\t\t/* deal = */\t\t%s,\n",
+    fprintf(file, "\t\t.count = 0,\n");
+    fprintf(file, "\t\t.deallocate = %s,\n",
         (arg->argDeallocate == d_YES) ? "TRUE" : "FALSE");
   fprintf(file, "\t\t/* copy is meaningful only in overwrite mode */\n");
-  fprintf(file, "\t\t/* copy = */\t\tMACH_MSG_PHYSICAL_COPY,\n");
-    fprintf(file, "\t\t/* disp = */\t\t%s,\n",
+  fprintf(file, "\t\t.copy = MACH_MSG_PHYSICAL_COPY,\n");
+    fprintf(file, "\t\t.disposition = %s,\n",
 	in ? it->itInNameStr: it->itOutNameStr);
-  fprintf(file, "\t\t/* type = */\t\tMACH_MSG_OOL_PORTS_DESCRIPTOR,\n");
+  fprintf(file, "\t\t.type = MACH_MSG_OOL_PORTS_DESCRIPTOR,\n");
   
   fprintf(file, "\t};\n");
   fprintf(file, "#endif\t/* UseStaticTemplates */\n");

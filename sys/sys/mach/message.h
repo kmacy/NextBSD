@@ -360,11 +360,11 @@ typedef struct
 typedef struct
 {
   void*				address;
-  mach_msg_size_t		count;
   boolean_t     		deallocate: 8;
   mach_msg_copy_options_t       copy: 8;
   mach_msg_type_name_t		disposition : 8;
-  mach_msg_descriptor_type_t	type : 8;
+  mach_msg_descriptor_type_t  type : 8;
+  mach_msg_size_t   count;
 } mach_msg_ool_ports_descriptor_t;
 
 typedef union
