@@ -719,7 +719,7 @@ kern_return_t	vm_map_copyin(
 	}
 
 	src_start = trunc_page(src_addr);
-	src_end = src_addr + len;
+	src_end = round_page(src_addr + len);
 	if (src_end < src_addr)
 		return KERN_INVALID_ADDRESS;
 
