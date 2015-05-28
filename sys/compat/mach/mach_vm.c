@@ -734,7 +734,7 @@ kern_return_t	vm_map_copyin(
 	vm_map_lock(src_map);
 
 	if (!vm_map_lookup_entry(src_map, src_start, &tmp_entry)) {
-		vm_map_lock(src_map);
+		vm_map_unlock(src_map);
 		return KERN_INVALID_ADDRESS;
 	}
 	prev_end = 0;
@@ -757,14 +757,14 @@ kern_return_t	vm_map_copyin(
 		vm_object_split(tmp_entry);
 		object = tmp_entry->object.vm_object;
 		vm_map_delete(src_map, src_start, src_end);
+		vm_map_unlock(src_map);
 	} else {
 		offset = tmp_entry->offset;
-
+		vm_map_unlock(src_map);
 		vm_map_protect(src_map, src_start, src_end, tmp_entry->protection & ~VM_PROT_WRITE, 0);
 		tmp_entry->eflags |= MAP_ENTRY_NEEDS_COPY | MAP_ENTRY_COW;
 	}
 #endif
-	vm_map_unlock(src_map);
 	vm_map_copyin_object(object, offset, src_end - src_start, copy_result);
 	/* neither mach nor osx does anything to prevent information leakage
 	 * in unaligned sends
