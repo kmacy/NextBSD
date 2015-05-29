@@ -153,7 +153,7 @@ create_socket(json_t *json)
 
 		strncpy(sun.sun_path, json_string_value(val), sizeof(sun.sun_path));
 
-		if ((sfd = (socket(AF_UNIX, st, 0)) == -1))
+		if ((sfd = socket(AF_UNIX, st, 0)) == -1)
 			errx(1, "socket(): %s", strerror(errno));
 
 		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PATHMODE))) {
