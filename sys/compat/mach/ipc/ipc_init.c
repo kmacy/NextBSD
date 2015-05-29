@@ -157,6 +157,11 @@ int ipc_space_max = SPACE_MAX;
 int ipc_port_max = PORT_MAX;
 int ipc_pset_max = SET_MAX;
 
+
+#define MSG_OOL_SIZE_SMALL 16385
+vm_size_t msg_ool_size_small;
+
+
 extern void mig_init(void);
 
 /*
@@ -219,13 +224,9 @@ ipc_bootstrap_sysinit(void *arg __unused)
 	ipc_table_init();
 	ipc_notify_init();
 	ipc_hash_init();
+	msg_ool_size_small = MSG_OOL_SIZE_SMALL;
 }
 
-/* 
- * XXX tunable, belongs in mach.message.h 
- */
-#define MSG_OOL_SIZE_SMALL 16385
-vm_size_t msg_ool_size_small;
 
 /*
  *	Routine:	ipc_init
@@ -264,7 +265,6 @@ ipc_init(void)
 		msg_ool_size_small = kalloc_max_prerounded;
 	}
 	else {
-		msg_ool_size_small = MSG_OOL_SIZE_SMALL;
 	}
 #endif
 
