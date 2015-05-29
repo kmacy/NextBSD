@@ -806,8 +806,10 @@ vm_map_copyout(
 	}
 	if (copy->type == VM_MAP_COPY_OBJECT) {
 		cow = copy->cpy_object->ref_count > 1 ? MAP_COPY_ON_WRITE : 0;
-		return vm_map_find(dst_map, copy->cpy_object, copy->offset, dst_addr, copy->size, 0,
-						   VMFS_ANY_SPACE, VM_PROT_READ|VM_PROT_WRITE, VM_PROT_READ|VM_PROT_WRITE, cow);
+		return vm_map_find(dst_map, copy->cpy_object, copy->offset,
+		    dst_addr, round_page(copy->size), 0, VMFS_ANY_SPACE,
+		    VM_PROT_READ|VM_PROT_WRITE, VM_PROT_READ|VM_PROT_WRITE,
+		    cow);
 	}
 	return KERN_NOT_SUPPORTED;
 #if 0

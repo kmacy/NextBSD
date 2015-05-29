@@ -8,7 +8,7 @@ LIB= dispatch
 
 CFLAGS+=	-I${.CURDIR}/../../apsl/include -I${.CURDIR}/os -I${.CURDIR}/private
 CFLAGS+=	-I${.CURDIR} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys 
-CFLAGS+=	-I. -I./include -fblocks
+CFLAGS+=	-I. -I${.CURDIR}/include -fblocks
 CFLAGS+=	-D__APPLE__ -DDISPATCH_USE_DTRACE=0
 CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0 -D__BLOCKS__=1
 
@@ -18,7 +18,7 @@ include/machine: ${.CURDIR}/Makefile
 	mkdir -p include
 	ln -sf ../../sys/${MACHINE_CPUARCH}/include include/machine
 
-protocolServer.c protocolUser.c protocol.h protocolServer.h: include/machine ${.CURDIR}/src/protocol.defs 
+protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/include/machine ${.CURDIR}/src/protocol.defs 
 	mig ${CFLAGS}  -user protocolUser.c \
 	-server protocolServer.c -header protocol.h \
 	-sheader protocolServer.h ${.CURDIR}/src/protocol.defs
