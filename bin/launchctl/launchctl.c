@@ -473,7 +473,7 @@ cmd_start_stop(int argc, char * const argv[])
 		json_object_set(msg, "StartJob", json_string(argv[1]));
 
 	if (!strcmp(argv[0], "stop"))
-		json_object_set(msg, "StartJob", json_string(argv[1]));
+		json_object_set(msg, "StopJob", json_string(argv[1]));
 
 	launch_msg_json(msg);
 	return (0);
