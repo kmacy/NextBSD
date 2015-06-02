@@ -35,7 +35,11 @@
 extern const char *_notify_shm_id();
 #define SHM_ID _notify_shm_id()
 #else
+#ifdef __FreeBSD__
+#define SHM_ID "/apple.shm.notification_center"
+#else
 #define SHM_ID "apple.shm.notification_center"
+#endif
 #endif
 
 #define NOTIFY_IPC_VERSION_NAME "com.apple.system.notify.ipc_version"

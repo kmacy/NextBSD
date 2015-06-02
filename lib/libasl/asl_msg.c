@@ -2993,6 +2993,13 @@ _jump_search(asl_object_private_t *obj, asl_object_private_t *query)
 static asl_object_private_t *
 _jump_match(asl_object_private_t *obj, asl_object_private_t *qlist, size_t *last, size_t start, size_t count, uint32_t duration, int32_t dir)
 {
+
+	(void)last;
+	(void)start;
+	(void)count;
+	(void)duration;
+	(void)dir;
+
 	if (obj == NULL) return NULL;
 
 	if (qlist == NULL)
