@@ -2523,7 +2523,7 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 	user_ool_dsc--;
 	user_ool_dsc->address = (void *)rcv_addr;
 	user_ool_dsc->size = size;
-	user_ool_dsc->type = dsc->type;
+	user_ool_dsc->type = MACH_MSG_OOL_DESCRIPTOR;
 	user_ool_dsc->copy = copy_options;
 	user_ool_dsc->deallocate = (copy_options == MACH_MSG_VIRTUAL_COPY) ? TRUE : FALSE;
 	user_dsc = (mach_msg_descriptor_t *)user_ool_dsc;
