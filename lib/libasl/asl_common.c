@@ -229,7 +229,7 @@ _strdup_clean(const char *s)
 static char **
 _insert_string(char *s, char **l, uint32_t x)
 {
-	int i, len;
+	unsigned int i, len;
 
 	if (s == NULL) return l;
 	if (l == NULL) 
@@ -797,7 +797,7 @@ asl_out_dst_set_access(int fd, asl_out_dst_data_t *dst)
 
 	for (i = 0; i < dst->ngid; i++)
 	{
-		if (dst->gid[i] == -2) continue;
+		if (dst->gid[i] == (gid_t)-2) continue;
 
 		/*
 		 * Don't bother setting group access if this is
@@ -834,7 +834,7 @@ asl_out_dst_set_access(int fd, asl_out_dst_data_t *dst)
 
 	for (i = 0; i < dst->nuid; i++)
 	{
-		if (dst->uid[i] == -2) continue;
+		if (dst->uid[i] == (gid_t)-2) continue;
 
 		/*
 		 * Don't bother setting user access if this is
@@ -1135,7 +1135,7 @@ _asl_out_module_parse_set_param(asl_out_module_t *m, char *s)
 static void
 _dst_add_uid(asl_out_dst_data_t *dst, char *s)
 {
-	int i;
+	unsigned int i;
 	uid_t uid;
 
 	if (dst == NULL) return;

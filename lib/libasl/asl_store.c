@@ -376,9 +376,9 @@ asl_store_make_ug_path(const char *dir, const char *base, const char *ext, uid_t
 	*g = 0;
 	*m = 0644;
 
-	if (ruid == -1)
+	if (ruid == (uid_t)-1)
 	{
-		if (rgid == -1)
+		if (rgid == (gid_t)-1)
 		{
 			if (ext == NULL) asprintf(&path, "%s/%s", dir, base);
 			else asprintf(&path, "%s/%s.%s", dir, base, ext);
@@ -394,7 +394,7 @@ asl_store_make_ug_path(const char *dir, const char *base, const char *ext, uid_t
 	else
 	{
 		*u = ruid;
-		if (rgid == -1)
+		if (rgid == (gid_t)-1)
 		{
 			*m = 0600;
 			if (ext == NULL) asprintf(&path, "%s/%s.U%d", dir, base, *u);
@@ -428,7 +428,7 @@ asl_store_file_open_write(asl_store_t *s, char *tstring, int32_t ruid, int32_t r
 	/* see if the file is already open and in the cache */
 	for (i = 0; i < FILE_CACHE_SIZE; i++)
 	{
-		if ((s->file_cache[i].u == ruid) && (s->file_cache[i].g == rgid) && (s->file_cache[i].bb == bb) && (s->file_cache[i].f != NULL))
+		if ((s->file_cache[i].u == (uid_t)ruid) && (s->file_cache[i].g == (gid_t)rgid) && (s->file_cache[i].bb == bb) && (s->file_cache[i].f != NULL))
 		{
 			s->file_cache[i].ts = now;
 			*f = s->file_cache[i].f;
@@ -662,7 +662,7 @@ asl_store_save(asl_store_t *s, asl_msg_t *msg)
 				if (scratch != NULL)
 				{
 					scratch[len - 4] = '\0';
-					asprintf(&tmp_path, "%s.%llu.asl", scratch, ftime);
+					asprintf(&tmp_path, "%s.%lu.asl", scratch, ftime);
 					free(scratch);
 
 				}
@@ -670,7 +670,7 @@ asl_store_save(asl_store_t *s, asl_msg_t *msg)
 			else
 			{
 				/* append timestamp */
-				asprintf(&tmp_path, "%s.%llu", path, ftime);
+				asprintf(&tmp_path, "%s.%lu", path, ftime);
 			}
 
 			if (tmp_path == NULL)
@@ -821,7 +821,7 @@ asl_store_open_aux(asl_store_t *s, asl_msg_t *msg, int *out_fd, char **url)
 	s->next_id++;
 	tstring = NULL;
 
-	asprintf(&tstring, "%s/%llu", dir, fid);
+	asprintf(&tstring, "%s/%lu", dir, fid);
 	free(dir);
 	if (tstring == NULL) return ASL_STATUS_NO_MEMORY;
 
@@ -919,6 +919,8 @@ asl_store_match_timeout(void *ignored, void *query_v1, void **result_v1, uint64_
 	asl_msg_list_v1_t *listv1;
 	asl_msg_list_t *qlist = NULL;
 	uint32_t status, n;
+
+	(void)ignored;
 
 	if (result_v1 == NULL) return ASL_STATUS_FAILED;
 	*result_v1 = NULL;
