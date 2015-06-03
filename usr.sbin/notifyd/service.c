@@ -98,7 +98,11 @@ service_open_path(const char *name, const char *path, uid_t uid, gid_t gid)
 		return NOTIFY_STATUS_OK;
 	}
 
-//	node = path_node_create(path, uid, gid, PATH_NODE_ALL, dispatch_get_main_queue());
+#ifdef notyet
+	node = path_node_create(path, uid, gid, PATH_NODE_ALL, dispatch_get_main_queue());
+#else
+	node = NULL;
+#endif
 	if (node == NULL) return NOTIFY_STATUS_FAILED;
 	
 	node->contextp = strdup(name);

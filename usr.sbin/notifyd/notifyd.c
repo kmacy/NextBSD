@@ -31,7 +31,6 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/fcntl.h>
-#include <sys/syslimits.h>
 #include <sys/param.h>
 #include <sys/resource.h>
 #include <asl.h>
@@ -178,10 +177,10 @@ fprint_quick_name_info(FILE *f, name_info_t *n)
 	if (n == NULL) return;
 
 	fprintf(f, "\"%s\" uid=%u gid=%u %03x", n->name, n->uid, n->gid, n->access);
-	if (n->slot != -1) 
+	if (n->slot != (uint32_t)-1) 
 	{
 		fprintf(f, " slot %u", n->slot);
-		if (global.shared_memory_refcount[n->slot] != -1) fprintf(f, " = %u", global.shared_memory_base[n->slot]);
+		if (global.shared_memory_refcount[n->slot] != (uint32_t)-1) fprintf(f, " = %u", global.shared_memory_base[n->slot]);
 	}
 
 	fprintf(f, "\n");
@@ -211,16 +210,16 @@ fprint_name_info(FILE *f, const char *name, name_info_t *n, table_t *pid_table, 
 	}
 
 	fprintf(f, "name: %s\n", n->name);
-	fprintf(f, "id: %llu\n", n->name_id);
+	fprintf(f, "id: %lu\n", n->name_id);
 	fprintf(f, "uid: %u\n", n->uid);
 	fprintf(f, "gid: %u\n", n->gid);
 	fprintf(f, "access: %03x\n", n->access);
 	fprintf(f, "refcount: %u\n", n->refcount);
-	if (n->slot == -1) fprintf(f, "slot: -unassigned-");
+	if (n->slot == (uint32_t)-1) fprintf(f, "slot: -unassigned-");
 	else
 	{
 		fprintf(f, "slot: %u", n->slot);
-		if (global.shared_memory_refcount[n->slot] != -1)
+		if (global.shared_memory_refcount[n->slot] != (uint32_t)-1)
 			fprintf(f, " = %u (%u)", global.shared_memory_base[n->slot], global.shared_memory_refcount[n->slot]);
 	}
 	fprintf(f, "\n");
@@ -295,7 +294,7 @@ fprint_status(FILE *f)
 {
 	void *tt;
 	name_info_t *n;
-	int32_t i;
+	uint32_t i;
 	client_t *c;
 	svc_info_t *info;
 	path_node_t *node;
@@ -450,7 +449,7 @@ fprint_status(FILE *f)
 		}
 		else if (info->type == SERVICE_TYPE_TIMER_PUBLIC)
 		{
-			timer = (timer_t *)info->private;
+			timer = (timer_event_t *)info->private;
 			switch (timer->type)
 			{
 				case TIME_EVENT_ONESHOT:
@@ -652,9 +651,7 @@ log_message(int priority, const char *str, ...)
 	va_list ap;
 	FILE *lfp;
 
-	(void)priority;
-
-	if (priority > global.log_cutoff) return;
+	if (priority > (int)global.log_cutoff) return;
 	if (global.log_path == NULL) return;
 
 	lfp = fopen(global.log_path, "a");
@@ -805,7 +802,7 @@ string_insert(char *s, char **l, unsigned int x)
 
 	l = (char **)realloc(l, (len + 1) * sizeof(char *));
 
-	if ((x >= (len - 1)) || (x == IndexNull))
+	if ((x >= (len - 1)) || (x == (unsigned int)IndexNull))
 	{
 		l[len - 1] = strdup(s);
 		l[len] = NULL;
@@ -861,7 +858,7 @@ explode(char *s, char *delim)
 	p = s;
 	while (p[0] != '\0')
 	{
-		for (i = 0; ((p[i] != '\0') && (string_index(p[i], delim) == IndexNull)); i++);
+		for (i = 0; ((p[i] != '\0') && (string_index(p[i], delim) == (unsigned int)IndexNull)); i++);
 		n = i;
 		t = malloc(n + 1);
 		for (i = 0; i < n; i++) t[i] = p[i];
@@ -870,7 +867,7 @@ explode(char *s, char *delim)
 		free(t);
 		t = NULL;
 		if (p[i] == '\0') return l;
-		if (p[i + 1] == '\0') l = string_append("", l);
+		if (p[i + 1] == '\0') l = string_append((char*)"", l);
 		p = p + i + 1;
 	}
 	return l;
