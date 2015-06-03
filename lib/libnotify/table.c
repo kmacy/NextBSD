@@ -406,6 +406,9 @@ _nc_table_traverse(table_t *tin, void *ttin)
 void
 _nc_table_traverse_end(table_t *tin, void *ttin)
 {
+	
+	(void)tin;
+
 	if (ttin == NULL) return;
 	free(ttin);
 }

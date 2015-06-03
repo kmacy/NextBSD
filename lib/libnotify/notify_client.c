@@ -355,13 +355,13 @@ _notify_lib_init(uint32_t event)
 		{
 			globals->notify_dispatch_source = dispatch_source_create(DISPATCH_SOURCE_TYPE_MACH_RECV, globals->notify_common_port, 0, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0));
 			dispatch_source_set_event_handler(globals->notify_dispatch_source, ^{
-				notify_globals_t globals = _notify_globals();
-				_notify_dispatch_handle(globals->notify_common_port);
+				notify_globals_t _globals = _notify_globals();
+				_notify_dispatch_handle(_globals->notify_common_port);
 			});
 			dispatch_source_set_cancel_handler(globals->notify_dispatch_source, ^{
-				task_t task = mach_task_self();
-				notify_globals_t globals = _notify_globals();
-				mach_port_mod_refs(task, globals->notify_common_port, MACH_PORT_RIGHT_RECEIVE, -1);
+				task_t _task = mach_task_self();
+				notify_globals_t _globals = _notify_globals();
+				mach_port_mod_refs(_task, _globals->notify_common_port, MACH_PORT_RIGHT_RECEIVE, -1);
 			});
 			dispatch_resume(globals->notify_dispatch_source);
 		}
@@ -725,7 +725,7 @@ notify_retain_file_descriptor(int clnt, int srv)
 static void
 notify_release_file_descriptor(int fd)
 {
-	int x, i, j;
+	unsigned int x, i, j;
 	notify_globals_t globals = _notify_globals();
 
 	if (fd < 0) return;
@@ -1252,6 +1252,8 @@ notify_get_access(const char *name, uint32_t *access)
 uint32_t
 notify_release_name(const char *name)
 {
+	(void)name;
+
 	return NOTIFY_STATUS_OK;
 }
 
@@ -2130,6 +2132,10 @@ notify_monitor_file(int token, char *path, int flags)
 uint32_t
 notify_get_event(int token, int *ev, char *buf, int *len)
 {
+
+	(void)token;
+	(void)buf;
+
 	if (ev != NULL) *ev = 0;
 	if (len != NULL) *len = 0;
 

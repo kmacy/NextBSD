@@ -1374,7 +1374,8 @@ uint32_t
 _notify_lib_get_owner(notify_state_t *ns, const char *name, uint32_t *uid, uint32_t *gid)
 {
 	name_info_t *n;
-	int i, nlen, len;
+	unsigned int i;
+	int nlen, len;
 
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (name == NULL) return NOTIFY_STATUS_INVALID_NAME;
@@ -1520,6 +1521,8 @@ uint32_t
 _notify_lib_release_name(notify_state_t *ns, const char *name, uid_t uid, gid_t gid)
 {
 	name_info_t *n;
+
+	(void)gid;
 
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (name == NULL) return NOTIFY_STATUS_INVALID_NAME;
