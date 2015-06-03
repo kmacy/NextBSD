@@ -779,7 +779,7 @@ notify_release_file_descriptor(int fd)
 static void
 notify_retain_mach_port(mach_port_t mp, int mine)
 {
-	int x, i;
+	unsigned int x, i;
 	notify_globals_t globals = _notify_globals();
 
 	if (mp == MACH_PORT_NULL) return;
@@ -1710,7 +1710,7 @@ notify_register_mach_port(const char *name, mach_port_name_t *notify_port, int f
 		port = *notify_port;
 		t->queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
 		dispatch_retain(t->queue);
-		t->block = (notify_handler_t)Block_copy(^(int unused){
+		t->block = (notify_handler_t)Block_copy(^(int unused __unused){
 			mach_msg_empty_send_t msg;
 			kern_return_t kstatus;
 
@@ -1778,8 +1778,8 @@ notify_register_file_descriptor(const char *name, int *notify_fd, int flags, int
 #ifndef __FreeBSD__
 	fileport_t fileport;
 #endif
-	kern_return_t kstatus;
-	uint32_t cid;
+	kern_return_t kstatus = 0;
+	uint32_t cid = 0;
 	notify_globals_t globals = _notify_globals();
 
 	regenerate_check();
@@ -1884,7 +1884,7 @@ notify_register_file_descriptor(const char *name, int *notify_fd, int flags, int
 		}
 	}
 
-#if 0
+#ifndef __FreeBSD__
 	/* send fdpair[1] (the sender's fd) to notifyd using a fileport */
 	fileport = MACH_PORT_NULL;
 	if (fileport_makeport(fdpair[1], (fileport_t *)&fileport) < 0)
@@ -1901,7 +1901,7 @@ notify_register_file_descriptor(const char *name, int *notify_fd, int flags, int
 
 	token = OSAtomicIncrement32((int32_t *)&globals->token_id);
 
-#if 0
+#ifndef __FreeBSD__
 	if (globals->notify_ipc_version == 0)
 	{
 		kstatus = _notify_server_register_file_descriptor(globals->notify_server_port, (caddr_t)name, namelen, (mach_port_t)fileport, token, (int32_t *)&cid, (int32_t *)&status);

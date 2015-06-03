@@ -87,6 +87,17 @@ void _notify_init_globals(void * /* notify_globals_t */ globals);
 __attribute__((visibility("hidden")))
 notify_globals_t _notify_globals_impl(void);
 
+uint32_t notify_set_owner(const char *name, uint32_t uid, uint32_t gid);
+uint32_t notify_get_owner(const char *name, uint32_t *uid, uint32_t *gid);
+uint32_t notify_set_access(const char *name, uint32_t access);
+uint32_t notify_get_access(const char *name, uint32_t *access);
+uint32_t notify_release_name(const char *name);
+uint32_t notify_register_plain(const char *name, int *out_token);
+uint32_t notify_peek(int token, uint32_t *val);
+int *notify_check_addr(int token);
+uint32_t notify_monitor_file(int token, char *path, int flags);
+uint32_t notify_get_event(int token, int *ev, char *buf, int *len);
+
 __attribute__((__pure__))
 static inline notify_globals_t
 _notify_globals(void) {
