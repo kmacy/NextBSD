@@ -1566,6 +1566,8 @@ ipc_kmsg_copyin_ool_descriptor(
 		 * is not being deallocated, we must be prepared
 		 * to page if the region is sufficiently large.
 		 */
+		MPASS(*space_needed >= length);
+
 		if (copyin((const char *) addr, (char *) *paddr,
 				   length)) {
 			*mr = MACH_SEND_INVALID_MEMORY;
