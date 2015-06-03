@@ -219,20 +219,28 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 }
 
 
-void *
-ipc_entry_copyin(ipc_space_t space, mach_port_name_t name)
+kern_return_t
+ipc_entry_copyin(ipc_space_t space, mach_port_name_t name, void **fpp, mach_msg_type_name_t disp, ipc_object_t *objectp)
 {
 	struct file *fp;
+	kern_return_t kr;
 
 	if (fget(curthread, name, NULL, &fp) != 0) {
 		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
-		return (NULL);
+		return (KERN_INVALID_ARGUMENT);
 	}
-	return (fp);
+	*fpp = fp;
+	if (fp->f_type == DTYPE_MACH_IPC) {
+		if ((kr = ipc_object_copyin(space, name, disp, objectp)) != KERN_SUCCESS) {
+			fdrop(fp, curthread);
+			return (kr);
+		}
+	}
+	return (KERN_SUCCESS);
 }
 
 kern_return_t
-ipc_entry_copyout(ipc_space_t space, mach_msg_type_name_t msgt_name, void *handle, mach_port_name_t *namep)
+ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_name, mach_port_name_t *namep)
 {
 	struct file *fp = handle;
 	ipc_entry_t entry;
@@ -245,7 +253,9 @@ ipc_entry_copyout(ipc_space_t space, mach_msg_type_name_t msgt_name, void *handl
 		fdrop(fp, curthread);
 		kr = ipc_object_copyout(space, object, msgt_name, namep);
 	} else {
-		kr = finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL);
+		kr = KERN_SUCCESS;
+		if (finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL) != 0)
+			kr = KERN_RESOURCE_SHORTAGE;
 	}
 	return (kr);
 }
