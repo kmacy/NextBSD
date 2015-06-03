@@ -63,7 +63,7 @@ asl_memory_statistics(asl_memory_t *s, asl_msg_t **msg)
 		if (((mem_string_t *)s->string_cache[i])->str != NULL) size += (strlen(((mem_string_t *)s->string_cache[i])->str) + 1);
 	}
 
-	snprintf(str, sizeof(str), "%llu", size);
+	snprintf(str, sizeof(str), "%lu", size);
 	asl_msg_set_key_val(out, "Size", str);
 
 	n = 0;
@@ -610,7 +610,7 @@ asl_memory_message_decode(asl_memory_t *s, mem_record_t *r, asl_msg_t **out)
 	if (msg == NULL) return ASL_STATUS_NO_MEMORY;
 
 	/* Message ID */
-	snprintf(tmp, sizeof(tmp), "%llu", r->mid);
+	snprintf(tmp, sizeof(tmp), "%lu", r->mid);
 	asl_msg_set_key_val(msg, ASL_KEY_MSG_ID, tmp);
 
 	/* Level */
@@ -620,7 +620,7 @@ asl_memory_message_decode(asl_memory_t *s, mem_record_t *r, asl_msg_t **out)
 	/* Time */
 	if (r->time != (uint64_t)-1)
 	{
-		snprintf(tmp, sizeof(tmp), "%llu", r->time);
+		snprintf(tmp, sizeof(tmp), "%lu", r->time);
 		asl_msg_set_key_val(msg, ASL_KEY_TIME, tmp);
 	}
 
@@ -668,7 +668,7 @@ asl_memory_message_decode(asl_memory_t *s, mem_record_t *r, asl_msg_t **out)
 	}
 
 	/* PID */
-	if (r->pid != -1)
+	if (r->pid != (uint32_t)-1)
 	{
 		snprintf(tmp, sizeof(tmp), "%d", r->pid);
 		asl_msg_set_key_val(msg, ASL_KEY_PID, tmp);
@@ -682,14 +682,14 @@ asl_memory_message_decode(asl_memory_t *s, mem_record_t *r, asl_msg_t **out)
 	}
 
 	/* UID */
-	if (r->uid != -2)
+	if (r->uid != (uid_t)-2)
 	{
 		snprintf(tmp, sizeof(tmp), "%d", r->uid);
 		asl_msg_set_key_val(msg, ASL_KEY_UID, tmp);
 	}
 
 	/* GID */
-	if (r->gid != -2)
+	if (r->gid != (gid_t)-2)
 	{
 		snprintf(tmp, sizeof(tmp), "%d", r->gid);
 		asl_msg_set_key_val(msg, ASL_KEY_GID, tmp);
@@ -718,7 +718,7 @@ asl_memory_message_decode(asl_memory_t *s, mem_record_t *r, asl_msg_t **out)
 	/* OSActivityID */
 	if (r->os_activity_id != 0)
 	{
-		snprintf(tmp, sizeof(tmp), "%llu", r->os_activity_id);
+		snprintf(tmp, sizeof(tmp), "%lu", r->os_activity_id);
 		asl_msg_set_key_val(msg, ASL_KEY_OS_ACTIVITY_ID, tmp);
 	}
 

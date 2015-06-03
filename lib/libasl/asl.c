@@ -820,7 +820,7 @@ asl_base_msg(asl_client_t *asl, uint32_t level, const struct timeval *tv, const 
 		snprintf(aux_val, sizeof(aux_val), "%lu", tv->tv_sec);
 		asl_msg_set_key_val(aux, ASL_KEY_TIME, aux_val);
 
-		snprintf(aux_val, sizeof(aux_val), "%d", tv->tv_usec * 1000);
+		snprintf(aux_val, sizeof(aux_val), "%ld", tv->tv_usec * 1000);
 		asl_msg_set_key_val(aux, ASL_KEY_TIME_NSEC, aux_val);
 	}
 

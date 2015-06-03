@@ -1062,11 +1062,13 @@ launch_msg_internal(launch_data_t d)
 {
 	launch_data_t resp = NULL;
 
+#ifdef notyet
 	if (d && (launch_data_get_type(d) == LAUNCH_DATA_STRING)
 			&& (strcmp(launch_data_get_string(d), LAUNCH_KEY_GETJOBS) == 0)
 			&& vproc_swap_complex(NULL, VPROC_GSK_ALLJOBS, NULL, &resp) == NULL) {
 		return resp;
 	}
+#endif
 
 	launch_globals_t globals = _launch_globals();
 	pthread_once(&globals->lc_once, launch_client_init);

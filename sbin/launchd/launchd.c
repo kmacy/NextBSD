@@ -310,7 +310,7 @@ main(int argc, char *const *argv)
 	jobmgr_init(sflag);
 	launchd_runtime_init2();
 	if (getpid() == 1 /* && !job_active(rlcj) */) {
-			init_pre_kevent();
+			init_pre_kevent(sflag);
 	}
 	sleep(1);
 	launchd_runtime();
