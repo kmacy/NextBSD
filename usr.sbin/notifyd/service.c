@@ -132,7 +132,10 @@ service_open_path_private(const char *name, client_t *c, const char *path, uid_t
 {
 	name_info_t *n;
 	svc_info_t *info;
-	path_node_t *node;
+	path_node_t *node = NULL;
+
+	(void)uid;
+	(void)gid;
 
 	call_statistics.service_path++;
 

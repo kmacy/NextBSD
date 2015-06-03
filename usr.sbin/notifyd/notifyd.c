@@ -118,7 +118,7 @@ fprint_client(FILE *f, client_t *c)
 
 	token = c->client_id;
 
-	fprintf(f, "client_id: %llu\n", c->client_id);
+	fprintf(f, "client_id: %lu\n", c->client_id);
 	fprintf(f, "pid: %d\n", c->pid);
 	fprintf(f, "token: %d\n", token);
 	fprintf(f, "lastval: %u\n", c->lastval);
@@ -225,7 +225,7 @@ fprint_name_info(FILE *f, const char *name, name_info_t *n, table_t *pid_table, 
 	}
 	fprintf(f, "\n");
 	fprintf(f, "val: %u\n", n->val);
-	fprintf(f, "state: %llu\n", n->state);
+	fprintf(f, "state: %lu\n", n->state);
 
 	for (i = 0; i < N_NOTIFY_TYPES; i++) reg[i] = 0;
 
@@ -314,48 +314,48 @@ fprint_status(FILE *f)
 	fprintf(f, "\n");
 
 	fprintf(f, "--- STATISTICS ---\n");
-	fprintf(f, "post         %llu\n", call_statistics.post);
-	fprintf(f, "    id       %llu\n", call_statistics.post_by_id);
-	fprintf(f, "    name     %llu\n", call_statistics.post_by_name);
-	fprintf(f, "    fetch    %llu\n", call_statistics.post_by_name_and_fetch_id);
-	fprintf(f, "    no_op    %llu\n", call_statistics.post_no_op);
+	fprintf(f, "post         %lu\n", call_statistics.post);
+	fprintf(f, "    id       %lu\n", call_statistics.post_by_id);
+	fprintf(f, "    name     %lu\n", call_statistics.post_by_name);
+	fprintf(f, "    fetch    %lu\n", call_statistics.post_by_name_and_fetch_id);
+	fprintf(f, "    no_op    %lu\n", call_statistics.post_no_op);
 	fprintf(f, "\n");
-	fprintf(f, "register     %llu\n", call_statistics.reg);
-	fprintf(f, "    plain    %llu\n", call_statistics.reg_plain);
-	fprintf(f, "    check    %llu\n", call_statistics.reg_check);
-	fprintf(f, "    signal   %llu\n", call_statistics.reg_signal);
-	fprintf(f, "    file     %llu\n", call_statistics.reg_file);
-	fprintf(f, "    port     %llu\n", call_statistics.reg_port);
+	fprintf(f, "register     %lu\n", call_statistics.reg);
+	fprintf(f, "    plain    %lu\n", call_statistics.reg_plain);
+	fprintf(f, "    check    %lu\n", call_statistics.reg_check);
+	fprintf(f, "    signal   %lu\n", call_statistics.reg_signal);
+	fprintf(f, "    file     %lu\n", call_statistics.reg_file);
+	fprintf(f, "    port     %lu\n", call_statistics.reg_port);
 	fprintf(f, "\n");
-	fprintf(f, "check        %llu\n", call_statistics.check);
-	fprintf(f, "cancel       %llu\n", call_statistics.cancel);
-	fprintf(f, "cleanup      %llu\n", call_statistics.cleanup);
-	fprintf(f, "regenerate   %llu\n", call_statistics.regenerate);
+	fprintf(f, "check        %lu\n", call_statistics.check);
+	fprintf(f, "cancel       %lu\n", call_statistics.cancel);
+	fprintf(f, "cleanup      %lu\n", call_statistics.cleanup);
+	fprintf(f, "regenerate   %lu\n", call_statistics.regenerate);
 	fprintf(f, "\n");
-	fprintf(f, "suspend      %llu\n", call_statistics.suspend);
-	fprintf(f, "resume       %llu\n", call_statistics.resume);
-	fprintf(f, "suspend_pid  %llu\n", call_statistics.suspend_pid);
-	fprintf(f, "resume_pid   %llu\n", call_statistics.resume_pid);
+	fprintf(f, "suspend      %lu\n", call_statistics.suspend);
+	fprintf(f, "resume       %lu\n", call_statistics.resume);
+	fprintf(f, "suspend_pid  %lu\n", call_statistics.suspend_pid);
+	fprintf(f, "resume_pid   %lu\n", call_statistics.resume_pid);
 	fprintf(f, "\n");
-	fprintf(f, "get_state    %llu\n", call_statistics.get_state);
-	fprintf(f, "    id       %llu\n", call_statistics.get_state_by_id);
-	fprintf(f, "    client   %llu\n", call_statistics.get_state_by_client);
-	fprintf(f, "    fetch    %llu\n", call_statistics.get_state_by_client_and_fetch_id);
+	fprintf(f, "get_state    %lu\n", call_statistics.get_state);
+	fprintf(f, "    id       %lu\n", call_statistics.get_state_by_id);
+	fprintf(f, "    client   %lu\n", call_statistics.get_state_by_client);
+	fprintf(f, "    fetch    %lu\n", call_statistics.get_state_by_client_and_fetch_id);
 	fprintf(f, "\n");
-	fprintf(f, "set_state    %llu\n", call_statistics.set_state);
-	fprintf(f, "    id       %llu\n", call_statistics.set_state_by_id);
-	fprintf(f, "    client   %llu\n", call_statistics.set_state_by_client);
-	fprintf(f, "    fetch    %llu\n", call_statistics.set_state_by_client_and_fetch_id);
+	fprintf(f, "set_state    %lu\n", call_statistics.set_state);
+	fprintf(f, "    id       %lu\n", call_statistics.set_state_by_id);
+	fprintf(f, "    client   %lu\n", call_statistics.set_state_by_client);
+	fprintf(f, "    fetch    %lu\n", call_statistics.set_state_by_client_and_fetch_id);
 	fprintf(f, "\n");
-	fprintf(f, "get_owner    %llu\n", call_statistics.get_owner);
-	fprintf(f, "set_owner    %llu\n", call_statistics.set_owner);
+	fprintf(f, "get_owner    %lu\n", call_statistics.get_owner);
+	fprintf(f, "set_owner    %lu\n", call_statistics.set_owner);
 	fprintf(f, "\n");
-	fprintf(f, "get_access   %llu\n", call_statistics.get_access);
-	fprintf(f, "set_access   %llu\n", call_statistics.set_access);
+	fprintf(f, "get_access   %lu\n", call_statistics.get_access);
+	fprintf(f, "set_access   %lu\n", call_statistics.set_access);
 	fprintf(f, "\n");
-	fprintf(f, "monitor      %llu\n", call_statistics.monitor_file);
-	fprintf(f, "svc_path     %llu\n", call_statistics.service_path);
-	fprintf(f, "svc_timer    %llu\n", call_statistics.service_timer);
+	fprintf(f, "monitor      %lu\n", call_statistics.monitor_file);
+	fprintf(f, "svc_path     %lu\n", call_statistics.service_path);
+	fprintf(f, "svc_timer    %lu\n", call_statistics.service_timer);
 
 	fprintf(f, "\n");
 	fprintf(f, "name         alloc %9u   free %9u   extant %9u\n", global.notify_state->stat_name_alloc , global.notify_state->stat_name_free, global.notify_state->stat_name_alloc - global.notify_state->stat_name_free);
@@ -455,17 +455,17 @@ fprint_status(FILE *f)
 			{
 				case TIME_EVENT_ONESHOT:
 				{
-					fprintf(f, "Time Service: %s <- Oneshot %llu\n", n->name, timer->start);
+					fprintf(f, "Time Service: %s <- Oneshot %lu\n", n->name, timer->start);
 					break;
 				}
 				case TIME_EVENT_CLOCK:
 				{
-					fprintf(f, "Time Service: %s <- Clock start %lld freq %u end %lld\n", n->name, timer->start, timer->freq, timer->end);
+					fprintf(f, "Time Service: %s <- Clock start %ld freq %u end %ld\n", n->name, timer->start, timer->freq, timer->end);
 					break;
 				}
 				case TIME_EVENT_CAL:
 				{
-					fprintf(f, "Time Service: %s <- Calendar start %lld freq %u end %lld day %d\n", n->name, timer->start, timer->freq, timer->end, timer->day);
+					fprintf(f, "Time Service: %s <- Calendar start %ld freq %u end %ld day %d\n", n->name, timer->start, timer->freq, timer->end, timer->day);
 					break;
 				}
 			}
@@ -504,7 +504,7 @@ fprint_status(FILE *f)
 		}
 		else if (info->type == SERVICE_TYPE_TIMER_PRIVATE)
 		{
-			timer = (timer_t *)info->private;
+			timer = (timer_event_t *)info->private;
 			switch (timer->type)
 			{
 				case TIME_EVENT_ONESHOT:
@@ -652,6 +652,8 @@ log_message(int priority, const char *str, ...)
 	va_list ap;
 	FILE *lfp;
 
+	(void)priority;
+
 	if (priority > global.log_cutoff) return;
 	if (global.log_path == NULL) return;
 
@@ -787,7 +789,7 @@ string_list_free(char **l)
 static char **
 string_insert(char *s, char **l, unsigned int x)
 {
-	int i, len;
+	unsigned int i, len;
 
 	if (s == NULL) return l;
 	if (l == NULL) 
@@ -942,7 +944,7 @@ init_config()
 		if (line[0] == '#') continue;
 
 		line[strlen(line) - 1] = '\0';
-		args = explode(line, "\t ");
+		args = explode(line, (char*)"\t ");
 		argslen = string_list_length(args);
 		if (argslen == 0) continue;
 
@@ -1132,7 +1134,8 @@ main(int argc, const char *argv[])
 	dispatch_queue_t main_q;
 	const char *service_name;
 	const char *shm_name;
-	uint32_t i, status;
+	int i;
+	uint32_t status;
 	struct rlimit rlim;
 
 #if TARGET_IPHONE_SIMULATOR
