@@ -574,7 +574,7 @@ launchd_shutdown(void)
 	now = runtime_get_wall_time();
 
 	const char *term_who = pid1_magic ? "System shutdown" : "Per-user launchd termination for ";
-	launchd_syslog(LOG_INFO, "%s%s began", term_who, pid1_magic ? "" : launchd_username);
+	launchd_syslog(LOG_CRIT, "%s%s began", term_who, pid1_magic ? "" : launchd_username);
 
 	os_assert(jobmgr_shutdown(root_jobmgr) != NULL);
 

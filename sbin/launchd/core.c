@@ -1257,6 +1257,7 @@ jobmgr_t
 jobmgr_shutdown(jobmgr_t jm)
 {
 	jobmgr_t jmi, jmn;
+	launchd_syslog(LOG_CRIT, "Beginning job manager shutdown with flags: %s", reboot_flags_to_C_names(jm->reboot_flags));
 	jobmgr_log(jm, LOG_DEBUG, "Beginning job manager shutdown with flags: %s", reboot_flags_to_C_names(jm->reboot_flags));
 
 	jm->shutdown_time = runtime_get_wall_time() / USEC_PER_SEC;
@@ -1388,6 +1389,8 @@ jobmgr_remove(jobmgr_t jm)
 		launchd_log_vm_stats();
 		jobmgr_log_stray_children(jm, true);
 		jobmgr_log(root_jobmgr, LOG_NOTICE | LOG_CONSOLE, "About to call: reboot(%s).", reboot_flags_to_C_names(jm->reboot_flags));
+
+		syslog(LOG_CRIT, "About to call reboot, flags = %#x (%s)", jm->reboot_flags, reboot_flags_to_C_names(jm->reboot_flags));
 		launchd_closelog();
 		(void)jobmgr_assumes_zero_p(jm, reboot(jm->reboot_flags));
 	} else {
@@ -8719,6 +8722,7 @@ job_mig_reboot2(job_t j, uint64_t flags)
 	}
 
 	root_jobmgr->reboot_flags = (int)flags;
+	
 	job_log(j, LOG_DEBUG, "reboot2() initiated by:%s", who_started_the_reboot);
 	launchd_shutdown();
 

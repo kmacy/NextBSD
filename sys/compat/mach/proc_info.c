@@ -367,9 +367,11 @@ proc_pidinfo(int pid, int flavor, uint64_t arg, void *buffer, uint32_t  buffersi
 			findzomb = 1;
 	}
 	if ((p = pfind(pid)) == NULL) {
-		if (findzomb && (p = zpfind(pid)) == NULL) {
-			err = ESRCH;
-			goto done;
+		if (findzomb) {
+			if ((p = zpfind(pid)) == NULL) {
+				err = ESRCH;
+				goto done;
+			}
 		} else {
 			err = ESRCH;
 			goto done;
