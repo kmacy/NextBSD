@@ -218,6 +218,40 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 	return (entry);
 }
 
+
+void *
+ipc_entry_copyin(ipc_space_t space, mach_port_name_t name)
+{
+	struct file *fp;
+
+	if (fget(curthread, name, NULL, &fp) != 0) {
+		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
+		return (NULL);
+	}
+	return (fp);
+}
+
+kern_return_t
+ipc_entry_copyout(ipc_space_t space, mach_msg_type_name_t msgt_name, void *handle, mach_port_name_t *namep)
+{
+	struct file *fp = handle;
+	ipc_entry_t entry;
+	ipc_object_t object;
+	kern_return_t kr;
+
+	if (fp->f_type != DTYPE_MACH_IPC) {
+		entry = fp->f_data;
+		object = entry->ie_object;
+		fdrop(fp, curthread);
+		kr = ipc_object_copyout(space, object, msgt_name, namep);
+	} else {
+		kr = finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL);
+	}
+	return (kr);
+}
+
+
+
 /*
  *	Routine:	ipc_entry_get
  *	Purpose:

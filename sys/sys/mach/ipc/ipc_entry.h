@@ -239,4 +239,15 @@ extern kern_return_t ipc_entry_grow_table(
 	ipc_space_t	space,
 	int		target_size);
 
+
+extern void *ipc_entry_copyin(
+	ipc_space_t space,
+	mach_port_name_t name);
+
+kern_return_t ipc_entry_copyout(
+	ipc_space_t space,
+	mach_msg_type_name_t msgt_name,
+	void *handle,
+	mach_port_name_t *namep);
+
 #endif	/* _IPC_IPC_ENTRY_H_ */
