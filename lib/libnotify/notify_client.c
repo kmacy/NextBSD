@@ -33,7 +33,6 @@
 #include <sys/un.h>
 #include <sys/ipc.h>
 #include <sys/signal.h>
-#include <sys/syslimits.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <sys/mman.h>
@@ -297,7 +296,7 @@ _notify_lib_init(uint32_t event)
 		globals->notify_ipc_version = 0;
 		globals->notify_server_pid = 0;
 
-		kstatus = _notify_server_register_plain(globals->notify_server_port, NOTIFY_IPC_VERSION_NAME, NOTIFY_IPC_VERSION_NAME_LEN, &cid, &status);
+		kstatus = _notify_server_register_plain(globals->notify_server_port, (char*)NOTIFY_IPC_VERSION_NAME, NOTIFY_IPC_VERSION_NAME_LEN, &cid, &status);
 		if ((kstatus == KERN_SUCCESS) && (status == NOTIFY_STATUS_OK))
 		{
 			kstatus = _notify_server_get_state(globals->notify_server_port, cid, &state, &status);
@@ -430,6 +429,8 @@ token_table_add(const char *name, size_t namelen, uint64_t nid, uint32_t token, 
 	name_table_node_t *n;
 	uint32_t warn_count = 0;
 	notify_globals_t globals = _notify_globals();
+
+	(void)sig;
 
 	dispatch_once(&globals->token_table_once, ^{
 		globals->token_table = _nc_table_new(CLIENT_TOKEN_TABLE_SIZE);
@@ -629,6 +630,8 @@ _notify_lib_regenerate(int src)
 	token_table_node_t *t;
 	notify_globals_t globals = _notify_globals();
 
+	(void)src;
+
 	if ((globals->client_opts & NOTIFY_OPT_REGEN) == 0) return;
 
 	/* _notify_lib_init returns an error if regeneration is unnecessary */
@@ -660,14 +663,15 @@ regenerate_check()
 
 	if ((globals->client_opts & NOTIFY_OPT_REGEN) == 0) return;
 
-	if ((globals->shm_base != NULL) && (globals->shm_base[0] != globals->notify_server_pid)) _notify_lib_regenerate(0);
+	if ((globals->shm_base != NULL) && (globals->shm_base[0] != (uint32_t)globals->notify_server_pid)) _notify_lib_regenerate(0);
 }
 
 /* notify_lock is required in notify_retain_file_descriptor */
 static void
 notify_retain_file_descriptor(int clnt, int srv)
 {
-	int x, i;
+	unsigned int i;
+	int x;
 	notify_globals_t globals = _notify_globals();
 
 	if (clnt < 0) return;
@@ -725,7 +729,8 @@ notify_retain_file_descriptor(int clnt, int srv)
 static void
 notify_release_file_descriptor(int fd)
 {
-	unsigned int x, i, j;
+	unsigned int i;
+	int x, j;
 	notify_globals_t globals = _notify_globals();
 
 	if (fd < 0) return;
@@ -779,7 +784,8 @@ notify_release_file_descriptor(int fd)
 static void
 notify_retain_mach_port(mach_port_t mp, int mine)
 {
-	unsigned int x, i;
+	unsigned int i;
+	int x;
 	notify_globals_t globals = _notify_globals();
 
 	if (mp == MACH_PORT_NULL) return;
@@ -836,7 +842,8 @@ notify_retain_mach_port(mach_port_t mp, int mine)
 static void
 notify_release_mach_port(mach_port_t mp, uint32_t flags)
 {
-	int x, i;
+	unsigned int i;
+	int x;
 	notify_globals_t globals = _notify_globals();
 
 	if (mp == MACH_PORT_NULL) return;
@@ -1291,8 +1298,8 @@ _notify_dispatch_handle(mach_port_t port)
 			dispatch_retain(thequeue);
 
 			dispatch_async(thequeue, ^{
-				token_table_node_t *t = token_table_find_no_lock(token);
-				if (t != NULL) theblock(token);
+				token_table_node_t *_t = token_table_find_no_lock(token);
+				if (_t != NULL) theblock(token);
 			});
 
 			_Block_release(theblock);
@@ -1355,7 +1362,7 @@ notify_register_mux_fd(const char *name, int *out_token, int rfd, int wfd)
 	t->queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
 	dispatch_retain(t->queue);
 	val = htonl(t->token);
-	t->block = (notify_handler_t)Block_copy(^(int unused){ write(wfd, &val, sizeof(val)); });
+	t->block = (notify_handler_t)Block_copy(^(int unused __unused){ write(wfd, &val, sizeof(val)); });
 
 	token_table_release(t);
 
@@ -1537,7 +1544,7 @@ notify_register_signal(const char *name, int sig, int *out_token)
 
 	if (globals->client_opts & NOTIFY_OPT_DEMUX)
 	{
-		return notify_register_dispatch(name, out_token, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(int unused){ kill(getpid(), sig); });
+		return notify_register_dispatch(name, out_token, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(int unused __unused){ kill(getpid(), sig); });
 	}
 
 	if (globals->notify_server_port == MACH_PORT_NULL)
@@ -1712,7 +1719,7 @@ notify_register_mach_port(const char *name, mach_port_name_t *notify_port, int f
 		dispatch_retain(t->queue);
 		t->block = (notify_handler_t)Block_copy(^(int unused __unused){
 			mach_msg_empty_send_t msg;
-			kern_return_t kstatus;
+			kern_return_t _kstatus;
 
 			/* send empty message to the port with msgh_id = token; */
 			memset(&msg, 0, sizeof(msg));
@@ -1722,7 +1729,7 @@ notify_register_mach_port(const char *name, mach_port_name_t *notify_port, int f
 			msg.header.msgh_size = sizeof(mach_msg_empty_send_t);
 			msg.header.msgh_id = token;
 
-			kstatus = mach_msg(&(msg.header), MACH_SEND_MSG | MACH_SEND_TIMEOUT, msg.header.msgh_size, 0, MACH_PORT_NULL, 0, MACH_PORT_NULL);
+			_kstatus = mach_msg(&(msg.header), MACH_SEND_MSG | MACH_SEND_TIMEOUT, msg.header.msgh_size, 0, MACH_PORT_NULL, 0, MACH_PORT_NULL);
 		});
 
 		token_table_release(t);
@@ -1734,6 +1741,7 @@ notify_register_mach_port(const char *name, mach_port_name_t *notify_port, int f
 	return NOTIFY_STATUS_OK;
 }
 
+#if 0
 static char *
 _notify_mk_tmp_path(int tid)
 {
@@ -1766,6 +1774,7 @@ _notify_mk_tmp_path(int tid)
 	asprintf(&path, "%s/com.apple.notify.%d.%d", tmp, getpid(), tid);
 	return path;
 }
+#endif
 
 uint32_t
 notify_register_file_descriptor(const char *name, int *notify_fd, int flags, int *out_token)

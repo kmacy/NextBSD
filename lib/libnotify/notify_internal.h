@@ -97,6 +97,11 @@ uint32_t notify_peek(int token, uint32_t *val);
 int *notify_check_addr(int token);
 uint32_t notify_monitor_file(int token, char *path, int flags);
 uint32_t notify_get_event(int token, int *ev, char *buf, int *len);
+void _notify_lib_cancel_port(notify_state_t *ns, mach_port_t port);
+uint32_t _notify_lib_check(notify_state_t *ns, pid_t pid, int token, int *check);
+int *_notify_lib_check_addr(notify_state_t *ns, pid_t pid, int token);
+uint32_t _notify_lib_peek(notify_state_t *ns, pid_t pid, int token, int *val);
+void _notify_fork_child(void);
 
 __attribute__((__pure__))
 static inline notify_globals_t

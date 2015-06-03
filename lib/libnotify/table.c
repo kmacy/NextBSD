@@ -191,7 +191,7 @@ _nc_table_insert_type(table_t *tin, int type, char *key, const char *ckey, void 
 
 	t = (table_private_t *)tin;
 	if (t->type == KEY_UNKNOWN) t->type = type;
-	else os_assumes(t->type == type);
+	else os_assumes(t->type == (uint32_t)type);
 
 	n = (table_node_t *)malloc(sizeof(table_node_t));
 
@@ -406,7 +406,7 @@ _nc_table_traverse(table_t *tin, void *ttin)
 void
 _nc_table_traverse_end(table_t *tin, void *ttin)
 {
-	
+
 	(void)tin;
 
 	if (ttin == NULL) return;

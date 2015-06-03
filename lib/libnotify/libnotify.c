@@ -1316,7 +1316,7 @@ _notify_lib_register_plain(notify_state_t *ns, const char *name, pid_t pid, int 
 		return status;
 	}
 
-	if (slot == SLOT_NONE)
+	if (slot == (uint32_t)SLOT_NONE)
 	{
 		c->notify_type = NOTIFY_TYPE_PLAIN;
 	}
@@ -1467,7 +1467,8 @@ uint32_t
 _notify_lib_get_access(notify_state_t *ns, const char *name, uint32_t *mode)
 {
 	name_info_t *n;
-	int i, nlen, len;
+	unsigned int i;
+	int nlen, len;
 
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (name == NULL) return NOTIFY_STATUS_INVALID_NAME;
