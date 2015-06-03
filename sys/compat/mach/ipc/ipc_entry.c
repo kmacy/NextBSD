@@ -92,6 +92,7 @@
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
 #include <sys/syscallsubr.h>
+#include <sys/stat.h>
 #include <sys/syslog.h>
 
 #include <sys/mach/mach_types.h>
@@ -143,10 +144,19 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 }
 
 static int
-mach_port_stat(struct file *fp __unused, struct stat *sb __unused,
+mach_port_stat(struct file *fp __unused, struct stat *sb,
 			   struct ucred *active_cred __unused, struct thread *td __unused)
 {
-	printf("Now WHY are you statting a mach port?\n");
+	ipc_entry_t entry;
+
+	bzero((caddr_t)sb, sizeof(*sb));
+
+	entry = fp->f_data;
+	if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET) {
+		sb->st_mode = S_IFPSET;
+	} else {
+		sb->st_mode = S_IFPORT;
+	}
 	return (0);
 }
 
