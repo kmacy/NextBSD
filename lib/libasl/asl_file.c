@@ -302,14 +302,14 @@ asl_file_create(const char *path, uid_t uid, gid_t gid, mode_t mode)
 	int fd = -1;
 
 	/* -1 means don't set ACL for uid or gid */
-	if ((uid == -1) && (gid == -1))
+	if ((uid == (uid_t)-1) && (gid == (gid_t)-1))
 	{
 		return open(path, O_RDWR | O_CREAT | O_EXCL, mode);
 	}
 
 	acl = acl_init(1);
 
-	if ((gid != 0) && (gid != -1))
+	if ((gid != 0) && (gid != (gid_t)-1))
 	{
 #if 0
 		status = mbr_gid_to_uuid(gid, uuid);
@@ -334,7 +334,7 @@ asl_file_create(const char *path, uid_t uid, gid_t gid, mode_t mode)
 		if (status != 0) goto asl_file_create_return;
 	}
 
-	if ((uid != 0) && (uid != -1))
+	if ((uid != 0) && (uid != (uid_t)-1))
 	{
 #if 0
 		status = mbr_uid_to_uuid(uid, uuid);
