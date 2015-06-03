@@ -2415,7 +2415,7 @@ ipc_kmsg_copyout_object(
 		return MACH_MSG_SUCCESS;
 	}
 
-	kr = ipc_object_copyout(space, object, msgt_name, TRUE, namep);
+	kr = ipc_object_copyout(space, object, msgt_name, namep);
 	if (kr != KERN_SUCCESS) {
 		ipc_object_destroy(object, msgt_name);
 
