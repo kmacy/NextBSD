@@ -651,8 +651,6 @@ ipc_object_destroy(
  *		KERN_INVALID_CAPABILITY	The object is dead.
  *		KERN_NO_SPACE		No room in space for another right.
  *		KERN_RESOURCE_SHORTAGE	No memory available.
- *		KERN_UREFS_OVERFLOW	Urefs limit exceeded
- *			and overflow wasn't specified.
  */
 
 kern_return_t
@@ -660,7 +658,6 @@ ipc_object_copyout(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	boolean_t		overflow,
 	mach_port_name_t		*namep)
 {
 	mach_port_name_t name;
@@ -735,7 +732,6 @@ ipc_object_copyout_name(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	boolean_t		overflow,
 	mach_port_name_t		name)
 {
 	mach_port_name_t oname;

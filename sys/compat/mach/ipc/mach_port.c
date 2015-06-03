@@ -1354,7 +1354,7 @@ mach_port_insert_right(
 		return KERN_INVALID_CAPABILITY;
 	}
 	return ipc_object_copyout_name(space, (ipc_object_t) poly, 
-				       polyPoly, FALSE, name);
+				       polyPoly, name);
 }
 
 /*
