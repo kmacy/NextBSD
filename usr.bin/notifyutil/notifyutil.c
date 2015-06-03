@@ -28,6 +28,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+#include <netinet/in.h>
 #include <mach/mach.h>
 #include <notify.h>
 #include <notify_private.h>
@@ -88,11 +89,11 @@ static int port_flag;
 static int file_flag;
 static int watch_file;
 static mach_port_t watch_port;
-dispatch_source_t timer_src;
-dispatch_source_t port_src;
-dispatch_source_t file_src;
-dispatch_source_t sig_src[__DARWIN_NSIG];
-dispatch_queue_t watch_queue;
+static dispatch_source_t timer_src;
+static dispatch_source_t port_src;
+static dispatch_source_t file_src;
+static dispatch_source_t sig_src[__DARWIN_NSIG];
+static dispatch_queue_t watch_queue;
 
 static void
 usage(const char *name)
@@ -223,7 +224,8 @@ process_event(int tid)
 	gettimeofday(&now, NULL);
 
 	index = reg_find_token(tid);
-	if (index == IndexNull) return;
+	if (index == (int)IndexNull)
+		return;
 
 	needspace = 0;
 
@@ -420,7 +422,7 @@ do_register(const char *name, uint32_t type, uint32_t signum, uint32_t count)
 
 		case TYPE_DISPATCH:
 		{
-			status = notify_register_dispatch(name, &tid, watch_queue, ^(int x){ dispatch_handler(name); });
+			status = notify_register_dispatch(name, &tid, watch_queue, ^(int x __unused){ dispatch_handler(name); });
 			if (status != NOTIFY_STATUS_OK) return status;
 			break;
 		}
@@ -476,7 +478,8 @@ int
 main(int argc, const char *argv[])
 {
 	const char *name;
-	uint32_t i, n, index, signum, ntype, status, opts, nap;
+	int i;
+	uint32_t n, index, signum, ntype, status, opts, nap;
 	int tid;
 	uint64_t state;
 
