@@ -75,6 +75,7 @@ thread_pool_remove(thread_act_t thread)
 	thread_act_t act = pool->thr_acts;
 	int found = 0;
 
+	mtx_assert(thread->ith_block_lock_data, MA_OWNED);
 	if (act == thread) {
 		pool->thr_acts = pool->thr_acts->ith_pool_next;
 		return;
@@ -156,9 +157,10 @@ thread_pool_get_act(ipc_port_t pool_port, int block)
 void
 thread_pool_put_act( thread_act_t thr_act )
 {
-        thread_pool_t   thr_pool;
+	thread_pool_t   thr_pool;
 
-	/*
+	mtx_assert(thr_act->ith_block_lock_data, MA_OWNED);
+		/*
 	 *	Find the thread pool for this activation.
 	 */	
         if (thr_act->ith_pool_port)

@@ -584,7 +584,6 @@ ipc_mqueue_receive_error(ipc_thread_t self, int save_wait_result, int option)
 		 *	then check the wakeup cause.
 		 */
 		if (self->ith_active) {
-			ip_lock(self->ith_pool_port);
 			thread_pool_remove(self);
 			ip_unlock(self->ith_pool_port);
 			self->ith_active = 0;
@@ -711,11 +710,9 @@ ipc_mqueue_receive(
 
 		self->ith_pool_port  = (ipc_port_t)object;
 		self->ith_active = 1;
-		ip_lock(self->ith_pool_port);
-		thread_pool_put_act(self);
-		ip_unlock(self->ith_pool_port);
-		self->ith_msize = max_size;
 		self->ith_block_lock_data = &((rpc_common_t)object)->rcd_io_lock_data;
+		thread_pool_put_act(self);
+		self->ith_msize = max_size;
 		thread_block();
 
 		/* Save proper wait_result in case we block */
@@ -783,12 +780,10 @@ ipc_mqueue_receive(
 
 	self->ith_pool_port  = (ipc_port_t)object;
 	self->ith_active = 1;
-	ip_lock(self->ith_pool_port);
+	self->ith_block_lock_data = &self->ith_pool_port->port_comm.rcd_io_lock_data;
 	thread_pool_put_act(self);
-	ip_unlock(self->ith_pool_port);
 
 	self->ith_msize = max_size;
-	self->ith_block_lock_data = &self->ith_pool_port->port_comm.rcd_io_lock_data;
 	thread_block();
 	/* Save proper wait_result in case we block */
 	save_wait_result = self->wait_result;
