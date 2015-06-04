@@ -49,7 +49,7 @@ char *launchd_copy_persistent_store(int type, const char *file);
 int _fd(int fd);
 
 void init_boot(bool sflag);
-void init_pre_kevent(void);
+void init_pre_kevent(bool sflag);
 void launchd_exit(int code)  __dead2;
 
 #define launchd_assumes(e)      \

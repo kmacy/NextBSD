@@ -1186,7 +1186,7 @@ ipc_port_copyout_send(
 		kern_return_t kr;
 
 		kr = ipc_object_copyout(space, (ipc_object_t) sright,
-					MACH_MSG_TYPE_PORT_SEND, TRUE, &name);
+					MACH_MSG_TYPE_PORT_SEND, &name);
 		if (kr != KERN_SUCCESS) {
 			ipc_port_release_send(sright);
 

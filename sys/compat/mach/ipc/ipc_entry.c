@@ -92,6 +92,7 @@
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
 #include <sys/syscallsubr.h>
+#include <sys/stat.h>
 #include <sys/syslog.h>
 
 #include <sys/mach/mach_types.h>
@@ -143,10 +144,19 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 }
 
 static int
-mach_port_stat(struct file *fp __unused, struct stat *sb __unused,
+mach_port_stat(struct file *fp __unused, struct stat *sb,
 			   struct ucred *active_cred __unused, struct thread *td __unused)
 {
-	printf("Now WHY are you statting a mach port?\n");
+	ipc_entry_t entry;
+
+	bzero((caddr_t)sb, sizeof(*sb));
+
+	entry = fp->f_data;
+	if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET) {
+		sb->st_mode = S_IFPSET;
+	} else {
+		sb->st_mode = S_IFPORT;
+	}
 	return (0);
 }
 
@@ -207,6 +217,50 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 	fdrop(fp, curthread);
 	return (entry);
 }
+
+
+kern_return_t
+ipc_entry_copyin(ipc_space_t space, mach_port_name_t name, void **fpp, mach_msg_type_name_t disp, ipc_object_t *objectp)
+{
+	struct file *fp;
+	kern_return_t kr;
+
+	if (fget(curthread, name, NULL, &fp) != 0) {
+		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
+		return (KERN_INVALID_ARGUMENT);
+	}
+	*fpp = fp;
+	if (fp->f_type == DTYPE_MACH_IPC) {
+		if ((kr = ipc_object_copyin(space, name, disp, objectp)) != KERN_SUCCESS) {
+			fdrop(fp, curthread);
+			return (kr);
+		}
+	}
+	return (KERN_SUCCESS);
+}
+
+kern_return_t
+ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_name, mach_port_name_t *namep)
+{
+	struct file *fp = handle;
+	ipc_entry_t entry;
+	ipc_object_t object;
+	kern_return_t kr;
+
+	if (fp->f_type != DTYPE_MACH_IPC) {
+		entry = fp->f_data;
+		object = entry->ie_object;
+		fdrop(fp, curthread);
+		kr = ipc_object_copyout(space, object, msgt_name, namep);
+	} else {
+		kr = KERN_SUCCESS;
+		if (finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL) != 0)
+			kr = KERN_RESOURCE_SHORTAGE;
+	}
+	return (kr);
+}
+
+
 
 /*
  *	Routine:	ipc_entry_get

@@ -98,7 +98,11 @@ service_open_path(const char *name, const char *path, uid_t uid, gid_t gid)
 		return NOTIFY_STATUS_OK;
 	}
 
-//	node = path_node_create(path, uid, gid, PATH_NODE_ALL, dispatch_get_main_queue());
+#ifdef notyet
+	node = path_node_create(path, uid, gid, PATH_NODE_ALL, dispatch_get_main_queue());
+#else
+	node = NULL;
+#endif
 	if (node == NULL) return NOTIFY_STATUS_FAILED;
 	
 	node->contextp = strdup(name);
@@ -132,7 +136,10 @@ service_open_path_private(const char *name, client_t *c, const char *path, uid_t
 {
 	name_info_t *n;
 	svc_info_t *info;
-	path_node_t *node;
+	path_node_t *node = NULL;
+
+	(void)uid;
+	(void)gid;
 
 	call_statistics.service_path++;
 

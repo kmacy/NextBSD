@@ -199,10 +199,14 @@ init_boot(bool sflag __unused)
 }
 
 void
-init_pre_kevent(void)
+init_pre_kevent(bool sflag)
 {
 	session_t s;
 
+	if (sflag) {
+		single_user_mode = 1;
+		run_runcom = 0;
+	}
 	syslog(LOG_EMERG, "starting init_pre_kevent() single_user_pid=%d runcom_pid=%d\n",
 		   single_user_pid, runcom_pid);
 	syslog(LOG_EMERG, "... single_user_mode=%d run_runcom=%d\n", single_user_mode, run_runcom);

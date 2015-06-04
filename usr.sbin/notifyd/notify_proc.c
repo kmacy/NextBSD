@@ -42,6 +42,103 @@
 #include "service.h"
 #include "notify_ipc.h"
 
+kern_return_t __notify_server_post_3(mach_port_t server __unused,
+    uint64_t name_id, audit_token_t audit);
+kern_return_t __notify_server_post_2(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, uint64_t *name_id,
+	int *status, audit_token_t audit);
+kern_return_t __notify_server_post_4(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt,audit_token_t audit);
+kern_return_t __notify_server_post(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt, int *status, audit_token_t audit);
+kern_return_t __notify_server_register_plain_2(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, int token,
+	audit_token_t audit);
+kern_return_t __notify_server_register_check_2(mach_port_t server,
+	caddr_t name, mach_msg_type_number_t nameCnt, int token, int *size,
+	int *slot, uint64_t *name_id, int *status, audit_token_t audit);
+kern_return_t __notify_server_register_signal_2(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, int token, int sig,
+	audit_token_t audit);
+kern_return_t __notify_server_register_file_descriptor_2(
+	mach_port_t server __unused, caddr_t name, mach_msg_type_number_t nameCnt,
+	int token, fileport_t fileport, audit_token_t audit);
+kern_return_t __notify_server_register_mach_port_2(
+	mach_port_t server __unused, caddr_t name, mach_msg_type_number_t nameCnt,
+	int token, mach_port_t port, audit_token_t audit);
+kern_return_t __notify_server_cancel(mach_port_t server, int token,
+	int *status, audit_token_t audit);
+kern_return_t __notify_server_cancel_2(mach_port_t server, int token,
+	audit_token_t audit);
+kern_return_t __notify_server_suspend(mach_port_t server __unused,
+	int token, int *status, audit_token_t audit);
+kern_return_t __notify_server_resume(mach_port_t server __unused,
+	int token, int *status, audit_token_t audit);
+kern_return_t __notify_server_suspend_pid(mach_port_t server __unused,
+	int pid, int *status, audit_token_t audit);
+kern_return_t __notify_server_resume_pid(mach_port_t server __unused,
+	int pid, int *status, audit_token_t audit);
+kern_return_t __notify_server_check(mach_port_t server __unused,
+	int token, int *check, int *status, audit_token_t audit);
+kern_return_t __notify_server_get_state(mach_port_t server __unused,
+	int token, uint64_t *state, int *status, audit_token_t audit);
+kern_return_t __notify_server_get_state_2(mach_port_t server __unused,
+	uint64_t name_id, uint64_t *state, int *status, audit_token_t audit);
+kern_return_t __notify_server_get_state_3(mach_port_t server __unused,
+	int token, uint64_t *state, uint64_t *name_id, int *status,
+	audit_token_t audit);
+kern_return_t __notify_server_set_state_3(mach_port_t server __unused,
+	int token, uint64_t state, uint64_t *name_id, int *status,
+	audit_token_t audit);
+kern_return_t __notify_server_set_state(mach_port_t server __unused,
+	int token, uint64_t state, int *status, audit_token_t audit);
+kern_return_t __notify_server_set_state_2(mach_port_t server __unused,
+	uint64_t name_id, uint64_t state, audit_token_t audit);
+kern_return_t __notify_server_set_owner(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, int uid, int gid,
+	int *status, audit_token_t audit);
+kern_return_t __notify_server_get_owner(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, int *uid, int *gid,
+	int *status, audit_token_t audit);
+kern_return_t __notify_server_set_access(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, int mode, int *status,
+	audit_token_t audit);
+kern_return_t __notify_server_get_access(mach_port_t server __unused,
+	caddr_t name, mach_msg_type_number_t nameCnt, int *mode, int *status,
+	audit_token_t audit);
+kern_return_t __notify_server_release_name(mach_port_t server __unused,
+	caddr_t name __unused, mach_msg_type_number_t nameCnt __unused,
+	int *status, audit_token_t audit __unused);
+kern_return_t __notify_server_monitor_file(mach_port_t server __unused,
+	int token, caddr_t path, mach_msg_type_number_t pathCnt, int flags,
+	int *status, audit_token_t audit);
+kern_return_t __notify_server_monitor_file_2(mach_port_t server, int token,
+	caddr_t path, mach_msg_type_number_t pathCnt, int flags,
+	audit_token_t audit);
+kern_return_t __notify_server_register_plain(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt, int *client_id, int *status,
+	audit_token_t audit);
+kern_return_t __notify_server_register_check(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt, int *size, int *slot, int *client_id,
+	int *status, audit_token_t audit);
+kern_return_t __notify_server_register_signal(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt, int sig, int *client_id, int *status,
+	audit_token_t audit);
+kern_return_t __notify_server_register_file_descriptor(mach_port_t server,
+	caddr_t name, mach_msg_type_number_t nameCnt, fileport_t fileport,
+	int ntoken, int *client_id, int *status, audit_token_t audit);
+kern_return_t __notify_server_register_mach_port(mach_port_t server,
+	caddr_t name, mach_msg_type_number_t nameCnt, mach_port_t port,
+	int ntoken, int *client_id, int *status, audit_token_t audit);
+kern_return_t __notify_server_simple_post(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt, audit_token_t audit);
+kern_return_t __notify_server_regenerate(mach_port_t server, caddr_t name,
+	mach_msg_type_number_t nameCnt, int token, uint32_t reg_type,
+	mach_port_t port, int sig, int prev_slot, uint64_t prev_state,
+	uint64_t prev_time, caddr_t path, mach_msg_type_number_t pathCnt,
+	int path_flags, int *new_slot, uint64_t *new_nid, int *status,
+	audit_token_t audit);
+
 static void
 cancel_subscription(client_t *c)
 {
@@ -116,7 +213,7 @@ cancel_proc(void *px)
 }
 
 static void
-cancel_port(mach_port_t port, dispatch_source_t src)
+cancel_port(mach_port_t port, dispatch_source_t src __unused)
 {
 	void *tt;
 	client_t *c;
@@ -312,7 +409,7 @@ server_preflight(caddr_t name, mach_msg_type_number_t nameCnt, audit_token_t aud
 
 kern_return_t __notify_server_post_3
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	uint64_t name_id,
 	audit_token_t audit
 )
@@ -335,7 +432,7 @@ kern_return_t __notify_server_post_3
 
 kern_return_t __notify_server_post_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	uint64_t *name_id,
@@ -434,7 +531,7 @@ kern_return_t __notify_server_post
 
 kern_return_t __notify_server_register_plain_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int token,
@@ -586,7 +683,7 @@ kern_return_t __notify_server_register_check_2
 
 kern_return_t __notify_server_register_signal_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int token,
@@ -628,7 +725,7 @@ kern_return_t __notify_server_register_signal_2
 
 kern_return_t __notify_server_register_file_descriptor_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int token,
@@ -652,7 +749,11 @@ kern_return_t __notify_server_register_file_descriptor_2
 
 	log_message(ASL_LEVEL_DEBUG, "__notify_server_register_file_descriptor %s %d %d\n", name, pid, token);
 
-//	fd = fileport_makefd(fileport);
+#ifdef notyet
+	fd = fileport_makefd(fileport);
+#else
+	fd = -1;
+#endif
 	mach_port_deallocate(mach_task_self(), fileport);
 	if (fd < 0)
 	{
@@ -693,7 +794,7 @@ kern_return_t __notify_server_register_file_descriptor_2
 
 kern_return_t __notify_server_register_mach_port_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int token,
@@ -743,7 +844,7 @@ kern_return_t __notify_server_register_mach_port_2
 
 kern_return_t __notify_server_cancel
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	int *status,
 	audit_token_t audit
@@ -782,7 +883,7 @@ kern_return_t __notify_server_cancel_2
 
 kern_return_t __notify_server_suspend
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	int *status,
 	audit_token_t audit
@@ -805,7 +906,7 @@ kern_return_t __notify_server_suspend
 
 kern_return_t __notify_server_resume
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	int *status,
 	audit_token_t audit
@@ -845,7 +946,7 @@ uid_for_pid(pid_t pid)
 
 kern_return_t __notify_server_suspend_pid
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int pid,
 	int *status,
 	audit_token_t audit
@@ -879,7 +980,7 @@ kern_return_t __notify_server_suspend_pid
 
 kern_return_t __notify_server_resume_pid
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int pid,
 	int *status,
 	audit_token_t audit
@@ -913,7 +1014,7 @@ kern_return_t __notify_server_resume_pid
 
 kern_return_t __notify_server_check
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	int *check,
 	int *status,
@@ -936,7 +1037,7 @@ kern_return_t __notify_server_check
 
 kern_return_t __notify_server_get_state
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	uint64_t *state,
 	int *status,
@@ -973,7 +1074,7 @@ kern_return_t __notify_server_get_state
 
 kern_return_t __notify_server_get_state_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	uint64_t name_id,
 	uint64_t *state,
 	int *status,
@@ -996,7 +1097,7 @@ kern_return_t __notify_server_get_state_2
 
 kern_return_t __notify_server_get_state_3
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	uint64_t *state,
 	uint64_t *name_id,
@@ -1038,7 +1139,7 @@ kern_return_t __notify_server_get_state_3
 
 kern_return_t __notify_server_set_state_3
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	uint64_t state,
 	uint64_t *name_id,
@@ -1079,7 +1180,7 @@ kern_return_t __notify_server_set_state_3
 
 kern_return_t __notify_server_set_state
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	uint64_t state,
 	int *status,
@@ -1101,7 +1202,7 @@ kern_return_t __notify_server_set_state
 
 kern_return_t __notify_server_set_state_2
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	uint64_t name_id,
 	uint64_t state,
 	audit_token_t audit
@@ -1126,7 +1227,7 @@ kern_return_t __notify_server_set_state_2
 
 kern_return_t __notify_server_set_owner
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int uid,
@@ -1159,7 +1260,7 @@ kern_return_t __notify_server_set_owner
 
 kern_return_t __notify_server_get_owner
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int *uid,
@@ -1185,7 +1286,7 @@ kern_return_t __notify_server_get_owner
 
 kern_return_t __notify_server_set_access
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int mode,
@@ -1222,7 +1323,7 @@ kern_return_t __notify_server_set_access
 
 kern_return_t __notify_server_get_access
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	caddr_t name,
 	mach_msg_type_number_t nameCnt,
 	int *mode,
@@ -1247,11 +1348,11 @@ kern_return_t __notify_server_get_access
 /* Unsupported because it makes no sense */
 kern_return_t __notify_server_release_name
 (
-	mach_port_t server,
-	caddr_t name,
-	mach_msg_type_number_t nameCnt,
+	mach_port_t server __unused,
+	caddr_t name __unused,
+	mach_msg_type_number_t nameCnt __unused,
 	int *status,
-	audit_token_t audit
+	audit_token_t audit __unused
 )
 {
 	*status = NOTIFY_STATUS_FAILED;
@@ -1260,7 +1361,7 @@ kern_return_t __notify_server_release_name
 
 kern_return_t __notify_server_monitor_file
 (
-	mach_port_t server,
+	mach_port_t server __unused,
 	int token,
 	caddr_t path,
 	mach_msg_type_number_t pathCnt,
@@ -1328,7 +1429,7 @@ kern_return_t __notify_server_monitor_file_2
  * Generates a integer "token" for legacy client registrations.
  */
 static int
-generate_token(audit_token_t audit)
+generate_token(audit_token_t audit __unused)
 {
 	static int legacy_id = 0;
 
@@ -1561,7 +1662,7 @@ kern_return_t __notify_server_regenerate
 		case NOTIFY_TYPE_MEMORY:
 		{
 			/* prev_slot must be between 0 and global.nslots */
-			if ((prev_slot < 0) || (prev_slot >= global.nslots))
+			if ((prev_slot < 0) || (prev_slot >= (int)global.nslots))
 			{
 				*status = NOTIFY_STATUS_INVALID_REQUEST;
 				return KERN_SUCCESS;
@@ -1570,7 +1671,7 @@ kern_return_t __notify_server_regenerate
 			kstatus = __notify_server_register_check_2(server, name, nameCnt, token, &size, new_slot, new_nid, status, audit);
 			if (*status == NOTIFY_STATUS_OK)
 			{
-				if ((*new_slot != UINT32_MAX) && (global.last_shm_base != NULL))
+				if ((*new_slot != (int)UINT32_MAX) && (global.last_shm_base != NULL))
 				{
 					global.shared_memory_base[*new_slot] = global.shared_memory_base[*new_slot] + global.last_shm_base[prev_slot] - 1;
 					global.last_shm_base[prev_slot] = 0;

@@ -1025,20 +1025,20 @@ mach_port_get_set_status(
 		mach_port_name_t *names;
 		ipc_pset_t pset;
 
-		addr = malloc(size, M_MACH_TMP, M_NOWAIT);
+		addr = malloc(size, M_MACH_VM, M_NOWAIT);
 		if (addr == NULL)
 			return KERN_RESOURCE_SHORTAGE;
 
 		kr = ipc_right_lookup_read(space, name, &entry);
 		if (kr != KERN_SUCCESS) {
-			free(addr, M_MACH_TMP);
+			free(addr, M_MACH_VM);
 			return kr;
 		}
 		/* space is read-locked and active */
 
 		if (IE_BITS_TYPE(entry->ie_bits) != MACH_PORT_TYPE_PORT_SET) {
 			is_read_unlock(space);
-			free(addr, M_MACH_TMP);
+			free(addr, M_MACH_VM);
 			return KERN_INVALID_RIGHT;
 		}
 
@@ -1073,7 +1073,7 @@ mach_port_get_set_status(
 
 		/* didn't have enough memory; allocate more */
 
-		free(addr, M_MACH_TMP);
+		free(addr, M_MACH_VM);
 		size = round_page(actual * sizeof(mach_port_t)) + PAGE_SIZE;
 	}
 
@@ -1091,7 +1091,7 @@ mach_port_get_set_status(
 		 *	copied-in form.  Free any unused memory.
 		 */
 		kr = vm_map_copyin(kernel_map, (vm_offset_t)addr, size_used,
-				   TRUE, &memory);
+				   FALSE, &memory);
 		assert(kr == KERN_SUCCESS);
 	}
 
@@ -1354,7 +1354,7 @@ mach_port_insert_right(
 		return KERN_INVALID_CAPABILITY;
 	}
 	return ipc_object_copyout_name(space, (ipc_object_t) poly, 
-				       polyPoly, FALSE, name);
+				       polyPoly, name);
 }
 
 /*

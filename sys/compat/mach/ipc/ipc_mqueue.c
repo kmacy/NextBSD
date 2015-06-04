@@ -583,8 +583,12 @@ ipc_mqueue_receive_error(ipc_thread_t self, int save_wait_result, int option)
 		 *	Remove ourself from the waiting queue,
 		 *	then check the wakeup cause.
 		 */
-		thread_pool_remove(self);
-
+		if (self->ith_active) {
+			ip_lock(self->ith_pool_port);
+			thread_pool_remove(self);
+			ip_unlock(self->ith_pool_port);
+			self->ith_active = 0;
+		}
 		switch (save_wait_result) {
 		case THREAD_INTERRUPTED:
 			/* receive was interrupted - give up */
@@ -704,9 +708,12 @@ ipc_mqueue_receive(
 		}
 
 		thread_will_wait_with_timeout(self, timeout);
+
 		self->ith_pool_port  = (ipc_port_t)object;
 		self->ith_active = 1;
+		ip_lock(self->ith_pool_port);
 		thread_pool_put_act(self);
+		ip_unlock(self->ith_pool_port);
 		self->ith_msize = max_size;
 		self->ith_block_lock_data = &((rpc_common_t)object)->rcd_io_lock_data;
 		thread_block();
@@ -723,8 +730,12 @@ ipc_mqueue_receive(
 			port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 			self->ith_kmsg = NULL;
 			goto done;
-		} else
+		} else {
+#ifdef INVARIANTS
+			printf("mqueue receive failed - line: %d with: %d\n", __LINE__, self->ith_state);
+#endif
 			return (ipc_mqueue_receive_error(self, save_wait_result, option));
+		}
 	}
 
 	port = (ipc_port_t)object;
@@ -769,9 +780,13 @@ ipc_mqueue_receive(
 		timeout = 0;
 	}
 	thread_will_wait_with_timeout(self, timeout);
+
 	self->ith_pool_port  = (ipc_port_t)object;
 	self->ith_active = 1;
+	ip_lock(self->ith_pool_port);
 	thread_pool_put_act(self);
+	ip_unlock(self->ith_pool_port);
+
 	self->ith_msize = max_size;
 	self->ith_block_lock_data = &self->ith_pool_port->port_comm.rcd_io_lock_data;
 	thread_block();
@@ -787,9 +802,12 @@ ipc_mqueue_receive(
 		seqno = self->ith_seqno;
 		port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 		self->ith_kmsg = NULL;
-	} else
+	} else {
+#ifdef INVARIANTS
+		printf("mqueue receive failed line: %d with: %d\n", __LINE__, self->ith_state);
+#endif
 		return (ipc_mqueue_receive_error(self, save_wait_result, option));
-
+	}
 done:
 	*kmsgp = kmsg;
 	*seqnop = seqno;

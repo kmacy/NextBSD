@@ -408,7 +408,7 @@ timer_calendar(time_t first, time_t freq_mth, time_t end, int day, dispatch_queu
 		unsigned long n = dispatch_source_get_data(t->t_src);
 		dispatch_source_merge_data(t->src, n);
 
-		time_t now = time(0);
+		time_t _now = time(0);
 		time_t x = timer_next(t, now);
 
 		/* deactivate when there is no next time */
@@ -422,7 +422,7 @@ timer_calendar(time_t first, time_t freq_mth, time_t end, int day, dispatch_queu
 		}
 		else
 		{
-			dispatch_source_set_timer(t->t_src, dispatch_walltime(NULL, (x - now) * NSEC_PER_SEC), NSEC_PER_SEC, 0);
+			dispatch_source_set_timer(t->t_src, dispatch_walltime(NULL, (x - _now) * NSEC_PER_SEC), NSEC_PER_SEC, 0);
 		}
 	});
 	
