@@ -270,7 +270,6 @@ extern kern_return_t ipc_object_copyout(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	boolean_t		overflow,
 	mach_port_name_t		*namep);
 
 /* Copyout a capability with a name, placing it into a space */
@@ -278,7 +277,6 @@ extern kern_return_t ipc_object_copyout_name(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	boolean_t		overflow,
 	mach_port_name_t		name);
 
 /* Translate/consume the destination right of a message */

@@ -141,7 +141,7 @@ typedef struct
 	mach_port_t port;
 	int fd;
 	uint32_t send_val;
-	uint32_t pid;
+	pid_t pid;
 	uint32_t sig;
 	void *private;
 } client_t;

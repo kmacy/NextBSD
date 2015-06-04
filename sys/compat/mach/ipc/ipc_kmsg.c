@@ -282,6 +282,8 @@
 #include <sys/mach/ipc_kobject.h>
 #include <sys/mach/thread.h>
 
+/* enable at your own risk */
+#define USE_FILEPORT 1
 
 #pragma pack(4)
 
@@ -1481,6 +1483,9 @@ ipc_kmsg_copyin_port_descriptor(
     mach_msg_type_name_t	result_disp;
     mach_port_name_t		name;
     ipc_object_t 			object;
+#if USE_FILEPORT
+	void *handle;
+#endif	
 
     user_disp = user_dsc->disposition;
     result_disp = ipc_object_copyin_type(user_disp);
@@ -1488,7 +1493,11 @@ ipc_kmsg_copyin_port_descriptor(
     name = (mach_port_name_t)user_dsc->name;
     if (MACH_PORT_NAME_VALID(name)) {
 
+#if USE_FILEPORT
+		kern_return_t kr = ipc_entry_copyin(space, name, &handle, user_disp, &object);
+#else
         kern_return_t kr = ipc_object_copyin(space, name, user_disp, &object);
+#endif
         if (kr != KERN_SUCCESS) {
             *mr = MACH_SEND_INVALID_RIGHT;
 			ERIGHTLOG;
@@ -1500,7 +1509,11 @@ ipc_kmsg_copyin_port_descriptor(
                     (ipc_port_t) dest)) {
             kmsg->ikm_header->msgh_bits |= MACH_MSGH_BITS_CIRCULAR;
         }
-        dsc->name = (ipc_port_t) object;
+#if USE_FILEPORT
+        dsc->name = (ipc_port_t) handle;
+#else
+		dsc->name = (ipc_port_t) object;
+#endif
     } else {
         dsc->name = CAST_MACH_NAME_TO_PORT(name);
     }
@@ -1566,6 +1579,8 @@ ipc_kmsg_copyin_ool_descriptor(
 		 * is not being deallocated, we must be prepared
 		 * to page if the region is sufficiently large.
 		 */
+		MPASS(*space_needed >= length);
+
 		if (copyin((const char *) addr, (char *) *paddr,
 				   length)) {
 			*mr = MACH_SEND_INVALID_MEMORY;
@@ -2413,20 +2428,27 @@ ipc_kmsg_copyout_object(
 		return MACH_MSG_SUCCESS;
 	}
 
-	kr = ipc_object_copyout(space, object, msgt_name, TRUE, namep);
+#if USE_FILEPORT
+	kr = ipc_entry_copyout(space, object, msgt_name, namep);
+#else
+	kr = ipc_object_copyout(space, object, msgt_name, namep);
+#endif
 	if (kr != KERN_SUCCESS) {
-		ipc_object_destroy(object, msgt_name);
+		if (msgt_name != 0) {
+			ipc_object_destroy(object, msgt_name);
 
-		if (kr == KERN_INVALID_CAPABILITY)
-			*namep = MACH_PORT_NAME_DEAD;
-		else {
-			*namep = MACH_PORT_NAME_NULL;
+			if (kr == KERN_INVALID_CAPABILITY)
+				*namep = MACH_PORT_NAME_DEAD;
+			else {
+				*namep = MACH_PORT_NAME_NULL;
 
-			if (kr == KERN_RESOURCE_SHORTAGE)
-				return MACH_MSG_IPC_KERNEL;
-			else
-				return MACH_MSG_IPC_SPACE;
-		}
+				if (kr == KERN_RESOURCE_SHORTAGE)
+					return MACH_MSG_IPC_KERNEL;
+				else
+					return MACH_MSG_IPC_SPACE;
+			}
+		} else
+			return kr;
 	}
 
 	return MACH_MSG_SUCCESS;

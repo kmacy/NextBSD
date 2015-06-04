@@ -1,6 +1,5 @@
 .include <src.opts.mk>
 PROG= notifyd
-WARNS= 6
 
 .PATH: .
 .PATH: ${.CURDIR}

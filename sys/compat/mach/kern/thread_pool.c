@@ -76,7 +76,7 @@ thread_pool_remove(thread_act_t thread)
 	int found = 0;
 
 	if (act == thread) {
-		pool->thr_acts = NULL;
+		pool->thr_acts = pool->thr_acts->ith_pool_next;
 		return;
 	}
 	

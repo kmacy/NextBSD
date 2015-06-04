@@ -124,9 +124,16 @@ static double tbi_float_val;
 #endif
 
 
-static const int sigigns[] = { SIGHUP, SIGINT, SIGPIPE, SIGALRM, SIGTERM,
-	SIGURG, SIGTSTP, SIGTSTP, SIGCONT, SIGTTIN, SIGTTOU, SIGIO, SIGXCPU,
-	SIGXFSZ, SIGVTALRM, SIGPROF, SIGWINCH, SIGINFO, SIGUSR1, SIGUSR2
+static const int init_compat_signals[] = {
+	SIGUSR2,	// halt
+	SIGTERM,	// Go to single user mode
+	SIGINT,	// Reboot
+	SIGTSTP,	// Stop further logins
+};
+
+static const int sigigns[] = { SIGHUP, SIGPIPE, SIGALRM,
+	SIGURG, SIGTSTP, SIGCONT, SIGTTIN, SIGTTOU, SIGIO, SIGXCPU,
+	SIGXFSZ, SIGVTALRM, SIGPROF, SIGWINCH, SIGINFO, SIGUSR1,
 };
 static sigset_t sigign_set;
 bool pid1_magic;
@@ -256,12 +263,51 @@ launchd_runtime_init(void)
 #endif
 }
 
+static void
+sighandler_init_compat(int signo)
+{
+	int kr;
+	_launchd_syslog(LOG_CRIT, "%s(%d)", __FUNCTION__, signo);
+	switch (signo) {
+	case SIGUSR2:
+		// halt and power off
+		kr = job_mig_reboot2(root_jobmgr, RB_HALT | RB_POWEROFF);
+		if (kr != KERN_SUCCESS) {
+			_launchd_syslog(LOG_CRIT, "%s(%d):  kr = %d", __FUNCTION__, __LINE__, kr);
+		}
+		break;
+	case SIGTERM:
+		_launchd_syslog(LOG_CRIT, "%s(%d):  Got SIGTERM", __FUNCTION__, __LINE__);
+		// Single user mode
+		break;
+	case SIGINT:
+		// Reboot
+		kr = job_mig_reboot2(root_jobmgr, RB_AUTOBOOT);
+		if (kr != KERN_SUCCESS) {
+			_launchd_syslog(LOG_CRIT, "%s(%d):  kr = %d", __FUNCTION__, __LINE__, kr);
+		}
+		break;
+	case SIGTSTP:
+		// Block further logins
+		break;
+	case SIGHUP:
+		// Rescan the ttys file
+		break;
+	default:
+		_launchd_syslog(LOG_DEBUG, "%s:  unknown signal number %d", __FUNCTION__, signo);
+		break;
+	}
+}
+
 void
 launchd_runtime_init2(void)
 {
 	size_t i;
 
 	__OS_COMPILETIME_ASSERT__(SIG_ERR == (typeof(SIG_ERR))-1);
+	for (i = 0; i < (sizeof(init_compat_signals) / sizeof(int)); i++) {
+		signal(init_compat_signals[i], sighandler_init_compat);
+	}
 	for (i = 0; i < (sizeof(sigigns) / sizeof(int)); i++) {
 		sigaddset(&sigign_set, sigigns[i]);
 		(void)posix_assumes_zero(signal(sigigns[i], SIG_IGN));

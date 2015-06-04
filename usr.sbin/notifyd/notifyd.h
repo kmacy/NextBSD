@@ -31,6 +31,9 @@
 
 #define NOTIFY_IPC_VERSION 2
 
+extern struct global_s global;
+extern struct call_statistics_s call_statistics;
+
 struct global_s
 {
 	mach_port_t server_port;

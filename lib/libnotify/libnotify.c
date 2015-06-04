@@ -228,7 +228,7 @@ _internal_new_name(notify_state_t *ns, const char *name)
 static void
 _internal_insert_controlled_name(notify_state_t *ns, name_info_t *n)
 {
-	int i, j;
+	unsigned int i, j;
 
 	if (ns == NULL) return;
 	if (n == NULL) return;
@@ -1076,6 +1076,9 @@ _notify_lib_get_state(notify_state_t *ns, uint64_t nid, uint64_t *state, uid_t u
 {
 	name_info_t *n;
 
+	(void)uid;
+	(void)gid;
+
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (state == NULL) return NOTIFY_STATUS_FAILED;
 
@@ -1313,7 +1316,7 @@ _notify_lib_register_plain(notify_state_t *ns, const char *name, pid_t pid, int 
 		return status;
 	}
 
-	if (slot == SLOT_NONE)
+	if (slot == (uint32_t)SLOT_NONE)
 	{
 		c->notify_type = NOTIFY_TYPE_PLAIN;
 	}
@@ -1371,7 +1374,8 @@ uint32_t
 _notify_lib_get_owner(notify_state_t *ns, const char *name, uint32_t *uid, uint32_t *gid)
 {
 	name_info_t *n;
-	int i, nlen, len;
+	unsigned int i;
+	int nlen, len;
 
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (name == NULL) return NOTIFY_STATUS_INVALID_NAME;
@@ -1463,7 +1467,8 @@ uint32_t
 _notify_lib_get_access(notify_state_t *ns, const char *name, uint32_t *mode)
 {
 	name_info_t *n;
-	int i, nlen, len;
+	unsigned int i;
+	int nlen, len;
 
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (name == NULL) return NOTIFY_STATUS_INVALID_NAME;
@@ -1517,6 +1522,8 @@ uint32_t
 _notify_lib_release_name(notify_state_t *ns, const char *name, uid_t uid, gid_t gid)
 {
 	name_info_t *n;
+
+	(void)gid;
 
 	if (ns == NULL) return NOTIFY_STATUS_FAILED;
 	if (name == NULL) return NOTIFY_STATUS_INVALID_NAME;
