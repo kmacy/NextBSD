@@ -119,6 +119,7 @@ SUBDIR=	${_addr2line} \
 	nl \
 	${_nm} \
 	nohup \
+	notifyutil \
 	opieinfo \
 	opiekey \
 	opiepasswd \
