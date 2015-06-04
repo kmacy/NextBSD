@@ -522,6 +522,7 @@ WriteSubsystem(FILE *file, statement_t *stats)
 	}
 	fprintf(file, "\n/* Description of this subsystem, for use in direct RPC */\n");
 	if (ServerHeaderFileName == strNULL) {
+		fprintf(file, "extern const struct %s %s;\n", ServerSubsys, ServerSubsys);
 		fprintf(file, "const struct %s {\n", ServerSubsys);
 		if (UseRPCTrap) {
 			fprintf(file, "\tstruct subsystem *\tsubsystem;\t/* Reserved for system use */\n");
