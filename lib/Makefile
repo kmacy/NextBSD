@@ -80,6 +80,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libnetbsd \
 	${_libnetgraph} \
 	${_libngatm} \
+	libnotify \
 	libnv \
 	libohash \
 	libopie \
