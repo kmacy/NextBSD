@@ -386,13 +386,6 @@ extern mach_msg_size_t ipc_kmsg_copyout_size(
 	ipc_kmsg_t		kmsg,
 	vm_map_t		map);
 
-/* Copyout port rights and out-of-line memory from the body of a message */
-extern mach_msg_return_t ipc_kmsg_copyout_body(
-    	ipc_kmsg_t		kmsg,
-	ipc_space_t		space,
-	vm_map_t		map,
-	mach_msg_body_t		*slist);
-
 /* Copyout port rights and out-of-line memory to a user message,
    not reversing the ports in the header */
 extern mach_msg_return_t ipc_kmsg_copyout_pseudo(
