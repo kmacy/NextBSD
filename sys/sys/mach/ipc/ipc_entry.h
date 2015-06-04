@@ -253,4 +253,8 @@ kern_return_t ipc_entry_copyout(
 	mach_msg_type_name_t msgt_name,
 	mach_port_name_t *namep);
 
+ipc_object_t ipc_entry_handle_to_object(
+	void *handle);
+
+
 #endif	/* _IPC_IPC_ENTRY_H_ */

@@ -260,6 +260,21 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 	return (kr);
 }
 
+ipc_object_t
+ipc_entry_handle_to_object(void *handle)
+{
+	struct file *fp = handle;
+	ipc_entry_t entry;
+
+	if (fp == NULL)
+		return (NULL);
+	if (fp->f_type != DTYPE_MACH_IPC)
+		return (NULL);
+	if ((entry = fp->f_data) == NULL)
+		return (NULL);
+
+	return (entry->ie_object);
+}
 
 
 /*
