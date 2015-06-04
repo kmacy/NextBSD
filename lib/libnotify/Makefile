@@ -13,15 +13,17 @@ DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck 
 
-notify_ipc.h notify_ipcUser.c: notify_ipc.defs machine
+notify_ipc.defs: ${.CURDIR}/machine
+
+notify_ipc.h notify_ipcUser.c: notify_ipc.defs ${.CURDIR}/machine
 	mig ${MIG_FLAGS} ${.CURDIR}/notify_ipc.defs
 
-notify_client.c: notify_ipc.h
+notify_client.c: notify_ipc.h notify_ipcUser.c
 
 SRCS= libnotify.c notify_client.c table.c notify_ipcUser.c
 
-machine:
-	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include machine
+${.CURDIR}/machine:
+	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include ${.CURDIR}/machine
 
 CLEANFILES+= *User.c *Server.c notify_ipc.h
 
