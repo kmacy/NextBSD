@@ -242,7 +242,7 @@ ipc_entry_copyin(ipc_space_t space, mach_port_name_t name, void **fpp, mach_msg_
 kern_return_t
 ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_name, mach_port_name_t *namep)
 {
-	struct file *newfp, *fp = handle;
+	struct file *fp = handle;
 	ipc_entry_t entry;
 	ipc_object_t object;
 	kern_return_t kr;
@@ -255,19 +255,14 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 		object = entry->ie_object;
 		MPASS(object != NULL);
 		kr = ipc_object_copyout(space, object, msgt_name, namep);
+		fdrop(fp, curthread);
 	} else {
-		if ((kr = falloc_noinstall(curthread, &newfp)) != 0) {
-			kr = KERN_RESOURCE_SHORTAGE;
-			goto done;
-		}
-		finit(newfp, fp->f_flag, fp->f_type, fp->f_data, fp->f_ops);
-		if ((kr = finstall(curthread, newfp, namep, O_CLOEXEC|FMINALLOC, NULL)) != 0) {
-			fdrop(newfp, curthread);
+		/* maintain the reference added at ipc_entry_copyin */
+		if ((kr = finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL)) != 0) {
+			fdrop(fp, curthread);
 			kr = KERN_RESOURCE_SHORTAGE;
 		}
 	}
-done:
-	fdrop(fp, curthread);
 	return (kr);
 }
 
