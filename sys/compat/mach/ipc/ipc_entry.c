@@ -242,21 +242,32 @@ ipc_entry_copyin(ipc_space_t space, mach_port_name_t name, void **fpp, mach_msg_
 kern_return_t
 ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_name, mach_port_name_t *namep)
 {
-	struct file *fp = handle;
+	struct file *newfp, *fp = handle;
 	ipc_entry_t entry;
 	ipc_object_t object;
 	kern_return_t kr;
 
-	if (fp->f_type != DTYPE_MACH_IPC) {
+	MPASS(handle != NULL);
+
+	if (fp->f_type == DTYPE_MACH_IPC) {
 		entry = fp->f_data;
+		MPASS(entry != NULL);
 		object = entry->ie_object;
-		fdrop(fp, curthread);
+		MPASS(object != NULL);
 		kr = ipc_object_copyout(space, object, msgt_name, namep);
 	} else {
-		kr = KERN_SUCCESS;
-		if (finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL) != 0)
+		if ((kr = falloc_noinstall(curthread, &newfp)) != 0) {
 			kr = KERN_RESOURCE_SHORTAGE;
+			goto done;
+		}
+		finit(newfp, fp->f_flag, fp->f_type, fp->f_data, fp->f_ops);
+		if ((kr = finstall(curthread, newfp, namep, O_CLOEXEC|FMINALLOC, NULL)) != 0) {
+			fdrop(newfp, curthread);
+			kr = KERN_RESOURCE_SHORTAGE;
+		}
 	}
+done:
+	fdrop(fp, curthread);
 	return (kr);
 }
 
@@ -309,9 +320,9 @@ ipc_entry_get(
 
 	if (*namep != MACH_PORT_NAME_NULL) {
 		fd = *namep;
-		flags = FNOFDALLOC;
+		flags = FNOFDALLOC|O_CLOEXEC;
 	} else
-		flags = FMINALLOC;
+		flags = FMINALLOC|O_CLOEXEC;
 
 	if (falloc(td, &fp, &fd, flags)) {
 		free(free_entry, M_MACH_IPC_ENTRY);
