@@ -75,7 +75,7 @@ store_route(struct rt_msghdr *rtm)
 {
 	u_int i;
 	struct natm_route *r;
-	long *cp;
+	char *cp;
 	struct sockaddr *sa;
 	struct sockaddr_in *sain;
 	struct sockaddr_dl *sdl;
@@ -87,11 +87,11 @@ store_route(struct rt_msghdr *rtm)
 		err(1, "allocate route");
 
 	r->flags = rtm->rtm_flags;
-	cp = (long *)(rtm + 1);
+	cp = (char *)(rtm + 1);
 	for (i = 1; i != 0; i <<= 1) {
 		if (rtm->rtm_addrs & i) {
 			sa = (struct sockaddr *)cp;
-			cp += roundup(sa->sa_len, sizeof(long))/sizeof(long);
+			cp += roundup(sa->sa_len, sizeof(long));
 			switch (i) {
 
 			  case RTA_DST:

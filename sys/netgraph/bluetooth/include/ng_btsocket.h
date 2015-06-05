@@ -226,7 +226,7 @@ struct sockaddr_l2cap {
 	u_char		l2cap_family;	/* address family */
 	u_int16_t	l2cap_psm;	/* PSM (Protocol/Service Multiplexor) */
 	bdaddr_t	l2cap_bdaddr;	/* address */
-} __aligned(sizeof(long));
+};
 
 /* L2CAP socket options */
 #define SOL_L2CAP		0x1609	/* socket option level */
