@@ -234,12 +234,6 @@ extern void ipc_entry_close(
 	ipc_space_t	space __unused,
 	mach_port_name_t	name);
 
-/* Grow the table in a space */
-extern kern_return_t ipc_entry_grow_table(
-	ipc_space_t	space,
-	int		target_size);
-
-
 kern_return_t ipc_entry_copyin(
 	ipc_space_t space,
 	mach_port_name_t name,
