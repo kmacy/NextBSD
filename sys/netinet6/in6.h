@@ -127,7 +127,7 @@ struct sockaddr_in6 {
 	uint32_t	sin6_flowinfo;	/* IP6 flow information */
 	struct in6_addr	sin6_addr;	/* IP6 address */
 	uint32_t	sin6_scope_id;	/* scope zone index */
-};
+} __aligned(sizeof(long));
 
 /*
  * Local definition for masks
