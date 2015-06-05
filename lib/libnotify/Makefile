@@ -13,7 +13,7 @@ DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck 
 
-notify_ipc.h notify_ipcUser.c: notify_ipc.defs
+notify_ipc.h notify_ipcUser.c: notify_ipc.defs machine
 	mig ${MIG_FLAGS} ${.CURDIR}/notify_ipc.defs
 
 notify_client.c: notify_ipc.h
