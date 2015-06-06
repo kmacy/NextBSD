@@ -18,7 +18,7 @@ include/machine: ${.CURDIR}/Makefile
 	mkdir -p include
 	ln -sf ../../sys/${MACHINE_CPUARCH}/include include/machine
 
-protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/include/machine ${.CURDIR}/src/protocol.defs 
+protocolServer.c protocolUser.c protocol.h protocolServer.h: include/machine ${.CURDIR}/src/protocol.defs 
 	mig ${CFLAGS}  -user protocolUser.c \
 	-server protocolServer.c -header protocol.h \
 	-sheader protocolServer.h ${.CURDIR}/src/protocol.defs
