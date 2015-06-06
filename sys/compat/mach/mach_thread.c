@@ -216,8 +216,8 @@ mach_thread_fini(void *arg __unused, struct thread *td)
 	MPASS(thread->ith_kmsg == NULL);
 	MPASS(thread->ith_block_lock_data == NULL);
 	MPASS(thread->ith_td == td);
-	mtx_destroy(&thread->ith_lock_data);
 	ipc_thr_act_terminate(thread);
+	mtx_destroy(&thread->ith_lock_data);
 	uma_zfree(thread_shuttle_zone, thread);
 }
 
