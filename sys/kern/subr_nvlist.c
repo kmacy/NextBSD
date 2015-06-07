@@ -1903,7 +1903,7 @@ NVLIST_GET(const nvlist_t *, nvlist, NVLIST)
 #ifndef _KERNEL
 NVLIST_GET(int, descriptor, DESCRIPTOR)
 #endif
-NVLIST_GET(const uuid_t *, uuid)
+NVLIST_GET(const uuid_t *, uuid, UUID)
 
 #undef	NVLIST_GET
 
@@ -2022,7 +2022,7 @@ NVLIST_TAKE(nvlist_t *, nvlist, NVLIST)
 #ifndef _KERNEL
 NVLIST_TAKE(int, descriptor, DESCRIPTOR)
 #endif
-NVLIST_TAKE(uuid_t *, uuid)
+NVLIST_TAKE(uuid_t *, uuid, UUID)
 
 #undef	NVLIST_TAKE
 
@@ -2155,7 +2155,7 @@ NVLIST_FREE(nvlist, NVLIST)
 NVLIST_FREE(descriptor, DESCRIPTOR)
 #endif
 NVLIST_FREE(binary, BINARY)
-NVLIST_FREE(uuid)
+NVLIST_FREE(uuid, UUID)
 
 #undef	NVLIST_FREE
 
