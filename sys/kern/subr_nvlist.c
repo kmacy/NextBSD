@@ -447,6 +447,7 @@ nvlist_dump(const nvlist_t *nvl, int fd)
 		case NV_TYPE_UINT64:
 		case NV_TYPE_INT64:
 		case NV_TYPE_ENDPOINT:
+		case NV_TYPE_DATE:
 			dprintf(fd, " %ju (%jd) (0x%jx)\n",
 			    (uintmax_t)nvpair_get_number(nvp),
 			    (intmax_t)nvpair_get_number(nvp),
@@ -485,6 +486,20 @@ nvlist_dump(const nvlist_t *nvl, int fd)
 				dprintf(fd, "%02hhx", binary[ii]);
 			dprintf(fd, "\n");
 			break;
+		    }
+		case NV_TYPE_UUID:
+		    {
+		    	char *str;
+		    	int status;
+		    	const uuid_t *uuid;
+
+		    	uuid = nvpair_get_uuid(nvp);
+		    	uuid_to_string(uuid, &str, &status);
+		    	if (status == uuid_s_ok)
+		    		dprintf(fd, " [%s]\n", str);
+
+		    	free(str);
+		    	break;
 		    }
 		default:
 			PJDLOG_ABORT("Unknown type: %d.", nvpair_type(nvp));
@@ -757,6 +772,7 @@ nvlist_xpack(const nvlist_t *nvl, void *ubuf, int64_t *fdidxp, size_t *sizep)
 			break;
 #endif
 		case NV_TYPE_BINARY:
+		case NV_TYPE_UUID:
 			ptr = nvpair_pack_binary(nvp, ptr, &left);
 			break;
 		default:
@@ -932,6 +948,7 @@ nvlist_xunpack(const void *buf, size_t size, const int *fds, size_t nfds)
 			break;
 #endif
 		case NV_TYPE_BINARY:
+		case NV_TYPE_UUID:
 			ptr = nvpair_unpack_binary(isbe, nvp, ptr, &left);
 			break;
 		case NV_TYPE_NVLIST_UP:
@@ -1160,6 +1177,7 @@ NVLIST_EXISTS(nvlist, NVLIST)
 NVLIST_EXISTS(descriptor, DESCRIPTOR)
 #endif
 NVLIST_EXISTS(binary, BINARY)
+NVLIST_EXISTS(uuid, UUID)
 
 #undef	NVLIST_EXISTS
 
@@ -1198,6 +1216,7 @@ NVLIST_EXISTSF(nvlist)
 NVLIST_EXISTSF(descriptor)
 #endif
 NVLIST_EXISTSF(binary)
+NVLIST_EXISTSF(uuid)
 
 #undef	NVLIST_EXISTSF
 
@@ -1239,6 +1258,7 @@ NVLIST_EXISTSV(string)
 NVLIST_EXISTSV(nvlist)
 NVLIST_EXISTSV(descriptor)
 NVLIST_EXISTSV(binary)
+NVLIST_EXISTSV(uuid)
 
 #undef	NVLIST_EXISTSV
 #endif
@@ -1368,6 +1388,13 @@ nvlist_add_binary(nvlist_t *nvl, const char *name, const void *value,
 }
 
 void
+nvlist_add_uuid(nvlist_t *nvl, const char *name, const uuid_t *value)
+{
+
+	nvlist_addf_uuid(nvl, value, "%s", name);
+}
+
+void
 nvlist_addf_null(nvlist_t *nvl, const char *namefmt, ...)
 {
 	va_list nameap;
@@ -1459,6 +1486,16 @@ nvlist_addf_binary(nvlist_t *nvl, const void *value, size_t size,
 
 	va_start(nameap, namefmt);
 	nvlist_addv_binary(nvl, value, size, namefmt, nameap);
+	va_end(nameap);
+}
+
+void
+nvlist_addf_uuid(nvlist_t *nvl, const uuid_t *value, const char *namefmt, ...)
+{
+	va_list nameap;
+
+	va_start(nameap, namefmt);
+	nvlist_addv_uuid(nvl, value, namefmt, nameap);
 	va_end(nameap);
 }
 
@@ -1622,6 +1659,24 @@ nvlist_addv_binary(nvlist_t *nvl, const void *value, size_t size,
 }
 
 void
+nvlist_addv_uuid(nvlist_t *nvl, const uuid_t *value,
+    const char *namefmt, va_list nameap)
+{
+	nvpair_t *nvp;
+
+	if (nvlist_error(nvl) != 0) {
+		errno = nvlist_error(nvl);
+		return;
+	}
+
+	nvp = nvpair_createv_uuid(value, namefmt, nameap);
+	if (nvp == NULL)
+		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
+	else
+		nvlist_move_nvpair(nvl, nvp);
+}
+
+void
 nvlist_move_nvpair(nvlist_t *nvl, nvpair_t *nvp)
 {
 
@@ -1666,6 +1721,13 @@ nvlist_move_binary(nvlist_t *nvl, const char *name, void *value, size_t size)
 	nvlist_movef_binary(nvl, value, size, "%s", name);
 }
 
+void
+nvlist_move_uuid(nvlist_t *nvl, const char *name, uuid_t *value)
+{
+
+	nvlist_movef_binary(nvl, value, sizeof(uuid_t), "%s", name);
+}
+
 #define	NVLIST_MOVEF(vtype, type)					\
 void									\
 nvlist_movef_##type(nvlist_t *nvl, vtype value, const char *namefmt,	\
@@ -1694,6 +1756,16 @@ nvlist_movef_binary(nvlist_t *nvl, void *value, size_t size,
 
 	va_start(nameap, namefmt);
 	nvlist_movev_binary(nvl, value, size, namefmt, nameap);
+	va_end(nameap);
+}
+
+void
+nvlist_movef_uuid(nvlist_t *nvl, uuid_t *value, const char *namefmt, ...)
+{
+	va_list nameap;
+
+	va_start(nameap, namefmt);
+	nvlist_movev_uuid(nvl, value, namefmt, nameap);
 	va_end(nameap);
 }
 
@@ -1787,6 +1859,25 @@ nvlist_movev_binary(nvlist_t *nvl, void *value, size_t size,
 		nvlist_move_nvpair(nvl, nvp);
 }
 
+void
+nvlist_movev_uuid(nvlist_t *nvl, uuid_t *value,
+const char *namefmt, va_list nameap)
+{
+	nvpair_t *nvp;
+
+	if (nvlist_error(nvl) != 0) {
+		free(value);
+		errno = nvlist_error(nvl);
+		return;
+	}
+
+	nvp = nvpair_movev_uuid(value, namefmt, nameap);
+	if (nvp == NULL)
+		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
+	else
+		nvlist_move_nvpair(nvl, nvp);
+}
+
 const nvpair_t *
 nvlist_get_nvpair(const nvlist_t *nvl, const char *name)
 {
@@ -1813,6 +1904,7 @@ NVLIST_GET(const nvlist_t *, nvlist, NVLIST)
 #ifndef _KERNEL
 NVLIST_GET(int, descriptor, DESCRIPTOR)
 #endif
+NVLIST_GET(const uuid_t *, uuid, UUID)
 
 #undef	NVLIST_GET
 
@@ -1848,6 +1940,7 @@ NVLIST_GETF(uint64_t, number)
 NVLIST_GETF(const char *, string)
 NVLIST_GETF(const nvlist_t *, nvlist)
 NVLIST_GETF(int, descriptor)
+NVLIST_GETF(const uuid_t *, uuid)
 
 #undef	NVLIST_GETF
 
@@ -1886,6 +1979,7 @@ NVLIST_GETV(uint64_t, number, NUMBER)
 NVLIST_GETV(const char *, string, STRING)
 NVLIST_GETV(const nvlist_t *, nvlist, NVLIST)
 NVLIST_GETV(int, descriptor, DESCRIPTOR)
+NVLIST_GETV(const uuid_t *, uuid, UUID)
 
 #undef	NVLIST_GETV
 
@@ -1929,6 +2023,7 @@ NVLIST_TAKE(nvlist_t *, nvlist, NVLIST)
 #ifndef _KERNEL
 NVLIST_TAKE(int, descriptor, DESCRIPTOR)
 #endif
+NVLIST_TAKE(uuid_t *, uuid, UUID)
 
 #undef	NVLIST_TAKE
 
@@ -1968,6 +2063,7 @@ NVLIST_TAKEF(uint64_t, number)
 NVLIST_TAKEF(char *, string)
 NVLIST_TAKEF(nvlist_t *, nvlist)
 NVLIST_TAKEF(int, descriptor)
+NVLIST_TAKEF(uuid_t *, uuid)
 
 #undef	NVLIST_TAKEF
 
@@ -2004,6 +2100,7 @@ NVLIST_TAKEV(uint64_t, number, NUMBER)
 NVLIST_TAKEV(char *, string, STRING)
 NVLIST_TAKEV(nvlist_t *, nvlist, NVLIST)
 NVLIST_TAKEV(int, descriptor, DESCRIPTOR)
+NVLIST_TAKEV(uuid_t *, uuid, UUID)
 
 #undef	NVLIST_TAKEV
 
@@ -2059,6 +2156,7 @@ NVLIST_FREE(nvlist, NVLIST)
 NVLIST_FREE(descriptor, DESCRIPTOR)
 #endif
 NVLIST_FREE(binary, BINARY)
+NVLIST_FREE(uuid, UUID)
 
 #undef	NVLIST_FREE
 
@@ -2091,6 +2189,7 @@ NVLIST_FREEF(string)
 NVLIST_FREEF(nvlist)
 NVLIST_FREEF(descriptor)
 NVLIST_FREEF(binary)
+NVLIST_FREEF(uuid)
 
 #undef	NVLIST_FREEF
 
@@ -2121,6 +2220,7 @@ NVLIST_FREEV(string, STRING)
 NVLIST_FREEV(nvlist, NVLIST)
 NVLIST_FREEV(descriptor, DESCRIPTOR)
 NVLIST_FREEV(binary, BINARY)
+NVLIST_FREEV(uuid, UUID)
 #undef	NVLIST_FREEV
 #endif
 
