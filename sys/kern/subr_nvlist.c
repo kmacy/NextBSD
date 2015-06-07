@@ -1928,7 +1928,7 @@ nvlist_getf_##type(const nvlist_t *nvl, const char *namefmt, ...)	\
 	ftype value;							\
 									\
 	va_start(nameap, namefmt);					\
-	value = nvlist_396_##type(nvl, namefmt, nameap);		\
+	value = nvlist_getv_##type(nvl, namefmt, nameap);		\
 	va_end(nameap);							\
 									\
 	return (value);							\
