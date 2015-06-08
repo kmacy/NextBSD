@@ -1,5 +1,6 @@
 .include <src.opts.mk>
 PROG= asld
+NO_WERROR=yes
 
 .PATH: .
 .PATH: ${.CURDIR}
@@ -25,6 +26,6 @@ DEBUG_FLAGS+= -g -O0
 LDFLAGS+= -pthread
 
 SRCS= asl_action.c bsd_in.c bsd_out.c daemon.c dbserver.c klog_in.c remote.c syslogd.c udp_in.c
-LDADD+= -lutil -lauditd -lbsm -ldispatch -lmach -lBlocksRuntime -llaunch -losxsupport -lxpc -lnotify -lnv -lasl
+LDADD+= -lutil -lauditd -lbsm -ldispatch -lmach -lBlocksRuntime -llaunch -losxsupport -lxpc -lnotify -lnv -lsbuf -lasl
 
 .include <bsd.prog.mk>

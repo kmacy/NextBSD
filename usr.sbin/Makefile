@@ -4,6 +4,7 @@
 .include <src.opts.mk>
 
 SUBDIR=	adduser \
+	asl \
 	arp \
 	binmiscctl \
 	bsdconfig \
