@@ -11,5 +11,6 @@ CFLAGS+= ${BASE_INCLUDE} -fblocks -g -O0
 
 SRCS = xpc_dictionary.c xpc_misc.c xpc_type.c xpc_array.c xpc_connection.c
 
+NO_WERROR=yes
 
 .include <bsd.lib.mk>
