@@ -11,5 +11,5 @@
     "/usr/sbin/notifyd",
     "-d"
   ],
-  "Label": "com.apple.notifyd",
+  "Label": "com.apple.notifyd"
 }
