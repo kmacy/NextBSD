@@ -297,7 +297,7 @@ WMAKEENV=	${CROSSENV} \
 		_SHLIBDIRPREFIX=${WORLDTMP} \
 		_LDSCRIPTROOT= \
 		VERSION="${VERSION}" \
-		MACHINE_INCLUDES="${WORLDTMP}/machine" \
+		MACHINE_INCLUDES="${WORLDTMP}/include" \
 		INSTALL="sh ${.CURDIR}/tools/install.sh" \
 		PATH=${TMPPATH}
 
@@ -537,7 +537,8 @@ _worldtmp:
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.include.dist \
 	    -p ${WORLDTMP}/usr/include >/dev/null
 	ln -sf ${.CURDIR}/sys ${WORLDTMP}
-	ln -sf ${.CURDIR}/sys/${MACHINE_CPUARCH}/include ${WORLDTMP}/machine
+	mkdir -p ${WORLDTMP}/include
+	ln -sf ${.CURDIR}/sys/${MACHINE_CPUARCH}/include ${WORLDTMP}/include/machine
 .if ${MK_DEBUG_FILES} != "no"
 	# We could instead disable debug files for these build stages
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.debug.dist \
