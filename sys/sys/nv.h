@@ -40,7 +40,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <uuid.h>
+#else
+#include <sys/uuid.h>
 #endif
+
+
 
 #ifndef	_NVLIST_T_DECLARED
 #define	_NVLIST_T_DECLARED

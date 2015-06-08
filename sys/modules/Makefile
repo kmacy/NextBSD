@@ -210,7 +210,7 @@ SUBDIR=	\
 	mac_seeotheruids \
 	mac_stub \
 	mac_test \
-	${_mach} \
+	mach \
 	malo \
 	mcd \
 	md \
@@ -623,8 +623,6 @@ _x86bios=	x86bios
 .if ${MACHINE_CPUARCH} == "amd64"
 _ixl=		ixl
 _ixlv=		ixlv
-# not really arch-specific but only building on amd64 for now
-_mach=		mach
 _ntb=		ntb
 _qlxge=		qlxge
 _qlxgb=		qlxgb

@@ -1665,13 +1665,13 @@ nvlist_addv_uuid(nvlist_t *nvl, const uuid_t *value,
 	nvpair_t *nvp;
 
 	if (nvlist_error(nvl) != 0) {
-		errno = nvlist_error(nvl);
+		RESTORE_ERRNO(nvlist_error(nvl));
 		return;
 	}
 
 	nvp = nvpair_createv_uuid(value, namefmt, nameap);
 	if (nvp == NULL)
-		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
+		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
 	else
 		nvlist_move_nvpair(nvl, nvp);
 }
@@ -1866,14 +1866,14 @@ const char *namefmt, va_list nameap)
 	nvpair_t *nvp;
 
 	if (nvlist_error(nvl) != 0) {
-		free(value);
-		errno = nvlist_error(nvl);
+		nv_free(value);
+		RESTORE_ERRNO(nvlist_error(nvl));
 		return;
 	}
 
 	nvp = nvpair_movev_uuid(value, namefmt, nameap);
 	if (nvp == NULL)
-		nvl->nvl_error = errno = (errno != 0 ? errno : ENOMEM);
+		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
 	else
 		nvlist_move_nvpair(nvl, nvp);
 }

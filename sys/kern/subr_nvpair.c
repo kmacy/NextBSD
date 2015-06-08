@@ -1102,11 +1102,11 @@ nvpair_createv_uuid(const uuid_t *value,  const char *namefmt,
 	size = sizeof(uuid_t);
 
 	if (value == NULL) {
-		errno = EINVAL;
+		RESTORE_ERRNO(EINVAL);
 		return (NULL);
 	}
 
-	data = malloc(size);
+	data = nv_malloc(size);
 	if (data == NULL)
 		return (NULL);
 	memcpy(data, value, size);
@@ -1114,7 +1114,7 @@ nvpair_createv_uuid(const uuid_t *value,  const char *namefmt,
 	nvp = nvpair_allocv(NV_TYPE_UUID, (uint64_t)(uintptr_t)data, size,
 	    namefmt, nameap);
 	if (nvp == NULL)
-		free(data);
+		nv_free(data);
 
 	return (nvp);	
 }
@@ -1324,7 +1324,7 @@ nvpair_movev_uuid(uuid_t *value, const char *namefmt,
 {
 
 	if (value == NULL) {
-		errno = EINVAL;
+		RESTORE_ERRNO(EINVAL);
 		return (NULL);
 	}
 
@@ -1432,7 +1432,7 @@ nvpair_free(nvpair_t *nvp)
 		nv_free((void *)(intptr_t)nvp->nvp_data);
 		break;
 	case NV_TYPE_UUID:
-		free((void *)(intptr_t)nvp->nvp_data);
+		nv_free((void *)(intptr_t)nvp->nvp_data);
 		break;	
 	}
 	nv_free(nvp);
