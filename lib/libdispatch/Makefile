@@ -7,18 +7,14 @@ LIB= dispatch
 .PATH: ${.CURDIR}/resolver
 
 CFLAGS+=	-I${.CURDIR}/../../apsl/include -I${.CURDIR}/os -I${.CURDIR}/private
-CFLAGS+=	-I${.CURDIR} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys 
+CFLAGS+=	-I${.CURDIR} -I${MACHINE_INCLUDES} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys 
 CFLAGS+=	-I. -I${.CURDIR}/include -fblocks
 CFLAGS+=	-D__APPLE__ -DDISPATCH_USE_DTRACE=0
 CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0 -D__BLOCKS__=1
 
 CFLAGS+=	-g -O0
 
-${.CURDIR}/include/machine: ${.CURDIR}/Makefile
-	mkdir -p ${.CURDIR}/include
-	ln -sf ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include ${.CURDIR}/include/machine
-
-protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/include/machine ${.CURDIR}/src/protocol.defs 
+protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/src/protocol.defs 
 	mig ${CFLAGS}  -user protocolUser.c \
 	-server protocolServer.c -header protocol.h \
 	-sheader protocolServer.h ${.CURDIR}/src/protocol.defs

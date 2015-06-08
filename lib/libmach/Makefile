@@ -65,10 +65,6 @@ SRCS=					\
 	mig_strncpy.c 		\
 	mig_support.c
 
-
-
-
-
 CLEANFILES+= machine *~ mach_port.h task.h host_priv.h mach_host.h
 CLEANFILES+= cscope.* vm_map.h *User.c
 

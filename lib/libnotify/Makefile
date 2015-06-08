@@ -6,7 +6,7 @@ WARNS=	6
 .PATH: .
 .PATH: ../../sbin/launchd
 
-BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
+BASE_INCLUDE= -I${.CURDIR}/../../apsl/include -I${MACHINE_INCLUDES}
 BASE_INCLUDE+= -I${.CURDIR} -I. -I${.CURDIR}/../liblaunch -I${.CURDIR}/../libosxsupport
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
@@ -15,15 +15,12 @@ CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck
 
 notify_ipc.defs: ${.CURDIR}/machine
 
-notify_ipc.h notify_ipcUser.c: notify_ipc.defs ${.CURDIR}/machine
+notify_ipc.h notify_ipcUser.c: notify_ipc.defs
 	mig ${MIG_FLAGS} ${.CURDIR}/notify_ipc.defs
 
 notify_client.c: notify_ipc.h notify_ipcUser.c
 
 SRCS= libnotify.c notify_client.c table.c notify_ipcUser.c
-
-${.CURDIR}/machine:
-	ln -s ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include ${.CURDIR}/machine
 
 CLEANFILES+= *User.c *Server.c notify_ipc.h
 

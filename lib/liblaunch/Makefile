@@ -7,7 +7,7 @@ LIB=	launch
 
 
 
-BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
+BASE_INCLUDE= -I${.CURDIR}/../../apsl/include -I${MACHINE_INCLUDES}
 BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I.
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
@@ -15,9 +15,9 @@ MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck -g -O0
 CFLAGS+= -I${.CURDIR}/../../contrib/openbsm
 
-helper.h launchd_helperUser.c launchd_helperServer.c helperServer.h: helper.defs machine
+helper.h launchd_helperUser.c launchd_helperServer.c helperServer.h: helper.defs
 	mig ${MIG_FLAGS} -header helper.h -sheader helperServer.h ${.CURDIR}/helper.defs
-job.h jobUser.c jobServer.h: job.defs machine
+job.h jobUser.c jobServer.h: job.defs
 	mig ${MIG_FLAGS} -sheader jobServer.h ${.CURDIR}/job.defs
 
 SRCS=  jobUser.c launchd_helperUser.c launchd_helperServer.c
