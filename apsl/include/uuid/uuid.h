@@ -52,7 +52,7 @@ extern "C" {
 
 void uuid_clear(uuid_t uu);
 
-#if 0
+#if defined(__DARWIN_UUID_COMPARE)
 int uuid_compare(const uuid_t uu1, const uuid_t uu2);
 #endif
 
