@@ -14,9 +14,9 @@ CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0 -D__BLOCKS__=1
 
 CFLAGS+=	-g -O0
 
-include/machine: ${.CURDIR}/Makefile
-	mkdir -p include
-	ln -sf ../../sys/${MACHINE_CPUARCH}/include include/machine
+${.CURDIR}/include/machine: ${.CURDIR}/Makefile
+	mkdir -p ${.CURDIR}/include
+	ln -sf ${.CURDIR}/../../sys/${MACHINE_CPUARCH}/include ${.CURDIR}/include/machine
 
 protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/include/machine ${.CURDIR}/src/protocol.defs 
 	mig ${CFLAGS}  -user protocolUser.c \
