@@ -25,6 +25,8 @@ LDFLAGS+= -static
 LDFLAGS+= -lBlocksRuntime -lbsm -lauditd
 LDFLAGS+= -pthread
 
+NO_WERROR=
+
 helper.h launchd_helperServer.h: ${.CURDIR}/helper.defs
 	mig ${MIG_FLAGS} -user /dev/null -server /dev/null -header helper.h \
 	-sheader launchd_helperServer.h ${.CURDIR}/helper.defs

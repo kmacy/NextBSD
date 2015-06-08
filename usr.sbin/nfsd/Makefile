@@ -4,4 +4,7 @@
 PROG=	nfsd
 MAN=	nfsd.8 nfsv4.4 stablerestart.5
 
+
+NO_WCAST_ALIGN=
+
 .include <bsd.prog.mk>

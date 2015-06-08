@@ -12,6 +12,7 @@ DEBUG_FLAGS=	-g
 
 LIBADD+=	bluetooth usbhid
 
+NO_WCAST_ALIGN=
 NO_WMISSING_VARIABLE_DECLARATIONS=
 
 .include <bsd.prog.mk>

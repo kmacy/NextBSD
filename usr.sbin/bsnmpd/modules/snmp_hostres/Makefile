@@ -47,6 +47,7 @@ SRCS=	hostres_begemot.c		\
 	hostres_swrun_tbl.c		\
 	printcap.c
 
+NO_WCAST_ALIGN=
 #Not having NDEBUG defined will enable assertions and a lot of output on stderr
 CFLAGS+= -DNDEBUG -I${LPRSRC}
 XSYM=	host hrStorageOther hrStorageRam hrStorageVirtualMemory \

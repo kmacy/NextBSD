@@ -11,5 +11,6 @@ CFLAGS+= -DLIBGEOM
 CFLAGS+= -I${.CURDIR}/../shared
 
 LIBADD=	geom util pthread
+NO_WCAST_ALIGN=
 
 .include <bsd.prog.mk>
