@@ -128,7 +128,6 @@ thread_block(void)
 	MPASS(curthread == thread->ith_td);
 
 	rc = msleep(thread, thread->ith_block_lock_data, PCATCH|PSOCK, "thread_block", thread->timeout);
-	thread->ith_block_lock_data = NULL;
 	switch (rc) {
 	case EINTR:
 	case ERESTART:
