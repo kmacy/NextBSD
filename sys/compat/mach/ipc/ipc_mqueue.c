@@ -585,7 +585,7 @@ ipc_mqueue_receive_error(ipc_thread_t self, int save_wait_result, int option)
 		 */
 		if (self->ith_active) {
 			thread_pool_remove(self);
-			ip_unlock(self->ith_pool_port);
+			self->ith_block_lock_data = NULL;
 			self->ith_active = 0;
 		}
 		switch (save_wait_result) {
@@ -801,6 +801,7 @@ ipc_mqueue_receive(
 #ifdef INVARIANTS
 		printf("mqueue receive failed line: %d with: %d\n", __LINE__, self->ith_state);
 #endif
+
 		return (ipc_mqueue_receive_error(self, save_wait_result, option));
 	}
 done:
