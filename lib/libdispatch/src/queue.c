@@ -4286,9 +4286,12 @@ _dispatch_runloop_queue_port_dispose(dispatch_queue_t dq)
 	kern_return_t kr = mach_port_deallocate(mach_task_self(), mp);
 	DISPATCH_VERIFY_MIG(kr);
 	(void)dispatch_assume_zero(kr);
+#ifndef __FreeBSD__
+	/* XXX: https://bugs.freenas.org/issues/10145 */
 	kr = mach_port_mod_refs(mach_task_self(), mp, MACH_PORT_RIGHT_RECEIVE, -1);
 	DISPATCH_VERIFY_MIG(kr);
 	(void)dispatch_assume_zero(kr);
+#endif
 }
 
 #pragma mark -
