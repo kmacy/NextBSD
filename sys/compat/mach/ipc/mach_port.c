@@ -141,17 +141,11 @@ void mach_port_names_helper(
 	mach_port_type_t	*types,
 	ipc_entry_num_t		*actualp);
 
-void mach_port_gst_helper(
-	ipc_pset_t		pset,
-	ipc_port_t		port,
-	ipc_entry_num_t		maxnames,
-	mach_port_name_t		*names,
-	ipc_entry_num_t		*actualp);
-
-
 /* Zeroed template of qos flags */
 
 static mach_port_qos_t	qos_template;
+
+
 
 /*
  *	Routine:	mach_port_names_helper
@@ -947,34 +941,26 @@ mach_port_set_seqno(
  *		A helper function for mach_port_get_set_status.
  */
 
-void
+static void
 mach_port_gst_helper(
 	ipc_pset_t		pset,
-	ipc_port_t		port,
 	ipc_entry_num_t		maxnames,
 	mach_port_name_t		*names,
 	ipc_entry_num_t		*actualp)
 {
-	ipc_pset_t ip_pset;
 	mach_port_name_t name;
+	ipc_port_t		port;
+	ipc_entry_num_t actual = *actualp;
 
 	assert(port != IP_NULL);
 
-	ip_lock(port);
-	assert(ip_active(port));
-
-	name = port->ip_receiver_name;
-	assert(name != MACH_PORT_NAME_NULL);
-	ip_pset = port->ip_pset;
-
-	ip_unlock(port);
-
-	if (pset == ip_pset) {
-		ipc_entry_num_t actual = *actualp;
-
+	TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
+		assert(ip_active(port));
+		name = port->ip_receiver_name;
+		assert(name != MACH_PORT_NAME_NULL);
+		assert(port->ip_pset == pset);
 		if (actual < maxnames)
 			names[actual] = name;
-
 		*actualp = actual+1;
 	}
 }
@@ -1011,62 +997,39 @@ mach_port_get_set_status(
 	vm_map_copy_t memory;	/* copied-in memory */
 
 
-	return KERN_NOT_SUPPORTED; /* XXX temporary */
-
 	if (space == IS_NULL)
 		return KERN_INVALID_TASK;
+	if (!MACH_PORT_NAME_VALID(name))
+		return KERN_INVALID_RIGHT;
 
 	size = PAGE_SIZE;	/* initial guess */
 
 	for (;;) {
-		ipc_entry_t entry, *table;
-		ipc_entry_num_t tsize;
-		mach_port_index_t index;
 		mach_port_name_t *names;
 		ipc_pset_t pset;
+		ipc_object_t obj;
 
 		addr = malloc(size, M_MACH_VM, M_NOWAIT);
 		if (addr == NULL)
 			return KERN_RESOURCE_SHORTAGE;
 
-		kr = ipc_right_lookup_read(space, name, &entry);
+		kr = ipc_object_translate(space, name, MACH_PORT_RIGHT_PORT_SET, &obj);
 		if (kr != KERN_SUCCESS) {
 			free(addr, M_MACH_VM);
 			return kr;
 		}
-		/* space is read-locked and active */
+		pset = (ipc_pset_t) obj;
+		ips_reference(pset);
 
-		if (IE_BITS_TYPE(entry->ie_bits) != MACH_PORT_TYPE_PORT_SET) {
-			is_read_unlock(space);
-			free(addr, M_MACH_VM);
-			return KERN_INVALID_RIGHT;
-		}
 
-		pset = (ipc_pset_t) entry->ie_object;
-		assert(pset != IPS_NULL);
 		/* the port set must be active */
 		names = (mach_port_name_t *) addr;
 		maxnames = size / sizeof(mach_port_t);
 		actual = 0;
 
-		table = space->is_table;
-		tsize = space->is_table_size;
-
-		for (index = 0; index < tsize; index++) {
-			ipc_entry_t ientry;
-			ipc_entry_bits_t bits;
-
-			for (ientry = table[index]; ientry != NULL; ientry = ientry->ie_link) {
-				bits = ientry->ie_bits;
-				if (bits & MACH_PORT_TYPE_RECEIVE) {
-					ipc_port_t port =
-						(ipc_port_t) ientry->ie_object;
-					mach_port_gst_helper(pset, port,
-										 maxnames, names, &actual);
-				}
-			}
-		}
-		is_read_unlock(space);
+		mach_port_gst_helper(pset, maxnames, names, &actual);
+		ips_release(pset);
+		ips_unlock(pset);
 
 		if (actual <= maxnames)
 			break;
