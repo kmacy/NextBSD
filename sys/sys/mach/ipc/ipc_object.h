@@ -159,15 +159,6 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 #define _VOLATILE_
 #endif	/* NCPUS > 1 */
 
-#define io_check_unlock(io) 						\
-MACRO_BEGIN								\
-	_VOLATILE_ ipc_object_refs_t _refs = (io)->io_references;	\
-									\
-	io_unlock(io);							\
-	if (_refs == 0)							\
-		io_free(io_otype(io), io);				\
-MACRO_END
-
 /* Sanity check the ref count.  If it is 0, we may be doubly zfreeing.
  * If it is larger than max int, it has been corrupted, probably by being
  * modified into an address (this is architecture dependent, but it's
@@ -180,18 +171,23 @@ MACRO_END
 #define IO_MAX_REFERENCES						\
 	(unsigned)(~0 ^ (1 << (sizeof(int)*BYTE_SIZE - 1)))
 
-#define	io_reference(io)						\
-MACRO_BEGIN								\
-	assert((io)->io_references < IO_MAX_REFERENCES);		\
-	(io)->io_references++;						\
-MACRO_END
 
-#define	io_release(io)							\
-MACRO_BEGIN								\
-	assert((io)->io_references > 0 &&				\
-		    (io)->io_references <= IO_MAX_REFERENCES);		\
-	(io)->io_references--;						\
-MACRO_END
+static inline void
+io_reference(ipc_object_t io) {
+
+	assert((io)->io_references > 0);
+	assert((io)->io_references < IO_MAX_REFERENCES);
+	atomic_add_int(&(io)->io_references, 1);
+}
+
+static inline void
+io_release(ipc_object_t io) {
+
+	assert((io)->io_references > 0);
+	assert((io)->io_references < IO_MAX_REFERENCES);
+	if (atomic_fetchadd_int(&(io)->io_references, -11) == 1)
+		io_free(io_otype(io), io);
+}
 
 /*
  * Exported interfaces

@@ -274,7 +274,6 @@ struct ipc_port {
 #define	ip_lock(port)		io_lock(&(port)->ip_object)
 #define	ip_lock_try(port)	io_lock_try(&(port)->ip_object)
 #define	ip_unlock(port)		io_unlock(&(port)->ip_object)
-#define	ip_check_unlock(port)	io_check_unlock(&(port)->ip_object)
 #define	ip_reference(port)	io_reference(&(port)->ip_object)
 #define	ip_release(port)	io_release(&(port)->ip_object)
 

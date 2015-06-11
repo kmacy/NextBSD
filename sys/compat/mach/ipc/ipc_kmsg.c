@@ -2232,8 +2232,8 @@ ipc_kmsg_copyout_header(
 
 			ip_lock(reply);
 			if (!ip_active(reply)) {
+				ip_unlock(reply);
 				ip_release(reply);
-				ip_check_unlock(reply);
 
 				ip_lock(dest);
 				is_write_unlock(space);
@@ -2392,8 +2392,8 @@ ipc_kmsg_copyout_header(
 		ipc_port_timestamp_t timestamp;
 
 		timestamp = dest->ip_timestamp;
+		ip_unlock(dest);
 		ip_release(dest);
-		ip_check_unlock(dest);
 
 		if (IP_VALID(reply)) {
 			ip_lock(reply);
@@ -2930,8 +2930,8 @@ ipc_kmsg_copyout_dest(
 		ipc_object_copyout_dest(space, dest, dest_type, &dest_name);
 		/* dest is unlocked */
 	} else {
+		io_unlock(dest);
 		io_release(dest);
-		io_check_unlock(dest);
 		dest_name = MACH_PORT_NAME_DEAD;
 	}
 
@@ -3108,8 +3108,8 @@ ipc_kmsg_copyout_to_kernel(
 		ipc_object_copyout_dest(space, dest, dest_type, &dest_name);
 		/* dest is unlocked */
 	} else {
+		io_unlock(dest);
 		io_release(dest);
-		io_check_unlock(dest);
 		dest_name = MACH_PORT_NAME_DEAD;
 	}
 

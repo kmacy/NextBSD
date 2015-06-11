@@ -127,7 +127,6 @@ typedef struct ipc_pset {
 #define	ips_lock(pset)		io_lock(&(pset)->ips_object)
 #define	ips_lock_try(pset)	io_lock_try(&(pset)->ips_object)
 #define	ips_unlock(pset)	io_unlock(&(pset)->ips_object)
-#define	ips_check_unlock(pset)	io_check_unlock(&(pset)->ips_object)
 #define	ips_reference(pset)	io_reference(&(pset)->ips_object)
 #define	ips_release(pset)	io_release(&(pset)->ips_object)
 

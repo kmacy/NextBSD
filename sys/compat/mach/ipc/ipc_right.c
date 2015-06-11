@@ -544,8 +544,8 @@ ipc_right_clean(
 		ip_lock(port);
 
 		if (!ip_active(port)) {
+			ip_unlock(port);
 			ip_release(port);
-			ip_check_unlock(port);
 			break;
 		}
 
@@ -577,8 +577,8 @@ ipc_right_clean(
 		} else {
 			assert(port->ip_receiver != space);
 
-			ip_release(port);
 			ip_unlock(port); /* port is active */
+			ip_release(port);
 		}
 
 		if (nsrequest != IP_NULL)
@@ -661,8 +661,8 @@ ipc_right_destroy(
 
 		if (!ip_active(port)) {
 			assert((type & MACH_PORT_TYPE_RECEIVE) == 0);
+			ip_unlock(port);
 			ip_release(port);
-			ip_check_unlock(port);
 
 			entry->ie_request = 0;
 			OBJECT_CLEAR(entry, name);
@@ -703,8 +703,8 @@ ipc_right_destroy(
 		} else {
 			assert(port->ip_receiver != space);
 
-			ip_release(port);
 			ip_unlock(port);
+			ip_release(port);
 		}
 
 		if (nsrequest != IP_NULL)
@@ -818,6 +818,7 @@ ipc_right_dealloc(
 
 		if (ipc_entry_refs(entry) > 1) {
 			ipc_entry_release(entry); /* decrement urefs */
+			ip_unlock(port);
 		} else {
 			if (--port->ip_srights == 0
 			    ) {
@@ -833,13 +834,13 @@ ipc_right_dealloc(
 
 			ipc_hash_delete(space, (ipc_object_t) port,
 					name, entry);
-
+			ip_unlock(port);
 			ip_release(port);
 			OBJECT_CLEAR(entry, name);
 			ipc_entry_dealloc(space, name, entry);
 		}
 		/* even if dropped a ref, port is active */
-		ip_unlock(port);
+
 		is_write_unlock(space);
 
 		if (nsrequest != IP_NULL)
@@ -1162,7 +1163,8 @@ ipc_right_delta(
 						MACH_PORT_TYPE_SEND_RECEIVE);
 
 				entry->ie_bits = bits &~ (IE_BITS_UREFS_MASK|
-							  MACH_PORT_TYPE_SEND);
+										  MACH_PORT_TYPE_SEND);
+				ip_unlock(port);
 			} else {
 				assert(IE_BITS_TYPE(bits) ==
 						MACH_PORT_TYPE_SEND);
@@ -1172,6 +1174,7 @@ ipc_right_delta(
 
 				ipc_hash_delete(space, (ipc_object_t) port,
 						name, entry);
+				ip_unlock(port);
 				ip_release(port);
 				OBJECT_CLEAR(entry, name);
 				ipc_entry_dealloc(space, name, entry);
@@ -1180,7 +1183,7 @@ ipc_right_delta(
 			ipc_entry_add_refs(entry, delta);
 
 		/* even if dropped a ref, port is active */
-		ip_unlock(port);
+
 		is_write_unlock(space);
 
 

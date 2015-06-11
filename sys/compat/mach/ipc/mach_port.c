@@ -1028,8 +1028,8 @@ mach_port_get_set_status(
 		actual = 0;
 
 		mach_port_gst_helper(pset, maxnames, names, &actual);
-		ips_release(pset);
 		ips_unlock(pset);
+		ips_release(pset);
 
 		if (actual <= maxnames)
 			break;
@@ -1409,7 +1409,8 @@ mach_port_get_attributes(
                         ips_lock(pset);
                         if (!ips_active(pset)) {
                                 ipc_pset_remove(pset, port);
-                                ips_check_unlock(pset);
+                                ips_unlock(pset);
+								ips_release(pset);
                                 goto no_port_set;
                         } else {
                                 statusp->mps_pset = pset->ips_local_name;

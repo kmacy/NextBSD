@@ -246,7 +246,7 @@ ipc_pset_move(
 	ipc_pset_t	nset)
 {
 	ipc_pset_t oset;
-
+	int active;
 	/*
 	 *	While we've got the space locked, it holds refs for
 	 *	the port and nset (because of the entries).  Also,
@@ -280,13 +280,11 @@ ipc_pset_move(
 		ips_lock(oset);
 
 		ipc_pset_remove(oset, port);
-
-		if (ips_active(oset))
-			ips_unlock(oset);
-		else {
-			ips_check_unlock(oset);
+		active = ips_active(oset);
+		ips_unlock(oset);
+		ips_release(oset);
+		if (!active)
 			oset = IPS_NULL; /* trigger KERN_NOT_IN_SET */
-		}
 	} else {
 		/* atomically move port from oset to nset */
 
@@ -305,7 +303,8 @@ ipc_pset_move(
 		ipc_pset_add(nset, port);
 
 		ips_unlock(nset);
-		ips_check_unlock(oset);	/* KERN_NOT_IN_SET not a possibility */
+		ips_unlock(oset);	/* KERN_NOT_IN_SET not a possibility */
+		ips_release(oset);
 	}
 
 	ip_unlock(port);
@@ -374,8 +373,8 @@ ipc_pset_destroy(
 		ip_unlock(port);
 	}
 	ipc_pset_changed(pset, MACH_RCV_PORT_DIED);
+	ips_unlock(pset);
 	ips_release(pset);	/* consume the ref our caller gave us */
-	ips_check_unlock(pset);
 }
 
 

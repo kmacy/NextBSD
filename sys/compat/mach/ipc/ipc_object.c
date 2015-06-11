@@ -129,10 +129,7 @@ _ipc_object_release(
 #ifdef VERBOSE_DEBUGGING
 	printf("ipc_object_release(%p:%d) %s:%d\n", object, object->io_references, file, line);
 #endif
-	io_lock(object);
-	assert(object->io_references > 0);
 	io_release(object);
-	io_check_unlock(object);
 }
 
 /*

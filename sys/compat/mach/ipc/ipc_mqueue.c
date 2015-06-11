@@ -293,8 +293,8 @@ ipc_mqueue_send(
 			 *	a send-once notification.
 			 */
 
+			ip_unlock(port);
 			ip_release(port);
-			ip_check_unlock(port);
 			kmsg->ikm_header->msgh_remote_port = MACH_PORT_NULL;
 			ipc_kmsg_destroy(kmsg);
 			return MACH_MSG_SUCCESS;
@@ -661,17 +661,16 @@ ipc_mqueue_receive(
 	}
 	if (bits & MACH_PORT_TYPE_PORT_SET) {
 		ipc_pset_t pset = (ipc_pset_t)object;
-
+		ips_reference(pset);
 		if (max_size == 0) {
 		restart:
 			TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
 				if (port->ip_msgcount != 0) {
 					if (ip_lock_try(port) == 0) {
-						ips_reference(pset);
+
 						ips_unlock(pset);
 						ip_lock(port);
 						ips_lock(pset);
-						ips_release(pset);
 						if (port->ip_msgcount == 0) {
 							ip_unlock(port);
 							goto restart;
@@ -683,6 +682,7 @@ ipc_mqueue_receive(
 						break;
 				}
 			}
+			ips_release(pset);
 			if (port != NULL) {
 				mqueue = &port->ip_messages;
 				kmsgs = &mqueue->imq_messages;

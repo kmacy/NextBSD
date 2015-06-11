@@ -347,7 +347,6 @@ ipc_port_dngrow(
 	}
 
 	ip_lock(port);
-	ip_release(port);
 
 	/*
 	 *	Check that port is still active and that nobody else
@@ -400,10 +399,10 @@ ipc_port_dngrow(
 			it_dnrequests_free(oits, otable);
 	        }
 	} else {
-		ip_check_unlock(port);
+		ip_unlock(port);
 		it_dnrequests_free(its, ntable);
 	}
-
+	ip_release(port);
 	return KERN_SUCCESS;
 }
  
@@ -573,7 +572,8 @@ ipc_port_set_seqno(
 		ips_lock(pset);
 		if (!ips_active(pset)) {
 			ipc_pset_remove(pset, port);
-			ips_check_unlock(pset);
+			ips_unlock(pset);
+			ips_release(pset);
 			goto no_port_set;
 		} else {
 			port->ip_seqno = seqno;
@@ -625,7 +625,8 @@ ipc_port_clear_receiver(
 	if (pset != IPS_NULL) {
 		ips_lock(pset);
 		ipc_pset_remove(pset, port);
-		ips_check_unlock(pset);
+		ips_unlock(pset);
+		ips_release(pset);
 	}
 
 	ipc_port_changed(port, MACH_RCV_PORT_DIED);
@@ -1221,10 +1222,10 @@ ipc_port_release_send(
 	assert(IP_VALID(port));
 
 	ip_lock(port);
-	ip_release(port);
 
 	if (!ip_active(port)) {
-		ip_check_unlock(port);
+		ip_unlock(port);
+		ip_release(port);
 		return;
 	}
 
@@ -1246,6 +1247,7 @@ ipc_port_release_send(
 #endif		
 	} else
 		ip_unlock(port);
+	ip_release(port);
 }
 
 /*
@@ -1297,14 +1299,8 @@ ipc_port_release_sonce(
 
 	port->ip_sorights--;
 
-	ip_release(port);
-
-	if (!ip_active(port)) {
-		ip_check_unlock(port);
-		return;
-	}
-
 	ip_unlock(port);
+	ip_release(port);
 }
 
 /*
