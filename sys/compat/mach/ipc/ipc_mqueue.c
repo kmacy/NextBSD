@@ -656,7 +656,7 @@ ipc_mqueue_receive(
 	ipc_thread_t self = current_thread();
 	kern_return_t	save_wait_result;
 
-	assert(io_otype(object) == IOT_PORT || (io_otype(object) == IOT_PORT_SET);
+	assert(io_otype(object) == IOT_PORT || io_otype(object) == IOT_PORT_SET);
 	if (self->ith_kmsg != NULL) {
 		self->ith_state = MACH_MSG_SUCCESS;
 		goto rx_done;
