@@ -712,7 +712,7 @@ ipc_port_alloc(
 	kern_return_t kr;
 
 	kr = ipc_object_alloc(space, IOT_PORT,
-			      MACH_PORT_TYPE_RECEIVE, 0,
+			      MACH_PORT_TYPE_RECEIVE,
 			      &name, (ipc_object_t *) &port);
 	if (kr != KERN_SUCCESS)
 		return kr;
@@ -754,7 +754,7 @@ ipc_port_alloc_name(
 	return KERN_NOT_SUPPORTED;
 
 	kr = ipc_object_alloc_name(space, IOT_PORT,
-				   MACH_PORT_TYPE_RECEIVE, 0,
+				   MACH_PORT_TYPE_RECEIVE,
 				   name, (ipc_object_t *) &port);
 	if (kr != KERN_SUCCESS)
 		return kr;

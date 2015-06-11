@@ -231,7 +231,6 @@ extern kern_return_t ipc_object_alloc(
 	ipc_space_t		space,
 	ipc_object_type_t	otype,
 	mach_port_type_t	type,
-	mach_port_urefs_t	urefs,
 	mach_port_name_t		*namep,
 	ipc_object_t		*objectp);
 
@@ -240,7 +239,6 @@ extern kern_return_t ipc_object_alloc_name(
 	ipc_space_t		space,
 	ipc_object_type_t	otype,
 	mach_port_type_t	type,
-	mach_port_urefs_t	urefs,
 	mach_port_name_t		name,
 	ipc_object_t		*objectp);
 

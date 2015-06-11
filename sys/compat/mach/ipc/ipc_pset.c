@@ -125,7 +125,7 @@ ipc_pset_alloc(
 	kern_return_t kr;
 
 	kr = ipc_object_alloc(space, IOT_PORT_SET,
-			      MACH_PORT_TYPE_PORT_SET, 0,
+			      MACH_PORT_TYPE_PORT_SET,
 			      &name, (ipc_object_t *) &pset);
 	if (kr != KERN_SUCCESS)
 		return kr;
@@ -166,7 +166,7 @@ ipc_pset_alloc_name(
 
 
 	kr = ipc_object_alloc_name(space, IOT_PORT_SET,
-				   MACH_PORT_TYPE_PORT_SET, 0,
+				   MACH_PORT_TYPE_PORT_SET,
 				   name, (ipc_object_t *) &pset);
 	if (kr != KERN_SUCCESS)
 		return kr;

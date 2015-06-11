@@ -121,7 +121,7 @@ ipc_object_reference(
  *	Purpose:
  *		Release a reference to an object.
  */
-
+#define VERBOSE_DEBUGGING
 void
 _ipc_object_release(
 	ipc_object_t	object, char *file, int line)
@@ -279,7 +279,6 @@ ipc_object_alloc(
 	ipc_space_t		space,
 	ipc_object_type_t	otype,
 	mach_port_type_t	type,
-	mach_port_urefs_t	urefs,
 	mach_port_name_t		*namep,
 	ipc_object_t		*objectp)
 {
@@ -290,7 +289,6 @@ ipc_object_alloc(
 	assert(otype < IOT_NUMBER);
 	assert((type & MACH_PORT_TYPE_ALL_RIGHTS) == type);
 	assert(type != MACH_PORT_TYPE_NONE);
-	assert(urefs <= MACH_PORT_UREFS_MAX);
 
 	object = io_alloc(otype);
 	if (object == IO_NULL)
@@ -316,7 +314,7 @@ ipc_object_alloc(
 	}
 	/* space is write-locked */
 
-	entry->ie_bits |= type | urefs;
+	entry->ie_bits |= type;;
 	entry->ie_object = object;
 
 	io_lock(object);
@@ -348,7 +346,6 @@ ipc_object_alloc_name(
 	ipc_space_t		space,
 	ipc_object_type_t	otype,
 	mach_port_type_t	type,
-	mach_port_urefs_t	urefs,
 	mach_port_name_t		name,
 	ipc_object_t		*objectp)
 {
@@ -359,7 +356,6 @@ ipc_object_alloc_name(
 	assert(otype < IOT_NUMBER);
 	assert((type & MACH_PORT_TYPE_ALL_RIGHTS) == type);
 	assert(type != MACH_PORT_TYPE_NONE);
-	assert(urefs <= MACH_PORT_UREFS_MAX);
 
 	object = io_alloc(otype);
 	if (object == IO_NULL)
@@ -388,7 +384,7 @@ ipc_object_alloc_name(
 		return KERN_NAME_EXISTS;
 	}
 
-	entry->ie_bits |= type | urefs;
+	entry->ie_bits |= type;
 	entry->ie_object = object;
 
 	io_lock(object);
