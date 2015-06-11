@@ -186,7 +186,7 @@ io_release(ipc_object_t io) {
 	assert((io)->io_references > 0);
 	MACH_VERIFY((io)->io_references < IO_MAX_REFERENCES, ("io_references: %d\n", (io)->io_references));
 	assert((io)->io_references < IO_MAX_REFERENCES);
-	if (atomic_fetchadd_int(&(io)->io_references, -11) == 1)
+	if (atomic_fetchadd_int(&(io)->io_references, -1) == 1)
 		io_free(io_otype(io), io);
 }
 
