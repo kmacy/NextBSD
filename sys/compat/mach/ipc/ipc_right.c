@@ -621,7 +621,7 @@ ipc_right_destroy(
 		assert(entry->ie_request == 0);
 		assert(entry->ie_object == IO_NULL);
 
-		ipc_entry_close(space, name);
+		ipc_entry_dealloc(space, name, entry);
 		is_write_unlock(space);
 		break;
 
@@ -755,10 +755,10 @@ ipc_right_dealloc(
 		assert(entry->ie_request == 0);
 		assert(entry->ie_object == IO_NULL);
 
-		if (ipc_entry_refs(entry) == 1)
-			ipc_entry_dealloc(space, name, entry);
+		if (ipc_entry_refs(entry) > 1)
+			ipc_entry_release(entry);
 		else
-			ipc_entry_close(space, name); /* decrement urefs */
+			ipc_entry_dealloc(space, name, entry);
 
 		is_write_unlock(space);
 		break;
@@ -816,7 +816,9 @@ ipc_right_dealloc(
 
 		assert(port->ip_srights > 0);
 
-		if (ipc_entry_refs(entry) == 1) {
+		if (ipc_entry_refs(entry) > 1) {
+			ipc_entry_release(entry); /* decrement urefs */
+		} else {
 			if (--port->ip_srights == 0
 			    ) {
 				nsrequest = port->ip_nsrequest;
@@ -835,8 +837,6 @@ ipc_right_dealloc(
 			ip_release(port);
 			OBJECT_CLEAR(entry, name);
 			ipc_entry_dealloc(space, name, entry);
-		} else {
-			ipc_entry_close(space, name); /* decrement urefs - free name */
 		}
 		/* even if dropped a ref, port is active */
 		ip_unlock(port);
@@ -866,7 +866,9 @@ ipc_right_dealloc(
 		assert(port->ip_receiver == space);
 		assert(port->ip_srights > 0);
 
-		if (ipc_entry_refs(entry) == 1) {
+		if (ipc_entry_refs(entry) > 1) {
+			ipc_entry_release(entry);
+		} else {
 			if (--port->ip_srights == 0
 			    ) {
 				nsrequest = port->ip_nsrequest;
@@ -878,8 +880,7 @@ ipc_right_dealloc(
 
 			entry->ie_bits = bits &~ (IE_BITS_UREFS_MASK|
 						  MACH_PORT_TYPE_SEND);
-		} else
-			ipc_entry_close(space, name);
+		}
 
 		ip_unlock(port);
 		is_write_unlock(space);
@@ -1107,12 +1108,11 @@ ipc_right_delta(
 			goto invalid_value;
 
 		if ((urefs + delta) == 0)
-			ipc_entry_close(space, name);
+			ipc_entry_dealloc(space, name, entry);
 		else
 			ipc_entry_add_refs(entry, delta);
 
 		is_write_unlock(space);
-
 		break;
 	    }
 
@@ -1252,7 +1252,6 @@ ipc_right_info(
 
 	*typep = type;
 	*urefsp = ipc_entry_refs(entry);
-	ipc_entry_release(entry);
 	return KERN_SUCCESS;
 }
 
@@ -1570,6 +1569,7 @@ ipc_right_copyin(
 			entry->ie_bits = bits &~
 				(IE_BITS_UREFS_MASK|MACH_PORT_TYPE_SEND);
 		} else {
+			MPASS(ipc_entry_refs(entry) > 1);
 			port->ip_srights++;
 			ip_reference(port);
 			ipc_entry_release(entry); /* decrement urefs */
@@ -1661,10 +1661,10 @@ ipc_right_copyin(
 		ELOG;
 		goto invalid_right;
 	}
-	if (ipc_entry_refs(entry) == 1)
-		entry->ie_bits = bits &~ MACH_PORT_TYPE_DEAD_NAME;
-	else
+	if (ipc_entry_refs(entry) > 1)
 		ipc_entry_release(entry); /* decrement urefs */
+	else
+		entry->ie_bits = bits &~ MACH_PORT_TYPE_DEAD_NAME;
 
 	*objectp = IO_DEAD;
 	*sorightp = IP_NULL;

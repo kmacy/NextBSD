@@ -230,10 +230,6 @@ extern void ipc_entry_hold(
 extern void ipc_entry_release(
 	ipc_entry_t entry);
 
-extern void ipc_entry_close(
-	ipc_space_t	space __unused,
-	mach_port_name_t	name);
-
 kern_return_t ipc_entry_copyin(
 	ipc_space_t space,
 	mach_port_name_t name,

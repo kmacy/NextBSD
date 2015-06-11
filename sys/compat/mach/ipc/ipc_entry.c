@@ -430,7 +430,7 @@ ipc_entry_alloc_name(
 	return (kr);
 }
 
-void
+static void
 ipc_entry_close(
 	ipc_space_t space __unused,
 	mach_port_name_t name)
