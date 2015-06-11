@@ -2762,8 +2762,11 @@ ipc_kmsg_copyout_size(
     mach_msg_size_t		send_size;
 
     send_size = kmsg->ikm_header->msgh_size;
-
+#ifdef notyet
     boolean_t is_task_64bit = (map->max_offset > VM_MAX_ADDRESS);
+#else
+    boolean_t is_task_64bit = TRUE;
+#endif
 
 #if defined(__LP64__)
 	send_size -= LEGACY_HEADER_SIZE_DELTA;
