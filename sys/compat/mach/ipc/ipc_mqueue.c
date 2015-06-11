@@ -239,6 +239,7 @@ ipc_mqueue_send(
 
 	port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 	assert(IP_VALID(port));
+	assert(io_otype((ipc_object_t)port) == IOT_PORT);
 
 	ip_lock(port);
 
@@ -706,6 +707,7 @@ ipc_mqueue_receive(
 			timeout = 0;
 		}
 
+		assert(io_otype(object) == IOT_PORT);
 		thread_will_wait_with_timeout(self, timeout);
 
 		self->ith_pool_port  = (ipc_port_t)object;

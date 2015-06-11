@@ -828,6 +828,7 @@ ipc_port_destroy(
 	assert(ip_active(port));
 	/* port->ip_receiver_name is garbage */
 	/* port->ip_receiver/port->ip_destination is garbage */
+	assert(io_otype((ipc_object_t)port) == IOT_PORT);
 	assert(port->ip_pset == IPS_NULL);
 	assert(port->ip_mscount == 0);
 	assert(port->ip_seqno == 0);

@@ -360,7 +360,7 @@ mach_msg_receive(
 	} else {
 		slist = MACH_MSG_BODY_NULL;
 	}
-	
+	assert(io_otype(object) == IOT_PORT || io_otype(object) == IOT_PORT_SET);
 	self->ith_option = option;
 	self->ith_scatter_list = slist;
 	self->ith_scatter_list_size = slist_size;
