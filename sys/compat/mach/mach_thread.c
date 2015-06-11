@@ -213,7 +213,6 @@ mach_thread_fini(void *arg __unused, struct thread *td)
 	thread_t thread = td->td_machdata;
 
 	MPASS(thread->ith_kmsg == NULL);
-	MPASS(thread->ith_block_lock_data == NULL);
 	MPASS(thread->ith_td == td);
 	ipc_thr_act_terminate(thread);
 	mtx_destroy(&thread->ith_lock_data);
@@ -227,6 +226,7 @@ mach_thread_ctor(void *arg __unused, struct thread *td)
 
 	MPASS(thread->ith_td == td);
 	mach_thread_create(td, thread);
+	thread->ith_block_lock_data = NULL;
 }
 
 static void
