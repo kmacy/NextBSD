@@ -2710,10 +2710,8 @@ ipc_kmsg_copyout_body(
     }
 
     for (i = dsc_count-1; i >= 0; i--) {
-	
 		switch (kern_dsc[i].type.type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
-			MDPRINTF("copying out port descriptor\n");
 			user_dsc = ipc_kmsg_copyout_port_descriptor(kern_dsc + i, user_dsc, space, &mr);
 			break;
 		case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
