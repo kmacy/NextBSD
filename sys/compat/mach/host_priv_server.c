@@ -1,7 +1,7 @@
 /*
  * IDENTIFICATION:
- * stub generated Fri Jan  2 23:04:32 2015
- * with a MiG generated Mon Dec 15 20:44:56 PST 2014 by kmacy@serenity
+ * stub generated Thu Jun 11 18:17:44 2015
+ * with a MiG generated Thu Jun 11 16:16:11 PDT 2015 by kmacy@serenity
  * OPTIONS: 
  *	KernelServer
  */
@@ -1307,22 +1307,18 @@ mig_internal novalue _Xhost_default_memory_manager
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t default_managerTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t default_managerTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		20,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 20,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -1828,26 +1824,26 @@ mig_internal novalue _Xhost_processors
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_ool_ports_descriptor_t out_processor_listTemplate = {
-		/* addr = */		(void *)0,
-		/* coun = */		0,
-		/* deal = */		FALSE,
+		.address = (void *)0,
+		.count = 0,
+		.deallocate = FALSE,
 		/* copy is meaningful only in overwrite mode */
-		/* copy = */		MACH_MSG_PHYSICAL_COPY,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_OOL_PORTS_DESCRIPTOR,
+		.copy = MACH_MSG_PHYSICAL_COPY,
+		.disposition = 17,
+		.type = MACH_MSG_OOL_PORTS_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_ool_ports_descriptor_t out_processor_listTemplate = {
-		/* addr = */		(void *)0,
-		/* coun = */		0,
-		/* deal = */		FALSE,
+		.address = (void *)0,
+		.count = 0,
+		.deallocate = FALSE,
 		/* copy is meaningful only in overwrite mode */
-		/* copy = */		MACH_MSG_PHYSICAL_COPY,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_OOL_PORTS_DESCRIPTOR,
+		.copy = MACH_MSG_PHYSICAL_COPY,
+		.disposition = 19,
+		.type = MACH_MSG_OOL_PORTS_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -1978,22 +1974,18 @@ mig_internal novalue _Xhost_get_clock_control
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t clock_ctrlTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t clock_ctrlTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -2125,22 +2117,18 @@ mig_internal novalue _Xhost_get_special_port
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t portTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t portTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -2504,22 +2492,18 @@ mig_internal novalue _Xhost_get_exception_ports
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t old_handlersTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t old_handlersTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -2711,22 +2695,18 @@ mig_internal novalue _Xhost_swap_exception_ports
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t old_handlerssTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t old_handlerssTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -3018,26 +2998,26 @@ mig_internal novalue _Xhost_processor_sets
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_ool_ports_descriptor_t processor_setsTemplate = {
-		/* addr = */		(void *)0,
-		/* coun = */		0,
-		/* deal = */		FALSE,
+		.address = (void *)0,
+		.count = 0,
+		.deallocate = FALSE,
 		/* copy is meaningful only in overwrite mode */
-		/* copy = */		MACH_MSG_PHYSICAL_COPY,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_OOL_PORTS_DESCRIPTOR,
+		.copy = MACH_MSG_PHYSICAL_COPY,
+		.disposition = 17,
+		.type = MACH_MSG_OOL_PORTS_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_ool_ports_descriptor_t processor_setsTemplate = {
-		/* addr = */		(void *)0,
-		/* coun = */		0,
-		/* deal = */		FALSE,
+		.address = (void *)0,
+		.count = 0,
+		.deallocate = FALSE,
 		/* copy is meaningful only in overwrite mode */
-		/* copy = */		MACH_MSG_PHYSICAL_COPY,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_OOL_PORTS_DESCRIPTOR,
+		.copy = MACH_MSG_PHYSICAL_COPY,
+		.disposition = 19,
+		.type = MACH_MSG_OOL_PORTS_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -3173,22 +3153,18 @@ mig_internal novalue _Xhost_processor_set_priv
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t setTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t setTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -3427,22 +3403,18 @@ mig_internal novalue _Xget_dp_control_port
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t contorl_portTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t contorl_portTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -3670,22 +3642,18 @@ mig_internal novalue _Xhost_get_UNDServer
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t serverTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		17,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 17,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_port_descriptor_t serverTemplate = {
-		/* name = */		MACH_PORT_NULL,
-		/* pad1 = */		0,
-		/* pad2 = */		0,
-		/* disp = */		19,
-		/* type = */		MACH_MSG_PORT_DESCRIPTOR,
+		.name = MACH_PORT_NULL,
+		.disposition = 19,
+		.type = MACH_MSG_PORT_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -3834,46 +3802,42 @@ mig_internal novalue _Xkext_request
 #if	__MigKernelSpecificCode
 #if	UseStaticTemplates
 	const static mach_msg_ool_descriptor_t response_dataTemplate = {
-		/* addr = */		(void *)0,
-		/* size = */		0,
-		/* deal = */		FALSE,
-		/* copy = */		MACH_MSG_VIRTUAL_COPY,
-		/* pad2 = */		0,
-		/* type = */		MACH_MSG_OOL_DESCRIPTOR,
+		.address = (void *)0,
+		.size = 0,
+		.deallocate = FALSE,
+		.copy = MACH_MSG_VIRTUAL_COPY,
+		.type = MACH_MSG_OOL_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #if	UseStaticTemplates
 	const static mach_msg_ool_descriptor_t log_dataTemplate = {
-		/* addr = */		(void *)0,
-		/* size = */		0,
-		/* deal = */		FALSE,
-		/* copy = */		MACH_MSG_VIRTUAL_COPY,
-		/* pad2 = */		0,
-		/* type = */		MACH_MSG_OOL_DESCRIPTOR,
+		.address = (void *)0,
+		.size = 0,
+		.deallocate = FALSE,
+		.copy = MACH_MSG_VIRTUAL_COPY,
+		.type = MACH_MSG_OOL_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #else
 #if	UseStaticTemplates
 	const static mach_msg_ool_descriptor_t response_dataTemplate = {
-		/* addr = */		(void *)0,
-		/* size = */		0,
-		/* deal = */		FALSE,
-		/* copy = */		MACH_MSG_VIRTUAL_COPY,
-		/* pad2 = */		0,
-		/* type = */		MACH_MSG_OOL_DESCRIPTOR,
+		.address = (void *)0,
+		.size = 0,
+		.deallocate = FALSE,
+		.copy = MACH_MSG_VIRTUAL_COPY,
+		.type = MACH_MSG_OOL_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
 #if	UseStaticTemplates
 	const static mach_msg_ool_descriptor_t log_dataTemplate = {
-		/* addr = */		(void *)0,
-		/* size = */		0,
-		/* deal = */		FALSE,
-		/* copy = */		MACH_MSG_VIRTUAL_COPY,
-		/* pad2 = */		0,
-		/* type = */		MACH_MSG_OOL_DESCRIPTOR,
+		.address = (void *)0,
+		.size = 0,
+		.deallocate = FALSE,
+		.copy = MACH_MSG_VIRTUAL_COPY,
+		.type = MACH_MSG_OOL_DESCRIPTOR,
 	};
 #endif	/* UseStaticTemplates */
 
@@ -3947,6 +3911,7 @@ mig_routine_t host_priv_server_routine(
 
 
 /* Description of this subsystem, for use in direct RPC */
+extern const struct host_priv_subsystem host_priv_subsystem;
 const struct host_priv_subsystem {
 	mig_server_routine_t 	server;	/* Server routine */
 	mach_msg_id_t	start;	/* Min routine number */

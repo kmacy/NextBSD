@@ -1,7 +1,7 @@
 /*
  * IDENTIFICATION:
- * stub generated Fri Jan  2 23:04:32 2015
- * with a MiG generated Mon Dec 15 20:44:56 PST 2014 by kmacy@serenity
+ * stub generated Thu Jun 11 18:17:44 2015
+ * with a MiG generated Thu Jun 11 16:16:11 PDT 2015 by kmacy@serenity
  * OPTIONS: 
  *	KernelServer
  */
@@ -597,6 +597,7 @@ mig_routine_t clock_server_routine(
 
 
 /* Description of this subsystem, for use in direct RPC */
+extern const struct clock_subsystem clock_subsystem;
 const struct clock_subsystem {
 	mig_server_routine_t 	server;	/* Server routine */
 	mach_msg_id_t	start;	/* Min routine number */

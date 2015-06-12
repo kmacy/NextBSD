@@ -136,7 +136,6 @@
 
 
 
-#define VERBOSE_DEBUGGING
 /*
  *	Routine:	ipc_task_init
  *	Purpose:
@@ -662,7 +661,7 @@ task_set_special_port(
 	ipc_port_t *whichp;
 	ipc_port_t old;
 
-#ifdef VERBOSE_DEBUGGING
+#if VERBOSE_DEBUGGING
 	printf("task_set_special_port(task=%p, which=%d, port=%p)\n",task, which, port);
 #endif
 	/* we only support the current task */
