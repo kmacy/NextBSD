@@ -101,38 +101,6 @@
 uma_zone_t ipc_object_zones[IOT_NUMBER];
 
 /*
- *	Routine:	ipc_object_reference
- *	Purpose:
- *		Take a reference to an object.
- */
-
-void
-ipc_object_reference(
-	ipc_object_t	object)
-{
-	io_lock(object);
-	assert(object->io_references > 0);
-	io_reference(object);
-	io_unlock(object);
-}
-
-/*
- *	Routine:	ipc_object_release
- *	Purpose:
- *		Release a reference to an object.
- */
-#define VERBOSE_DEBUGGING
-void
-_ipc_object_release(
-	ipc_object_t	object, char *file, int line)
-{
-#ifdef VERBOSE_DEBUGGING
-	printf("ipc_object_release(%p:%d) %s:%d\n", object, object->io_references, file, line);
-#endif
-	io_release(object);
-}
-
-/*
  *	Routine:	ipc_object_translate
  *	Purpose:
  *		Look up an object in a space.
@@ -282,6 +250,7 @@ ipc_object_alloc(
 	ipc_object_t object;
 	ipc_entry_t entry;
 	kern_return_t kr;
+	int size;
 
 	assert(otype < IOT_NUMBER);
 	assert((type & MACH_PORT_TYPE_ALL_RIGHTS) == type);
@@ -291,17 +260,13 @@ ipc_object_alloc(
 	if (object == IO_NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
-	if (otype == IOT_PORT) {
-		ipc_port_t port = (ipc_port_t)object;
-
-		bzero((char *)port, sizeof(*port));
-	} else if (otype == IOT_PORT_SET) {
-		ipc_pset_t pset = (ipc_pset_t)object;
-
-		bzero((char *)pset, sizeof(*pset));
-	}
+	size = otype == IOT_PORT ? sizeof(struct ipc_port) : sizeof(struct ipc_pset);
+	bzero((char *)object, size);
 
 	io_lock_init(object);
+#if VERBOSE_DEBUGGING
+	printf("allocated new object %p type %d\n", object, otype);
+#endif
 
 	kr = ipc_entry_alloc(space,
 		type == MACH_PORT_TYPE_SEND_ONCE, namep, &entry);
@@ -349,6 +314,7 @@ ipc_object_alloc_name(
 	ipc_object_t object;
 	ipc_entry_t entry;
 	kern_return_t kr;
+	int size;
 
 	assert(otype < IOT_NUMBER);
 	assert((type & MACH_PORT_TYPE_ALL_RIGHTS) == type);
@@ -358,15 +324,8 @@ ipc_object_alloc_name(
 	if (object == IO_NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
-	if (otype == IOT_PORT) {
-		ipc_port_t port = (ipc_port_t)object;
-
-		bzero((char *)port, sizeof(*port));
-	} else if (otype == IOT_PORT_SET) {
-		ipc_pset_t pset = (ipc_pset_t)object;
-
-		bzero((char *)pset, sizeof(*pset));
-	}
+	size = otype == IOT_PORT ? sizeof(struct ipc_port) : sizeof(struct ipc_pset);
+	bzero((char *)object, size);
 
 	io_lock_init(object);
 	kr = ipc_entry_alloc_name(space, name, &entry);
@@ -658,6 +617,7 @@ ipc_object_copyout(
 	kern_return_t kr;
 
 	assert(IO_VALID(object));
+	MACH_VERIFY(io_otype(object) == IOT_PORT, ("bad type value on %p\n", object));
 	assert(io_otype(object) == IOT_PORT);
 
 	is_write_lock(space);
