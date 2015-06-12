@@ -4704,6 +4704,8 @@ job_start_child(job_t j)
 	        j->jetsam_priority, j->jetsam_memlimit));
 #endif
 
+#ifdef notyet
+	/* XXX: not yet: https://bugs.freenas.org/issues/10186 */
 	mach_port_array_t sports = NULL;
 	mach_msg_type_number_t sports_cnt = 0;
 	kern_return_t kr = vproc_mig_get_listener_port_rights(bootstrap_port, &sports, &sports_cnt);
@@ -4724,6 +4726,7 @@ job_start_child(job_t j)
 	} else if (kr != BOOTSTRAP_UNKNOWN_SERVICE) {
 		(void)job_assumes_zero(j, kr);
 	}
+#endif
 
 #if TARGET_OS_EMBEDDED
 	if (!j->app || j->system_app) {
