@@ -1,8 +1,7 @@
-.include <src.opts.mk>
+.include <bsd.own.mk>
 
 PROG= launchctl
 MAN=
-WARNS= 3
 
 BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
 BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
