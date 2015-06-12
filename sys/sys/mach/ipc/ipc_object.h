@@ -159,6 +159,8 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 #define _VOLATILE_
 #endif	/* NCPUS > 1 */
 
+#define VERBOSE_DEBUGGING 0
+
 /* Sanity check the ref count.  If it is 0, we may be doubly zfreeing.
  * If it is larger than max int, it has been corrupted, probably by being
  * modified into an address (this is architecture dependent, but it's
@@ -173,16 +175,24 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 
 
 static inline void
-io_reference(ipc_object_t io) {
+_io_reference(ipc_object_t io, char *file, int line) {
 
 	assert((io)->io_references > 0);
 	assert((io)->io_references < IO_MAX_REFERENCES);
 	atomic_add_int(&(io)->io_references, 1);
+#if VERBOSE_DEBUGGING
+	if (io->io_references < 5)
+		printf("ref %p refs: %d %s:%d\n", io, io->io_references, file, line);
+#endif
 }
 
 static inline void
-io_release(ipc_object_t io) {
+_io_release(ipc_object_t io, char* file, int line) {
 
+#if VERBOSE_DEBUGGING
+	if (io->io_references < 5)
+		printf("rel %p refs: %d %s:%d\n", io, io->io_references, file, line);
+#endif
 	assert((io)->io_references > 0);
 	MACH_VERIFY((io)->io_references < IO_MAX_REFERENCES, ("io_references: %d\n", (io)->io_references));
 	assert((io)->io_references < IO_MAX_REFERENCES);
@@ -190,20 +200,15 @@ io_release(ipc_object_t io) {
 		io_free(io_otype(io), io);
 }
 
+#define io_release(io)  _io_release(io, __FILE__, __LINE__)
+#define io_reference(io)  _io_reference(io, __FILE__, __LINE__)
+
+#define ipc_object_reference(io) io_reference(io)
+#define ipc_object_release(io) io_release(io)
+
 /*
  * Exported interfaces
  */
-
-/* Take a reference to an object */
-extern void ipc_object_reference(
-	ipc_object_t	object);
-
-/* Release a reference to an object */
-extern void _ipc_object_release(
-       ipc_object_t    object, char *file, int line);
-
-#define ipc_object_release(object) _ipc_object_release((object), __FILE__, __LINE__)
-
 
 /* Look up an object in a space */
 extern kern_return_t ipc_object_translate(
