@@ -326,6 +326,7 @@ xpc_dictionary_set_value(xpc_object_t xdict, const char *key, xpc_object_t value
 	pair->key = key;
 	pair->value = value;
 	TAILQ_INSERT_TAIL(&xo->xo_dict, pair, xo_link);
+	xpc_retain(value);
 }
 
 xpc_object_t

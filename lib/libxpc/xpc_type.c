@@ -346,7 +346,7 @@ xpc_string_create_with_format_and_arguments(const char *fmt, va_list ap)
 size_t
 xpc_string_get_length(xpc_object_t xstring)
 {
-	struct xpc_object *xo;
+	struct xpc_object *xo = xstring;
 
 	if (xo == NULL)
 		return (0);
