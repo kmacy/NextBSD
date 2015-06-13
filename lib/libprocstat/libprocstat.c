@@ -671,7 +671,9 @@ kinfo_type2fst(int kftype)
 		{ KF_TYPE_SHM, PS_FST_TYPE_SHM },
 		{ KF_TYPE_SOCKET, PS_FST_TYPE_SOCKET },
 		{ KF_TYPE_VNODE, PS_FST_TYPE_VNODE },
-		{ KF_TYPE_UNKNOWN, PS_FST_TYPE_UNKNOWN }
+		{ KF_TYPE_UNKNOWN, PS_FST_TYPE_UNKNOWN },
+		{ KF_TYPE_PORT, PS_FST_TYPE_PORT },
+		{ KF_TYPE_PORTSET, PS_FST_TYPE_PORTSET }
 	};
 #define NKFTYPES	(sizeof(kftypes2fst) / sizeof(*kftypes2fst))
 	unsigned int i;
