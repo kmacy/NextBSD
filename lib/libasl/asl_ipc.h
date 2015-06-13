@@ -1,5 +1,5 @@
-#ifndef	_asl_ipc_user_
-#define	_asl_ipc_user_
+#ifndef	_asl_ipc_server_
+#define	_asl_ipc_server_
 
 /* Module asl_ipc */
 
@@ -45,12 +45,9 @@ typedef function_table_entry   *function_table_t;
 #include <sys/mach/mach_types.h>
 #include <sys/types.h>
 
-#ifdef __BeforeMigUserHeader
-__BeforeMigUserHeader
-#endif /* __BeforeMigUserHeader */
-
-#include <sys/cdefs.h>
-__BEGIN_DECLS
+#ifdef __BeforeMigServerHeader
+__BeforeMigServerHeader
+#endif /* __BeforeMigServerHeader */
 
 
 /* Routine _asl_server_query */
@@ -59,7 +56,7 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_query
+kern_return_t __asl_server_query
 #if	defined(LINTLIBRARY)
     (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token)
 	mach_port_t server;
@@ -73,7 +70,7 @@ kern_return_t _asl_server_query
 	uint64_t *lastid;
 	int *status;
 	security_token_t *token;
-{ return _asl_server_query(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
+{ return __asl_server_query(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
 #else
 (
 	mach_port_t server,
@@ -96,21 +93,21 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_query_timeout
+kern_return_t __asl_server_query_timeout
 #if	defined(LINTLIBRARY)
-    (server, request, requestCnt, startid, count, timeout, flags, reply, replyCnt, lastid, status)
+    (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token)
 	mach_port_t server;
 	caddr_t request;
 	mach_msg_type_number_t requestCnt;
 	uint64_t startid;
 	int count;
-	natural_t timeout;
 	int flags;
 	caddr_t *reply;
 	mach_msg_type_number_t *replyCnt;
 	uint64_t *lastid;
 	int *status;
-{ return _asl_server_query_timeout(server, request, requestCnt, startid, count, timeout, flags, reply, replyCnt, lastid, status); }
+	audit_token_t token;
+{ return __asl_server_query_timeout(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
 #else
 (
 	mach_port_t server,
@@ -118,12 +115,12 @@ kern_return_t _asl_server_query_timeout
 	mach_msg_type_number_t requestCnt,
 	uint64_t startid,
 	int count,
-	natural_t timeout,
 	int flags,
 	caddr_t *reply,
 	mach_msg_type_number_t *replyCnt,
 	uint64_t *lastid,
-	int *status
+	int *status,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -133,7 +130,7 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_prune
+kern_return_t __asl_server_prune
 #if	defined(LINTLIBRARY)
     (server, request, requestCnt, status, token)
 	mach_port_t server;
@@ -141,7 +138,7 @@ kern_return_t _asl_server_prune
 	mach_msg_type_number_t requestCnt;
 	int *status;
 	security_token_t *token;
-{ return _asl_server_prune(server, request, requestCnt, status, token); }
+{ return __asl_server_prune(server, request, requestCnt, status, token); }
 #else
 (
 	mach_port_t server,
@@ -158,9 +155,9 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_create_aux_link
+kern_return_t __asl_server_create_aux_link
 #if	defined(LINTLIBRARY)
-    (server, message, messageCnt, fileport, url, urlCnt, status)
+    (server, message, messageCnt, fileport, url, urlCnt, status, token)
 	mach_port_t server;
 	caddr_t message;
 	mach_msg_type_number_t messageCnt;
@@ -168,7 +165,8 @@ kern_return_t _asl_server_create_aux_link
 	caddr_t *url;
 	mach_msg_type_number_t *urlCnt;
 	int *status;
-{ return _asl_server_create_aux_link(server, message, messageCnt, fileport, url, urlCnt, status); }
+	audit_token_t token;
+{ return __asl_server_create_aux_link(server, message, messageCnt, fileport, url, urlCnt, status, token); }
 #else
 (
 	mach_port_t server,
@@ -177,7 +175,8 @@ kern_return_t _asl_server_create_aux_link
 	mach_port_t *fileport,
 	caddr_t *url,
 	mach_msg_type_number_t *urlCnt,
-	int *status
+	int *status,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -187,18 +186,20 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_message
+kern_return_t __asl_server_message
 #if	defined(LINTLIBRARY)
-    (server, message, messageCnt)
+    (server, message, messageCnt, token)
 	mach_port_t server;
 	caddr_t message;
 	mach_msg_type_number_t messageCnt;
-{ return _asl_server_message(server, message, messageCnt); }
+	audit_token_t token;
+{ return __asl_server_message(server, message, messageCnt, token); }
 #else
 (
 	mach_port_t server,
 	caddr_t message,
-	mach_msg_type_number_t messageCnt
+	mach_msg_type_number_t messageCnt,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -208,16 +209,18 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_register_direct_watch
+kern_return_t __asl_server_register_direct_watch
 #if	defined(LINTLIBRARY)
-    (server, port)
+    (server, port, token)
 	mach_port_t server;
 	int port;
-{ return _asl_server_register_direct_watch(server, port); }
+	audit_token_t token;
+{ return __asl_server_register_direct_watch(server, port, token); }
 #else
 (
 	mach_port_t server,
-	int port
+	int port,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -227,16 +230,18 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_cancel_direct_watch
+kern_return_t __asl_server_cancel_direct_watch
 #if	defined(LINTLIBRARY)
-    (server, port)
+    (server, port, token)
 	mach_port_t server;
 	int port;
-{ return _asl_server_cancel_direct_watch(server, port); }
+	audit_token_t token;
+{ return __asl_server_cancel_direct_watch(server, port, token); }
 #else
 (
 	mach_port_t server,
-	int port
+	int port,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -246,9 +251,9 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_query_2
+kern_return_t __asl_server_query_2
 #if	defined(LINTLIBRARY)
-    (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status)
+    (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token)
 	mach_port_t server;
 	caddr_t request;
 	mach_msg_type_number_t requestCnt;
@@ -259,7 +264,8 @@ kern_return_t _asl_server_query_2
 	mach_msg_type_number_t *replyCnt;
 	uint64_t *lastid;
 	int *status;
-{ return _asl_server_query_2(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status); }
+	audit_token_t token;
+{ return __asl_server_query_2(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
 #else
 (
 	mach_port_t server,
@@ -271,7 +277,8 @@ kern_return_t _asl_server_query_2
 	caddr_t *reply,
 	mach_msg_type_number_t *replyCnt,
 	uint64_t *lastid,
-	int *status
+	int *status,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
@@ -281,9 +288,9 @@ mig_external
 #else
 extern
 #endif	/* mig_external */
-kern_return_t _asl_server_match
+kern_return_t __asl_server_match
 #if	defined(LINTLIBRARY)
-    (server, request, requestCnt, startid, count, duration, direction, reply, replyCnt, lastid, status)
+    (server, request, requestCnt, startid, count, duration, direction, reply, replyCnt, lastid, status, token)
 	mach_port_t server;
 	caddr_t request;
 	mach_msg_type_number_t requestCnt;
@@ -295,7 +302,8 @@ kern_return_t _asl_server_match
 	mach_msg_type_number_t *replyCnt;
 	uint64_t *lastid;
 	int *status;
-{ return _asl_server_match(server, request, requestCnt, startid, count, duration, direction, reply, replyCnt, lastid, status); }
+	audit_token_t token;
+{ return __asl_server_match(server, request, requestCnt, startid, count, duration, direction, reply, replyCnt, lastid, status, token); }
 #else
 (
 	mach_port_t server,
@@ -308,22 +316,310 @@ kern_return_t _asl_server_match
 	caddr_t *reply,
 	mach_msg_type_number_t *replyCnt,
 	uint64_t *lastid,
-	int *status
+	int *status,
+	audit_token_t token
 );
 #endif	/* defined(LINTLIBRARY) */
 
-__END_DECLS
+/* Routine _asl_server_query */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_query
+#if	defined(LINTLIBRARY)
+    (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token)
+	mach_port_t server;
+	caddr_t request;
+	mach_msg_type_number_t requestCnt;
+	uint64_t startid;
+	int count;
+	int flags;
+	caddr_t *reply;
+	mach_msg_type_number_t *replyCnt;
+	uint64_t *lastid;
+	int *status;
+	security_token_t *token;
+{ return __asl_server_query(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t request,
+	mach_msg_type_number_t requestCnt,
+	uint64_t startid,
+	int count,
+	int flags,
+	caddr_t *reply,
+	mach_msg_type_number_t *replyCnt,
+	uint64_t *lastid,
+	int *status,
+	security_token_t *token
+);
+#endif	/* defined(LINTLIBRARY) */
 
-/********************** Caution **************************/
-/* The following data types should be used to calculate  */
-/* maximum message sizes only. The actual message may be */
-/* smaller, and the position of the arguments within the */
-/* message layout may vary from what is presented here.  */
-/* For example, if any of the arguments are variable-    */
-/* sized, and less than the maximum is sent, the data    */
-/* will be packed tight in the actual message to reduce  */
-/* the presence of holes.                                */
-/********************** Caution **************************/
+/* Routine _asl_server_query_timeout */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_query_timeout
+#if	defined(LINTLIBRARY)
+    (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token)
+	mach_port_t server;
+	caddr_t request;
+	mach_msg_type_number_t requestCnt;
+	uint64_t startid;
+	int count;
+	int flags;
+	caddr_t *reply;
+	mach_msg_type_number_t *replyCnt;
+	uint64_t *lastid;
+	int *status;
+	audit_token_t token;
+{ return __asl_server_query_timeout(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t request,
+	mach_msg_type_number_t requestCnt,
+	uint64_t startid,
+	int count,
+	int flags,
+	caddr_t *reply,
+	mach_msg_type_number_t *replyCnt,
+	uint64_t *lastid,
+	int *status,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* Routine _asl_server_prune */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_prune
+#if	defined(LINTLIBRARY)
+    (server, request, requestCnt, status, token)
+	mach_port_t server;
+	caddr_t request;
+	mach_msg_type_number_t requestCnt;
+	int *status;
+	security_token_t *token;
+{ return __asl_server_prune(server, request, requestCnt, status, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t request,
+	mach_msg_type_number_t requestCnt,
+	int *status,
+	security_token_t *token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* Routine _asl_server_create_aux_link */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_create_aux_link
+#if	defined(LINTLIBRARY)
+    (server, message, messageCnt, fileport, url, urlCnt, status, token)
+	mach_port_t server;
+	caddr_t message;
+	mach_msg_type_number_t messageCnt;
+	mach_port_t *fileport;
+	caddr_t *url;
+	mach_msg_type_number_t *urlCnt;
+	int *status;
+	audit_token_t token;
+{ return __asl_server_create_aux_link(server, message, messageCnt, fileport, url, urlCnt, status, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t message,
+	mach_msg_type_number_t messageCnt,
+	mach_port_t *fileport,
+	caddr_t *url,
+	mach_msg_type_number_t *urlCnt,
+	int *status,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* SimpleRoutine _asl_server_message */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_message
+#if	defined(LINTLIBRARY)
+    (server, message, messageCnt, token)
+	mach_port_t server;
+	caddr_t message;
+	mach_msg_type_number_t messageCnt;
+	audit_token_t token;
+{ return __asl_server_message(server, message, messageCnt, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t message,
+	mach_msg_type_number_t messageCnt,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* SimpleRoutine _asl_server_register_direct_watch */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_register_direct_watch
+#if	defined(LINTLIBRARY)
+    (server, port, token)
+	mach_port_t server;
+	int port;
+	audit_token_t token;
+{ return __asl_server_register_direct_watch(server, port, token); }
+#else
+(
+	mach_port_t server,
+	int port,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* SimpleRoutine _asl_server_cancel_direct_watch */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_cancel_direct_watch
+#if	defined(LINTLIBRARY)
+    (server, port, token)
+	mach_port_t server;
+	int port;
+	audit_token_t token;
+{ return __asl_server_cancel_direct_watch(server, port, token); }
+#else
+(
+	mach_port_t server,
+	int port,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* Routine _asl_server_query_2 */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_query_2
+#if	defined(LINTLIBRARY)
+    (server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token)
+	mach_port_t server;
+	caddr_t request;
+	mach_msg_type_number_t requestCnt;
+	uint64_t startid;
+	int count;
+	int flags;
+	caddr_t *reply;
+	mach_msg_type_number_t *replyCnt;
+	uint64_t *lastid;
+	int *status;
+	audit_token_t token;
+{ return __asl_server_query_2(server, request, requestCnt, startid, count, flags, reply, replyCnt, lastid, status, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t request,
+	mach_msg_type_number_t requestCnt,
+	uint64_t startid,
+	int count,
+	int flags,
+	caddr_t *reply,
+	mach_msg_type_number_t *replyCnt,
+	uint64_t *lastid,
+	int *status,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+/* Routine _asl_server_match */
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+kern_return_t __asl_server_match
+#if	defined(LINTLIBRARY)
+    (server, request, requestCnt, startid, count, duration, direction, reply, replyCnt, lastid, status, token)
+	mach_port_t server;
+	caddr_t request;
+	mach_msg_type_number_t requestCnt;
+	uint64_t startid;
+	uint64_t count;
+	uint32_t duration;
+	int direction;
+	caddr_t *reply;
+	mach_msg_type_number_t *replyCnt;
+	uint64_t *lastid;
+	int *status;
+	audit_token_t token;
+{ return __asl_server_match(server, request, requestCnt, startid, count, duration, direction, reply, replyCnt, lastid, status, token); }
+#else
+(
+	mach_port_t server,
+	caddr_t request,
+	mach_msg_type_number_t requestCnt,
+	uint64_t startid,
+	uint64_t count,
+	uint32_t duration,
+	int direction,
+	caddr_t *reply,
+	mach_msg_type_number_t *replyCnt,
+	uint64_t *lastid,
+	int *status,
+	audit_token_t token
+);
+#endif	/* defined(LINTLIBRARY) */
+
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+boolean_t asl_ipc_server(
+		mach_msg_header_t *InHeadP,
+		mach_msg_header_t *OutHeadP);
+
+#ifdef	mig_external
+mig_external
+#else
+extern
+#endif	/* mig_external */
+mig_routine_t asl_ipc_server_routine(
+		mach_msg_header_t *InHeadP);
+
+
+/* Description of this subsystem, for use in direct RPC */
+extern const struct _asl_ipc_subsystem {
+	mig_server_routine_t	server;	/* Server routine */
+	mach_msg_id_t	start;	/* Min routine number */
+	mach_msg_id_t	end;	/* Max routine number + 1 */
+	unsigned int	maxsize;	/* Max msg size */
+	vm_address_t	reserved;	/* Reserved */
+	struct routine_descriptor	/*Array of routine descriptors */
+		routine[9];
+} _asl_ipc_subsystem;
 
 /* typedefs for all requests */
 
@@ -486,11 +782,12 @@ __END_DECLS
 #endif
 #endif /* !__Request__asl_ipc_subsystem__defined */
 
+
 /* union of all requests */
 
-#ifndef __RequestUnion__asl_ipc_subsystem__defined
-#define __RequestUnion__asl_ipc_subsystem__defined
-union __RequestUnion__asl_ipc_subsystem {
+#ifndef __RequestUnion___asl_ipc_subsystem__defined
+#define __RequestUnion___asl_ipc_subsystem__defined
+union __RequestUnion___asl_ipc_subsystem {
 	__Request___asl_server_query_t Request__asl_server_query;
 	__Request___asl_server_query_timeout_t Request__asl_server_query_timeout;
 	__Request___asl_server_prune_t Request__asl_server_prune;
@@ -501,7 +798,7 @@ union __RequestUnion__asl_ipc_subsystem {
 	__Request___asl_server_query_2_t Request__asl_server_query_2;
 	__Request___asl_server_match_t Request__asl_server_match;
 };
-#endif /* !__RequestUnion__asl_ipc_subsystem__defined */
+#endif /* __RequestUnion___asl_ipc_subsystem__defined */
 /* typedefs for all replies */
 
 #ifndef __Reply__asl_ipc_subsystem__defined
@@ -647,11 +944,12 @@ union __RequestUnion__asl_ipc_subsystem {
 #endif
 #endif /* !__Reply__asl_ipc_subsystem__defined */
 
+
 /* union of all replies */
 
-#ifndef __ReplyUnion__asl_ipc_subsystem__defined
-#define __ReplyUnion__asl_ipc_subsystem__defined
-union __ReplyUnion__asl_ipc_subsystem {
+#ifndef __ReplyUnion___asl_ipc_subsystem__defined
+#define __ReplyUnion___asl_ipc_subsystem__defined
+union __ReplyUnion___asl_ipc_subsystem {
 	__Reply___asl_server_query_t Reply__asl_server_query;
 	__Reply___asl_server_query_timeout_t Reply__asl_server_query_timeout;
 	__Reply___asl_server_prune_t Reply__asl_server_prune;
@@ -662,7 +960,7 @@ union __ReplyUnion__asl_ipc_subsystem {
 	__Reply___asl_server_query_2_t Reply__asl_server_query_2;
 	__Reply___asl_server_match_t Reply__asl_server_match;
 };
-#endif /* !__RequestUnion__asl_ipc_subsystem__defined */
+#endif /* __RequestUnion___asl_ipc_subsystem__defined */
 
 #ifndef subsystem_to_name_map_asl_ipc
 #define subsystem_to_name_map_asl_ipc \
@@ -677,8 +975,8 @@ union __ReplyUnion__asl_ipc_subsystem {
     { "_asl_server_match", 122 }
 #endif
 
-#ifdef __AfterMigUserHeader
-__AfterMigUserHeader
-#endif /* __AfterMigUserHeader */
+#ifdef __AfterMigServerHeader
+__AfterMigServerHeader
+#endif /* __AfterMigServerHeader */
 
-#endif	 /* _asl_ipc_user_ */
+#endif	 /* _asl_ipc_server_ */
