@@ -88,9 +88,11 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/eventhandler.h>
 #include <sys/file.h>
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
+#include <sys/kernel.h>
 #include <sys/syscallsubr.h>
 #include <sys/stat.h>
 #include <sys/syslog.h>
@@ -549,6 +551,172 @@ ipc_entry_dealloc(
 
 	ipc_entry_close(space, name);
 }
+
+#define NDFILE		20
+#define NDSLOTSIZE	sizeof(NDSLOTTYPE)
+#define	NDENTRIES	(NDSLOTSIZE * __CHAR_BIT)
+#define NDSLOT(x)	((x) / NDENTRIES)
+#define NDBIT(x)	((NDSLOTTYPE)1 << ((x) % NDENTRIES))
+#define	NDSLOTS(x)	(((x) + NDENTRIES - 1) / NDENTRIES)
+
+/*
+ * Find the highest non-zero bit in the given bitmap, starting at 0 and
+ * not exceeding size - 1. Return -1 if not found.
+ */
+static int
+fd_last_used(struct filedesc *fdp, int size)
+{
+	NDSLOTTYPE *map = fdp->fd_map;
+	NDSLOTTYPE mask;
+	int off, minoff;
+
+	off = NDSLOT(size);
+	if (size % NDENTRIES) {
+		mask = ~(~(NDSLOTTYPE)0 << (size % NDENTRIES));
+		if ((mask &= map[off]) != 0)
+			return (off * NDENTRIES + flsl(mask) - 1);
+		--off;
+	}
+	for (minoff = NDSLOT(0); off >= minoff; --off)
+		if (map[off] != 0)
+			return (off * NDENTRIES + flsl(map[off]) - 1);
+	return (-1);
+}
+
+/*
+ * Function drops the filedesc lock on return.
+ */
+static int
+ipc_entry_closefp(struct filedesc *fdp, int fd, struct file *fp, struct thread *td,
+    int holdleaders)
+{
+	int error;
+
+	FILEDESC_XLOCK_ASSERT(fdp);
+
+	if (holdleaders) {
+		if (td->td_proc->p_fdtol != NULL) {
+			/*
+			 * Ask fdfree() to sleep to ensure that all relevant
+			 * process leaders can be traversed in closef().
+			 */
+			fdp->fd_holdleaderscount++;
+		} else {
+			holdleaders = 0;
+		}
+	}
+
+	/*
+	 * We now hold the fp reference that used to be owned by the
+	 * descriptor array.  We have to unlock the FILEDESC *AFTER*
+	 * knote_fdclose to prevent a race of the fd getting opened, a knote
+	 * added, and deleteing a knote for the new fd.
+	 */
+	knote_fdclose(td, fd);
+
+	FILEDESC_XUNLOCK(fdp);
+
+	error = closef(fp, td);
+	if (holdleaders) {
+		FILEDESC_XLOCK(fdp);
+		fdp->fd_holdleaderscount--;
+		if (fdp->fd_holdleaderscount == 0 &&
+		    fdp->fd_holdleaderswakeup != 0) {
+			fdp->fd_holdleaderswakeup = 0;
+			wakeup(&fdp->fd_holdleaderscount);
+		}
+		FILEDESC_XUNLOCK(fdp);
+	}
+	return (error);
+}
+
+/*
+ * Mark a file descriptor as unused.
+ */
+static void
+fdunused(struct filedesc *fdp, int fd)
+{
+
+	FILEDESC_XLOCK_ASSERT(fdp);
+
+	KASSERT(fdp->fd_ofiles[fd].fde_file == NULL,
+	    ("fd=%d is still in use", fd));
+
+	fdp->fd_map[NDSLOT(fd)] &= ~NDBIT(fd);
+	if (fd < fdp->fd_freefile)
+		fdp->fd_freefile = fd;
+	if (fd == fdp->fd_lastfile)
+		fdp->fd_lastfile = fd_last_used(fdp, fd);
+}
+
+/*
+ * Free a file descriptor.
+ *
+ * Avoid some work if fdp is about to be destroyed.
+ */
+static inline void
+fdefree_last(struct filedescent *fde)
+{
+
+	filecaps_free(&fde->fde_caps);
+}
+
+static inline void
+fdfree(struct filedesc *fdp, int fd)
+{
+	struct filedescent *fde;
+
+	fde = &fdp->fd_ofiles[fd];
+#ifdef CAPABILITIES
+	seq_write_begin(&fde->fde_seq);
+#endif
+	fdefree_last(fde);
+	bzero(fde, fde_change_size);
+	fdunused(fdp, fd);
+#ifdef CAPABILITIES
+	seq_write_end(&fde->fde_seq);
+#endif
+}
+
+static void
+ipc_entry_exit(void *arg __unused, struct proc *p)
+{
+	struct filedesc *fdp;
+	struct filedescent *fde;
+	struct file *fp;
+	struct thread *td;
+	int i;
+
+	fdp = p->p_fd;
+	td = curthread;
+	/* do we want to just return if the refcount is > 1 or should we
+	 * bar this from happening in the first place?
+	 **/
+	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
+	for (i = 0; i <= fdp->fd_lastfile; i++) {
+		fde = &fdp->fd_ofiles[i];
+		fp = fde->fde_file;
+		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
+			/* mach file pointers cannot be shared across processes
+			 * or fds - but they can have arbitrarily large refcounts
+			 */
+			fp->f_count = 1;
+			FILEDESC_XLOCK(fdp);
+			fdfree(fdp, i);
+			(void) ipc_entry_closefp(fdp, i, fp, td, 0);
+			/* closefp() drops the FILEDESC lock. */
+		}
+	}
+}
+
+static void
+ipc_entry_sysinit(void *arg __unused)
+{
+
+	EVENTHANDLER_REGISTER(process_exit, ipc_entry_exit, NULL, EVENTHANDLER_PRI_ANY);
+}
+
+SYSINIT(ipc_entry, SI_SUB_KLD, SI_ORDER_ANY, ipc_entry_sysinit, NULL);
 
 
 #if	MACH_KDB
