@@ -13,7 +13,7 @@
 #include <stdio.h>
 
 #include <machine/mach/ndr_def.h>
-static void mach_init(void) __attribute__((constructor));
+void mach_init(void) __attribute__((constructor));
 mach_port_t mach_reply_port(void);
 mach_port_t task_self_trap(void);
 
@@ -24,19 +24,21 @@ mach_port_t mach_task_self_ = MACH_PORT_NULL;
  __attribute__((visibility("hidden"))) mach_port_t _task_reply_port;
 
 
-static void
+void
 mach_init(void)
 {
 	pid_t pid;
 	char *root_flag;
 	int root_bootstrap;
 	kern_return_t kr;
-	static bool mach_inited = false;
-	if (!mach_inited) {
+	static int mach_inited_pid = 0;
+
+
+	/* we may need to call this again after fork */
+	if (mach_inited_pid != (pid = getpid())) {
 		root_flag = getenv("ROOT_BOOTSTRAP");
 		root_bootstrap = (root_flag != NULL) && (strcmp(root_flag, "T") == 0);
 
-		pid = getpid();
 		mach_task_self_ = task_self_trap();
 		_task_reply_port = mach_reply_port();
 		if (pid != 1 && root_bootstrap == false) {
@@ -44,6 +46,6 @@ mach_init(void)
 			if (kr != KERN_SUCCESS)
 				return;
 		}
-		mach_inited = true;
+		mach_inited_pid = pid;
 	}
 }
