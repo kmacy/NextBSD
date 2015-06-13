@@ -733,7 +733,8 @@ launchd_mport_notify_req(mach_port_t name, mach_msg_id_t which)
 	return (err);
 }
 
-extern void mig_init(void *port);
+extern void mach_init(void);
+
 pid_t
 runtime_fork(mach_port_t bsport)
 {
@@ -773,7 +774,7 @@ runtime_fork(mach_port_t bsport)
 		pid_t p = -getpid();
 		(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
 		(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &emptyset, NULL));
-		mig_init(NULL);
+		mach_init();
 	}
 
 	errno = saved_errno;
