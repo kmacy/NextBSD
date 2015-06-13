@@ -116,6 +116,7 @@
 #include <sys/mach/thread.h>
 
 
+#define MODERN (__FreeBSD_version >= 1100000)
 
 static void
 ipc_entry_hash_delete(
@@ -157,12 +158,16 @@ ipc_entry_hash_delete(
 
 static fo_close_t mach_port_close;
 static fo_stat_t mach_port_stat;
+#if MODERN
 static fo_fill_kinfo_t mach_port_fill_kinfo;
+#endif
 
 struct fileops mach_fileops  = {
 	.fo_close = mach_port_close,
 	.fo_stat = mach_port_stat,
+#if MODERN
 	.fo_fill_kinfo = mach_port_fill_kinfo,
+#endif
 	.fo_flags = 0,
 };
 
@@ -208,6 +213,7 @@ mach_port_stat(struct file *fp __unused, struct stat *sb,
 	return (0);
 }
 
+#if MODERN
 static int
 mach_port_fill_kinfo(struct file *fp, struct kinfo_file *kif,
 					 struct filedesc *fdp __unused)
@@ -226,6 +232,7 @@ mach_port_fill_kinfo(struct file *fp, struct kinfo_file *kif,
 
 	return (0);
 }
+#endif
 
 /*
  *	Routine:	ipc_entry_release

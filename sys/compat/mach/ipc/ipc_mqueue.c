@@ -458,9 +458,6 @@ ipc_mqueue_deliver(
 		ips_unlock(pset);
 	}
 
-
-
-
 	TR_IPC_MQEX("exit: wakeup 0x%x", receiver);
 	return MACH_MSG_SUCCESS;
 }
