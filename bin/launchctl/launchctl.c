@@ -401,7 +401,7 @@ static int
 cmd_bootstrap(int argc, char * const argv[])
 {
 	struct dirent **files;
-	char *args[2] = {(char *)"load", NULL};
+	char *args[2] = {__DECONST(char *, "load"), NULL};
 	char *name, *path;
 	unsigned long i;
 	int n;
