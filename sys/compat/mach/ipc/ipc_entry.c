@@ -137,17 +137,20 @@ ipc_entry_hash_delete(
 	if (entryp == entry) {
 		space->is_table[idx] = entry->ie_link;
 		entry->ie_link = NULL;
+		entry->ie_index = UINT_MAX;
 	} else {
 		while (entryp->ie_link != NULL) {
 			if (entryp->ie_link == entry) {
 				entryp->ie_link = entry->ie_link;
 				entry->ie_link = NULL;
+				entry->ie_index = UINT_MAX;
 				break;
 			}
 			entryp = entryp->ie_link;
 		}
 	}
-	MPASS(entry->ie_link == NULL);
+	/* assert that it was found */
+	MPASS(entry->ie_index == UINT_MAX);
 }
 
 static fo_close_t mach_port_close;
@@ -170,7 +173,10 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 	entry = fp->f_data;
 	if (entry == NULL)
 		return (0);
-	ipc_entry_hash_delete(current_space(), entry);
+#ifdef INVARIANTS
+	printf("closing mach_port: %d\n", entry->ie_name);
+#endif	
+	ipc_entry_hash_delete(entry->ie_space, entry);
 	MPASS(entry->ie_link == NULL);
 
 	if (entry->ie_object != NULL) {
@@ -306,6 +312,10 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 		object = entry->ie_object;
 		MPASS(object != NULL);
 		kr = ipc_object_copyout(space, object, msgt_name, namep);
+		/* XXX this shouldn't be curthread it should be the originating thread - which we need
+		 * to be able get to through ipc_space
+		 * KMM
+		 */
 		fdrop(fp, curthread);
 	} else {
 		/* maintain the reference added at ipc_entry_copyin */
@@ -381,6 +391,7 @@ ipc_entry_get(
 	free_entry->ie_fp = fp;
 	free_entry->ie_index = UINT_MAX;
 	free_entry->ie_link = NULL;
+	free_entry->ie_space = current_space();
 
 	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
 	fdrop(fp, td);
