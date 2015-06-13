@@ -55,12 +55,19 @@ xpc_connection_create(const char *name, dispatch_queue_t targetq)
 	TAILQ_INIT(&conn->xc_peers);
 	TAILQ_INIT(&conn->xc_pending);
 
-	/* Create connection queue */
-	asprintf(&qname, "com.ixsystems.xpc.connection.%p", conn);
-	conn->xc_queue = dispatch_queue_create(qname, NULL);
+	/* Create send queue */
+	asprintf(&qname, "com.ixsystems.xpc.connection.sendq.%p", conn);
+	conn->xc_send_queue = dispatch_queue_create(qname, NULL);
 
-	/* Queue is initially suspended */
-	dispatch_suspend(conn->xc_queue);
+	/* Create recv queue */
+	asprintf(&qname, "com.ixsystems.xpc.connection.recvq.%p", conn);
+	conn->xc_recv_queue = dispatch_queue_create(qname, NULL);
+
+	/* Create target queue */
+	conn->xc_target_queue = targetq ? targetq : dispatch_get_main_queue();
+
+	/* Receive queue is initially suspended */
+	dispatch_suspend(conn->xc_recv_queue);
 
 	/* Create local port */
 	kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE,
@@ -117,10 +124,14 @@ xpc_connection_create_mach_service(const char *name, dispatch_queue_t targetq,
 }
 
 void
-xpc_connection_set_target_queue(xpc_connection_t connection,
+xpc_connection_set_target_queue(xpc_connection_t xconn,
     dispatch_queue_t targetq)
 {
+	struct xpc_connection *conn;
 
+	debugf("connection=%p", xconn);
+	conn = xconn;
+	conn->xc_target_queue = targetq;	
 }
 
 void
@@ -155,14 +166,14 @@ xpc_connection_resume(xpc_connection_t xconn)
 	if (conn->xc_parent == NULL) {
 		conn->xc_recv_source = dispatch_source_create(
 		    DISPATCH_SOURCE_TYPE_MACH_RECV, conn->xc_local_port, 0,
-		    dispatch_get_main_queue());
+		    conn->xc_recv_queue);
 		dispatch_set_context(conn->xc_recv_source, conn);
 		dispatch_source_set_event_handler_f(conn->xc_recv_source,
 		    xpc_connection_recv_message);
 		dispatch_resume(conn->xc_recv_source);
 	}
 
-	dispatch_resume(conn->xc_queue);
+	dispatch_resume(conn->xc_recv_queue);
 }
 
 void
@@ -178,7 +189,7 @@ xpc_connection_send_message(xpc_connection_t xconn,
 	if (id == 0)
 		id = XPC_CONNECTION_NEXT_ID(conn);
 
-	dispatch_async(conn->xc_queue, ^{
+	dispatch_async(conn->xc_send_queue, ^{
 		xpc_send(conn, message, id);
 	});
 }
@@ -194,9 +205,10 @@ xpc_connection_send_message_with_reply(xpc_connection_t xconn,
 	call = malloc(sizeof(struct xpc_pending_call));
 	call->xp_id = XPC_CONNECTION_NEXT_ID(conn);
 	call->xp_handler = handler;
+	call->xp_queue = targetq;
 	TAILQ_INSERT_TAIL(&conn->xc_pending, call, xp_link);
 
-	dispatch_async(conn->xc_queue, ^{
+	dispatch_async(conn->xc_send_queue, ^{
 		xpc_send(conn, message, call->xp_id);
 	});
 
@@ -205,6 +217,105 @@ xpc_connection_send_message_with_reply(xpc_connection_t xconn,
 xpc_object_t
 xpc_connection_send_message_with_reply_sync(xpc_connection_t conn,
     xpc_object_t message)
+{
+	__block xpc_object_t result;
+	dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+	xpc_connection_send_message_with_reply(conn, message, NULL,
+	    ^(xpc_object_t o) {
+		result = o;
+		dispatch_semaphore_signal(sem);
+	});
+
+	dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+	return (result);
+}
+
+void
+xpc_connection_send_barrier(xpc_connection_t xconn, dispatch_block_t barrier)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	dispatch_sync(conn->xc_send_queue, barrier);
+}
+
+void
+xpc_connection_cancel(xpc_connection_t connection)
+{
+
+}
+
+const char *
+xpc_connection_get_name(xpc_connection_t connection)
+{
+
+	return ("unknown"); /* ??? */
+}
+
+uid_t
+xpc_connection_get_euid(xpc_connection_t xconn)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	return (conn->xc_remote_euid);
+}
+
+gid_t
+xpc_connection_get_guid(xpc_connection_t xconn)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	return (conn->xc_remote_guid);
+}
+
+pid_t
+xpc_connection_get_pid(xpc_connection_t xconn)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	return (conn->xc_remote_pid);
+}
+
+au_asid_t
+xpc_connection_get_asid(xpc_connection_t xconn)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	return (conn->xc_remote_asid);
+}
+
+void
+xpc_connection_set_context(xpc_connection_t xconn, void *ctx)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	conn->xc_context = ctx;
+}
+
+void *
+xpc_connection_get_context(xpc_connection_t xconn)
+{
+	struct xpc_connection *conn;
+
+	conn = xconn;
+	return (conn->xc_context);
+}
+
+void
+xpc_connection_set_finalizer_f(xpc_connection_t connection,
+    xpc_finalizer_t finalizer)
+{
+
+}
+
+xpc_endpoint_t
+xpc_endpoint_create(xpc_connection_t connection)
 {
 
 }
@@ -216,6 +327,18 @@ xpc_main(xpc_connection_handler_t handler)
 	dispatch_main();
 }
 
+void
+xpc_transaction_begin(void)
+{
+
+}
+
+void
+xpc_transaction_end(void)
+{
+
+}
+
 static void
 xpc_send(xpc_connection_t xconn, xpc_object_t message, uint64_t id)
 {
@@ -224,7 +347,27 @@ xpc_send(xpc_connection_t xconn, xpc_object_t message, uint64_t id)
 
 	conn = xconn;
 	kr = xpc_pipe_send(message, conn->xc_remote_port,
-	    conn->xc_local_port, id);	
+	    conn->xc_local_port, id);
+
+	if (kr != KERN_SUCCESS)
+		debugf("send failed, kr=%d", kr);
+}
+
+static void
+xpc_connection_set_credentials(struct xpc_connection *conn, audit_token_t *tok)
+{
+	uid_t uid;
+	gid_t gid;
+	pid_t pid;
+	au_asid_t asid;
+
+	audit_token_to_au32(tok, NULL, &uid, &gid, NULL, NULL, &pid, &asid,
+	    NULL);
+
+	conn->xc_remote_euid = uid;
+	conn->xc_remote_guid = gid;
+	conn->xc_remote_pid = pid;
+	conn->xc_remote_asid = asid;
 }
 
 static void
@@ -249,7 +392,7 @@ xpc_connection_recv_message(void *context)
 	if (conn->xc_flags & XPC_CONNECTION_MACH_SERVICE_LISTENER) {
 		TAILQ_FOREACH(peer, &conn->xc_peers, xc_link) {
 			if (remote == peer->xc_remote_port) {
-				dispatch_async(peer->xc_queue, ^{
+				dispatch_async(peer->xc_target_queue, ^{
 					peer->xc_handler(result);
 				});
 				return;
@@ -262,20 +405,27 @@ xpc_connection_recv_message(void *context)
 		peer = xpc_connection_create(NULL, NULL);
 		peer->xc_parent = conn;
 		peer->xc_remote_port = remote;
+		xpc_connection_set_credentials(peer,
+		    ((struct xpc_object *)result)->xo_audit_token);
+
 		TAILQ_INSERT_TAIL(&conn->xc_peers, peer, xc_link);
 
-		dispatch_async(conn->xc_queue, ^{
+		dispatch_async(conn->xc_target_queue, ^{
 			conn->xc_handler(peer);
 		});
 
-		dispatch_async(peer->xc_queue, ^{
+		dispatch_async(peer->xc_target_queue, ^{
 			peer->xc_handler(result);
 		});
+
 	} else {
+		xpc_connection_set_credentials(conn,
+		    ((struct xpc_object *)result)->xo_audit_token);
+
 		TAILQ_FOREACH(call, &conn->xc_pending, xp_link) {
 			if (call->xp_id == id) {
-				dispatch_async(conn->xc_queue, ^{
-					call->xp_handler(result);
+				dispatch_async(conn->xc_target_queue, ^{
+					conn->xc_handler(result);
 					TAILQ_REMOVE(&conn->xc_pending, call,
 					    xp_link);
 					free(call);
@@ -285,8 +435,8 @@ xpc_connection_recv_message(void *context)
 		}
 
 		if (conn->xc_handler) {
-			dispatch_async(conn->xc_queue, ^{
-				conn->xc_handler(result);
+			dispatch_async(conn->xc_target_queue, ^{
+			    conn->xc_handler(result);
 			});
 		}
 	}

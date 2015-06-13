@@ -33,6 +33,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
+#include <sys/user.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <mach/mach.h>
@@ -460,9 +461,9 @@ procinfo(char *pname, int *pid, int *uid)
 		/* Search for a pid */
 		for (i = 0; i < nprocs; i++) 
 		{
-			if (*pid == procs[i].kp_proc.p_pid)
+			if (*pid == procs[i].ki_pid)
 			{
-				*uid = procs[i].kp_eproc.e_ucred.cr_uid;
+				*uid = procs[i].ki_uid;
 				return 0;
 			}
 		}
@@ -474,7 +475,7 @@ procinfo(char *pname, int *pid, int *uid)
 
 	for (i = 0; i < nprocs; i++) 
 	{
-		if (!strcmp(procs[i].kp_proc.p_comm, pname))
+		if (!strcmp(procs[i].ki_comm, pname))
 		{
 			if (*pid != PROC_NOT_FOUND)
 			{
@@ -482,8 +483,8 @@ procinfo(char *pname, int *pid, int *uid)
 				return PROC_NOT_UNIQUE;
 			}
 
-			*pid = procs[i].kp_proc.p_pid;
-			*uid = procs[i].kp_eproc.e_ucred.cr_uid;
+			*pid = procs[i].ki_pid;
+			*uid = procs[i].ki_uid;
 		}
 	}
 

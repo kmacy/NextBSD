@@ -64,13 +64,14 @@ xpc_array_set_value(xpc_object_t xarray, size_t index, xpc_object_t value)
 
 	TAILQ_FOREACH_SAFE(xotmp, arr, xo_link, xotmp2) {
 		if (i++ == index) {
+			TAILQ_INSERT_AFTER(arr, (struct xpc_object *)value,
+			    xotmp, xo_link);
 			TAILQ_REMOVE(arr, xotmp, xo_link);
+			xpc_retain(value);
+			free(xotmp);
 			break;
 		}
 	}
-
-
-	TAILQ_INSERT_TAIL(arr, (struct xpc_object *)value, xo_link);
 }
 	
 void
@@ -83,6 +84,7 @@ xpc_array_append_value(xpc_object_t xarray, xpc_object_t value)
 	arr = &xo->xo_array;
 
 	TAILQ_INSERT_TAIL(arr, (struct xpc_object *)value, xo_link);
+	xpc_retain(value);
 }
 
 
