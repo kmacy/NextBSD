@@ -258,7 +258,7 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 		fdrop(fp, curthread);
 	} else {
 		/* maintain the reference added at ipc_entry_copyin */
-		if ((kr = finstall(curthread, fp, namep, O_CLOEXEC|FMINALLOC, NULL)) != 0) {
+		if ((kr = finstall(curthread, fp, namep, FMINALLOC, NULL)) != 0) {
 			fdrop(fp, curthread);
 			kr = KERN_RESOURCE_SHORTAGE;
 		}
@@ -315,9 +315,9 @@ ipc_entry_get(
 
 	if (*namep != MACH_PORT_NAME_NULL) {
 		fd = *namep;
-		flags = FNOFDALLOC|O_CLOEXEC;
+		flags = FNOFDALLOC;
 	} else
-		flags = FMINALLOC|O_CLOEXEC;
+		flags = FMINALLOC;
 
 	if (falloc(td, &fp, &fd, flags)) {
 		free(free_entry, M_MACH_IPC_ENTRY);
