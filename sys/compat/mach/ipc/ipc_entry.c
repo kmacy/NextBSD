@@ -696,12 +696,12 @@ ipc_entry_exit(void *arg __unused, struct proc *p)
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
-		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
+		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC) && fp->f_data != NULL) {
 			/* mach file pointers cannot be shared across processes
 			 * or fds - but they can have arbitrarily large refcounts
 			 */
-			fp->f_count = 1;
 			FILEDESC_XLOCK(fdp);
+			fp->f_count = 1;
 			fdfree(fdp, i);
 			(void) ipc_entry_closefp(fdp, i, fp, td, 0);
 			/* closefp() drops the FILEDESC lock. */
@@ -713,7 +713,9 @@ static void
 ipc_entry_sysinit(void *arg __unused)
 {
 
+#ifdef notyet	
 	EVENTHANDLER_REGISTER(process_exit, ipc_entry_exit, NULL, EVENTHANDLER_PRI_ANY);
+#endif
 }
 
 SYSINIT(ipc_entry, SI_SUB_KLD, SI_ORDER_ANY, ipc_entry_sysinit, NULL);
