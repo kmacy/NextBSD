@@ -94,6 +94,7 @@
 #include <sys/syscallsubr.h>
 #include <sys/stat.h>
 #include <sys/syslog.h>
+#include <sys/user.h>
 
 #include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
@@ -113,6 +114,42 @@
 #include <sys/mach/thread.h>
 
 
+
+static void
+ipc_entry_hash_delete(
+	ipc_space_t space,
+	ipc_entry_t entry)
+{
+	mach_port_index_t idx;
+	ipc_entry_t entryp;
+
+	if ((idx = entry->ie_index) == UINT_MAX)
+		return;
+	if ((entry->ie_bits & (MACH_PORT_TYPE_DEAD_NAME | MACH_PORT_TYPE_SEND)) !=
+		MACH_PORT_TYPE_SEND)
+		return;
+	if (idx >= space->is_table_size)
+		return;
+
+	entryp = space->is_table[idx];
+	assert(entryp);
+
+	if (entryp == entry) {
+		space->is_table[idx] = entry->ie_link;
+		entry->ie_link = NULL;
+	} else {
+		while (entryp->ie_link != NULL) {
+			if (entryp->ie_link == entry) {
+				entryp->ie_link = entry->ie_link;
+				entry->ie_link = NULL;
+				break;
+			}
+			entryp = entryp->ie_link;
+		}
+	}
+	MPASS(entry->ie_link == NULL);
+}
+
 static fo_close_t mach_port_close;
 static fo_stat_t mach_port_stat;
 static fo_fill_kinfo_t mach_port_fill_kinfo;
@@ -130,9 +167,12 @@ mach_port_close(struct file *fp, struct thread *td __unused)
 	ipc_entry_t entry;
 
 	MACH_VERIFY(fp->f_data != NULL, ("expected fp->f_data != NULL - got NULL\n"));
-	if (fp->f_data == NULL)
-		return (0);
 	entry = fp->f_data;
+	if (entry == NULL)
+		return (0);
+	ipc_entry_hash_delete(current_space(), entry);
+	MPASS(entry->ie_link == NULL);
+
 	if (entry->ie_object != NULL) {
 		ipc_object_release(entry->ie_object);
 		entry->ie_object = NULL;
@@ -161,10 +201,21 @@ mach_port_stat(struct file *fp __unused, struct stat *sb,
 }
 
 static int
-mach_port_fill_kinfo(struct file *fp __unused, struct kinfo_file *kif __unused,
+mach_port_fill_kinfo(struct file *fp, struct kinfo_file *kif,
 					 struct filedesc *fdp __unused)
 {
-	/* placeholder to prevent us from panicking */
+	ipc_entry_t entry;
+
+	/* assume it's a port first */
+	kif->kf_type = KF_TYPE_PORT;
+
+	if ((entry = fp->f_data) == NULL)
+		return (0);
+	/* What else do we want from it? */
+	if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET) {
+		kif->kf_type = KF_TYPE_PORTSET;
+	}
+
 	return (0);
 }
 
@@ -258,6 +309,7 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 		fdrop(fp, curthread);
 	} else {
 		/* maintain the reference added at ipc_entry_copyin */
+		/* Are sent file O_CLOEXEC? */
 		if ((kr = finstall(curthread, fp, namep, FMINALLOC, NULL)) != 0) {
 			fdrop(fp, curthread);
 			kr = KERN_RESOURCE_SHORTAGE;
@@ -315,9 +367,9 @@ ipc_entry_get(
 
 	if (*namep != MACH_PORT_NAME_NULL) {
 		fd = *namep;
-		flags = FNOFDALLOC;
+		flags = FNOFDALLOC|O_CLOEXEC;
 	} else
-		flags = FMINALLOC;
+		flags = FMINALLOC|O_CLOEXEC;
 
 	if (falloc(td, &fp, &fd, flags)) {
 		free(free_entry, M_MACH_IPC_ENTRY);
@@ -328,6 +380,7 @@ ipc_entry_get(
 	free_entry->ie_name = fd;
 	free_entry->ie_fp = fp;
 	free_entry->ie_index = UINT_MAX;
+	free_entry->ie_link = NULL;
 
 	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
 	fdrop(fp, td);
@@ -412,7 +465,7 @@ ipc_entry_alloc_name(
 		kern_fddealloc(td, newname);
 		return (KERN_NAME_EXISTS);
 	}
-	if (falloc(td, &fp, &newname, FNOFDALLOC)) {
+	if (falloc(td, &fp, &newname, FNOFDALLOC|O_CLOEXEC)) {
 		kern_fddealloc(td, newname);
 		return (KERN_RESOURCE_SHORTAGE);
 	}
@@ -478,35 +531,12 @@ ipc_entry_dealloc(
 	mach_port_name_t	name,
 	ipc_entry_t	entry)
 {
-	mach_port_index_t idx;
-	ipc_entry_t entryp;
-	ipc_entry_bits_t bits;
-	int has_entry;
-
 	assert(space->is_active);
 	assert(entry->ie_object == IO_NULL);
 	assert(entry->ie_request == 0);
 
-	bits = entry->ie_bits;
-	has_entry = ((bits & (MACH_PORT_TYPE_DEAD_NAME | MACH_PORT_TYPE_SEND)) ==
-				 MACH_PORT_TYPE_SEND);
-	idx = entry->ie_index;
-	if (has_entry && idx < space->is_table_size) {
-		entryp = space->is_table[idx];
-		assert(entryp);
-
-		if (entryp == entry)
-			space->is_table[idx] = entry->ie_link;
-		else {
-			while (entryp->ie_link != NULL) {
-				if (entryp->ie_link == entry) {
-					entryp->ie_link = entry->ie_link;
-					break;
-				}
-				entryp = entryp->ie_link;
-			}
-		}
-	}
+	ipc_entry_hash_delete(space, entry);
+	MPASS(entry->ie_link == NULL);
 
 	ipc_entry_close(space, name);
 }
