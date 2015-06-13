@@ -65,11 +65,9 @@ static mach_port_t	mig_reply_port = MACH_PORT_NULL;
  ****************************************************/
 
 void
-mig_init(
-	void		*first)
+mig_init(void * arg __unused)
 {
-	if (first == (void *) 0)
-		mig_reply_port = MACH_PORT_NULL;
+	mig_reply_port = MACH_PORT_NULL;
 }
 
 /********************************************************

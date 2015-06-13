@@ -22,7 +22,7 @@ extern mach_port_t _task_reply_port;
 mach_port_t bootstrap_port = MACH_PORT_NULL;
 mach_port_t mach_task_self_ = MACH_PORT_NULL;
  __attribute__((visibility("hidden"))) mach_port_t _task_reply_port;
-
+extern void mig_init(void);
 
 void
 mach_init(void)
@@ -36,6 +36,7 @@ mach_init(void)
 
 	/* we may need to call this again after fork */
 	if (mach_inited_pid != (pid = getpid())) {
+		mig_init();
 		root_flag = getenv("ROOT_BOOTSTRAP");
 		root_bootstrap = (root_flag != NULL) && (strcmp(root_flag, "T") == 0);
 
