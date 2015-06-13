@@ -616,7 +616,7 @@ ipc_entry_closefp(struct filedesc *fdp, int fd, struct file *fp, struct thread *
 
 	FILEDESC_XUNLOCK(fdp);
 
-	error = closef(fp, td);
+	error = fdrop(fp, td);
 	if (holdleaders) {
 		FILEDESC_XLOCK(fdp);
 		fdp->fd_holdleaderscount--;
