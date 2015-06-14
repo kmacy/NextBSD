@@ -273,14 +273,14 @@ _librtld_db=	librtld_db
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
-.if ${MK_BHYVE} != "no"
 _libcfxlite=	libcfxlite
 _libdispatch=	libdispatch
 _liblaunch=	liblaunch
 _libmach=	libmach
 _libasl=	libasl
-_libvmmapi=	libvmmapi
 _libxpc=	libxpc
+.if ${MK_BHYVE} != "no"
+_libvmmapi=	libvmmapi
 .endif
 .endif
 
