@@ -21,8 +21,8 @@ SYSDIR=	${_dir}
 .error "can't find kernel source tree"
 .endif
 
-CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR}
-CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include
+CFLAGS+= -I${.CURDIR}/../../include -I. -I${A} -I${.CURDIR} -I./include
+CFLAGS+= -I${SYSDIR} -I${.CURDIR}/../../apsl/include -I${MACHINE_INCLUDES}
 CFLAGS+= -fPIC -DPRIVATE -D__MigTypeCheck=1 -DLIBSYSCALL_INTERFACE=1
 DEBUG_FLAGS= -g -O0
 mach_port.h mach_portUser.c: ${DEFS}/mach_port.defs
