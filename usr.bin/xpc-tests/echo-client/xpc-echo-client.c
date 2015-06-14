@@ -68,5 +68,11 @@ main(int argc, char *argv[])
 		printf("yay, message!\n");
 		printf("%s\n", xpc_copy_description(resp));
 	});
+
+	xpc_connection_send_message_with_reply(conn, msg, NULL, ^(xpc_object_t resp) {
+		printf("yay, another message!\n");
+		printf("%s\n", xpc_copy_description(resp));
+	});
+
 	dispatch_main();
 }

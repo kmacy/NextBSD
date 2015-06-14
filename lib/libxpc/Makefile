@@ -10,6 +10,5 @@ BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 CFLAGS+= ${BASE_INCLUDE} -fblocks -g -O0
 
 SRCS= xpc_dictionary.c xpc_misc.c xpc_type.c xpc_array.c xpc_connection.c
-SUBDIR= tests
 
 .include <bsd.lib.mk>

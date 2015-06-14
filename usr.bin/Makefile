@@ -199,6 +199,9 @@ SUBDIR=	${_addr2line} \
 	xargs \
 	xinstall \
 	xo \
+	${_xlint} \
+	${_xpc-tests} \
+	${_xstr} \
 	xz \
 	xzdec \
 	yes \
@@ -363,6 +366,9 @@ SUBDIR+=	telnet
 .endif
 
 .if ${MK_TESTS} != "no"
+.if ${MACHINE_CPUARCH} == "amd64"
+_xpc-tests=	xpc-tests
+.endif
 _tests=		tests
 .endif
 
