@@ -200,7 +200,7 @@ SUBDIR=	${_addr2line} \
 	xinstall \
 	xo \
 	${_xlint} \
-	${_xpc-tests} \
+	${_xpc_tests} \
 	${_xstr} \
 	xz \
 	xzdec \
@@ -365,10 +365,11 @@ SUBDIR+=	talk
 SUBDIR+=	telnet
 .endif
 
-.if ${MK_TESTS} != "no"
 .if ${MACHINE_CPUARCH} == "amd64"
-_xpc-tests=	xpc-tests
+_xpc_tests=     xpc-tests
 .endif
+
+.if ${MK_TESTS} != "no"
 _tests=		tests
 .endif
 
