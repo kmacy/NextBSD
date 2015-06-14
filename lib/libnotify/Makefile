@@ -1,7 +1,8 @@
 .include <bsd.init.mk>
 
 LIB=	notify
-WARNS=	6
+NO_WERROR=yes
+NO_WTHREAD_SAFETY=yes
 
 .PATH: .
 .PATH: ../../sbin/launchd
