@@ -173,20 +173,19 @@ struct fileops mach_fileops  = {
 };
 
 static int
-mach_port_close(struct file *fp, struct thread *td __unused)
+mach_port_close(struct file *fp, struct thread *td)
 {
 	ipc_entry_t entry;
 
 	MACH_VERIFY(fp->f_data != NULL, ("expected fp->f_data != NULL - got NULL\n"));
-	entry = fp->f_data;
-	if (entry == NULL)
+	if ((entry = fp->f_data) == NULL)
 		return (0);
-#ifdef INVARIANTS
-	printf("closing mach_port: %d\n", entry->ie_name);
-#endif	
+
 	ipc_entry_hash_delete(entry->ie_space, entry);
 	MPASS(entry->ie_link == NULL);
-
+	PROC_LOCK(td->td_proc);
+	LIST_REMOVE(entry, ie_space_link);
+	PROC_UNLOCK(td->td_proc);
 	if (entry->ie_object != NULL) {
 		ipc_object_release(entry->ie_object);
 		entry->ie_object = NULL;
@@ -270,11 +269,11 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 		return (NULL);
 
 	if (fget(curthread, name, NULL, &fp) != 0) {
-		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
+		log(LOG_DEBUG, "%s:%d entry for port name: %d not found\n", curproc->p_comm, curproc->p_pid, name);
 		return (NULL);
 	}
 	if (fp->f_type != DTYPE_MACH_IPC) {
-		log(LOG_DEBUG, "port name: %d is not MACH\n", name);
+		log(LOG_DEBUG, "%s:%d port name: %d is not MACH\n", curproc->p_comm, curproc->p_pid, name);
 		fdrop(fp, curthread);
 		return (NULL);
 	}
@@ -375,11 +374,12 @@ ipc_entry_get(
 	ipc_entry_t free_entry;
 	int fd, flags;
 	struct file *fp;
-	struct thread *td = curthread;
+	struct thread *td;
 
 	assert(space->is_active);
 
 	flags = 0;
+	td  = curthread;
 	if ((free_entry = malloc(sizeof(*free_entry), M_MACH_IPC_ENTRY, M_WAITOK|M_ZERO)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
@@ -399,8 +399,10 @@ ipc_entry_get(
 	free_entry->ie_fp = fp;
 	free_entry->ie_index = UINT_MAX;
 	free_entry->ie_link = NULL;
-	free_entry->ie_space = current_space();
-
+	free_entry->ie_space = space;
+	PROC_LOCK(curproc);
+	LIST_INSERT_HEAD(&space->is_entry_list, free_entry, ie_space_link);
+	PROC_UNLOCK(curproc);
 	finit(fp, 0, DTYPE_MACH_IPC, free_entry, &mach_fileops);
 	fdrop(fp, td);
 	assert(fp->f_count == 1);
@@ -568,10 +570,12 @@ ipc_entry_exit(void *arg __unused, struct proc *p)
 	struct file *fp;
 	struct thread *td;
 	ipc_entry_t entry;
+	ipc_space_t space;
 	int i;
 
 	fdp = p->p_fd;
 	td = curthread;
+	space = current_space();
 	/* do we want to just return if the refcount is > 1 or should we
 	 * bar this from happening in the first place?
 	 **/
@@ -580,27 +584,51 @@ ipc_entry_exit(void *arg __unused, struct proc *p)
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
-		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC) && fp->f_data != NULL) {
+		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
+			if (fp->f_data == NULL) {
+				printf("%s:%d fd: %d has NULL f_data\n", p->p_comm, p->p_pid, i);
+				kern_close(td, i);
+				continue;
+			}
 
 			entry = fp->f_data;
 			if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET)
 				continue;
-			printf("fd: %d port refcount: %d\n", i, fp->f_count);
-
-			fp->f_count = 1;
-			mach_port_deallocate(current_space(), i);
+			if (fp->f_count > 1)
+				printf("%s:%d fd: %d port refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+			kern_close(td, i);
 		}
 	}
+	/* clear portsets */
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
-		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC) && fp->f_data != NULL) {
-
+		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
+			MPASS(fp->f_data != NULL);
 			entry = fp->f_data;
-			printf("fd: %d portset refcount: %d\n", i, fp->f_count);
-
-			mach_port_deallocate(current_space(), i);
+			if (fp->f_count > 1)
+				printf("%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+			kern_close(td, i);
 		}
+	}
+#ifdef INVARIANTS
+	for (i = 0; i <= fdp->fd_lastfile; i++) {
+		fde = &fdp->fd_ofiles[i];
+		fp = fde->fde_file;
+		if (fp != NULL)
+			MPASS(fp->f_type != DTYPE_MACH_IPC);
+	}
+#endif
+	/* free unreferenced ipc_entrys */
+	i = 0;
+	while(!LIST_EMPTY(&space->is_entry_list)) {
+		entry = LIST_FIRST(&space->is_entry_list);
+		/* mach_port_close removes the entry */
+		fp = entry->ie_fp;
+		fp->f_count = 1;
+		fdrop(fp, td);
+		/* ensure no infinite loop */
+		MPASS(i++ < 10000);
 	}
 }
 

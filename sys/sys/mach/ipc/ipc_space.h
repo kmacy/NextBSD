@@ -115,7 +115,7 @@ typedef natural_t ipc_space_refs_t;
 struct ipc_space {
 	decl_mutex_data(,is_ref_lock_data)
 	ipc_space_refs_t is_references;
-
+	LIST_HEAD(, ipc_entry) is_entry_list;
 	struct rwlock is_lock_data;
 	boolean_t is_active;		/* is the space alive? */
 	boolean_t is_growing;		/* is the space growing? */

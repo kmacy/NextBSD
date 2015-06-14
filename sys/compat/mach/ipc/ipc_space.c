@@ -198,6 +198,7 @@ ipc_space_create(
 	space->is_table = table;
 	space->is_table_size = new_size;
 	space->is_table_next = initial+1;
+	LIST_INIT(&space->is_entry_list);
 
 	space->is_tree_total = 0;
 	space->is_tree_small = 0;
