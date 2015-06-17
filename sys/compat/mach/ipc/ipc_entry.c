@@ -116,6 +116,11 @@
 #include <sys/mach/ipc/ipc_port.h>
 #include <sys/mach/thread.h>
 
+static void fdunused(struct filedesc *fdp, int fd);
+static int kern_fdalloc(struct thread *td, int minfd, int *result);
+static void kern_fddealloc(struct thread *td, int fd);
+static int kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
+			 struct filecaps *fcaps);
 
 #define MODERN (__FreeBSD_version >= 1100000)
 
@@ -327,7 +332,7 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 	} else {
 		/* maintain the reference added at ipc_entry_copyin */
 		/* Are sent file O_CLOEXEC? */
-		if ((kr = finstall(curthread, fp, namep, FMINALLOC, NULL)) != 0) {
+		if ((kr = kern_finstall(curthread, fp, namep, FMINALLOC, NULL)) != 0) {
 			fdrop(fp, curthread);
 			kr = KERN_RESOURCE_SHORTAGE;
 		}
@@ -486,11 +491,15 @@ ipc_entry_alloc_name(
 		kern_fddealloc(td, newname);
 		return (KERN_NAME_EXISTS);
 	}
-	if (falloc(td, &fp, &newname, FNOFDALLOC|O_CLOEXEC)) {
-		kern_fddealloc(td, newname);
+	if (falloc_noinstall(td, &fp)) {
+	  kern_fddealloc(td, newname);
+	  return (KERN_RESOURCE_SHORTAGE);
+	}
+	if (kern_finstall(td, fp, &name, FNOFDALLOC|O_CLOEXEC, NULL)) {
+	  kern_fddealloc(td, newname);
+	  fdrop(fp, td);
 		return (KERN_RESOURCE_SHORTAGE);
 	}
-
 	if (!space->is_active) {
 		kern_fddealloc(td, newname);
 		return (KERN_INVALID_TASK);
@@ -642,6 +651,130 @@ ipc_entry_sysinit(void *arg __unused)
 SYSINIT(ipc_entry, SI_SUB_KLD, SI_ORDER_ANY, ipc_entry_sysinit, NULL);
 
 
+#define NDFILE		20
+#define NDSLOTSIZE	sizeof(NDSLOTTYPE)
+#define	NDENTRIES	(NDSLOTSIZE * __CHAR_BIT)
+#define NDSLOT(x)	((x) / NDENTRIES)
+#define NDBIT(x)	((NDSLOTTYPE)1 << ((x) % NDENTRIES))
+#define	NDSLOTS(x)	(((x) + NDENTRIES - 1) / NDENTRIES)
+
+
+/*
+ * Find the highest non-zero bit in the given bitmap, starting at 0 and
+ * not exceeding size - 1. Return -1 if not found.
+ */
+static int
+fd_last_used(struct filedesc *fdp, int size)
+{
+	NDSLOTTYPE *map = fdp->fd_map;
+	NDSLOTTYPE mask;
+	int off, minoff;
+
+	off = NDSLOT(size);
+	if (size % NDENTRIES) {
+		mask = ~(~(NDSLOTTYPE)0 << (size % NDENTRIES));
+		if ((mask &= map[off]) != 0)
+			return (off * NDENTRIES + flsl(mask) - 1);
+		--off;
+	}
+	for (minoff = NDSLOT(0); off >= minoff; --off)
+		if (map[off] != 0)
+			return (off * NDENTRIES + flsl(map[off]) - 1);
+	return (-1);
+}
+
+static int
+fdisused(struct filedesc *fdp, int fd)
+{
+
+	FILEDESC_LOCK_ASSERT(fdp);
+
+	KASSERT(fd >= 0 && fd < fdp->fd_nfiles,
+	    ("file descriptor %d out of range (0, %d)", fd, fdp->fd_nfiles));
+
+	return ((fdp->fd_map[NDSLOT(fd)] & NDBIT(fd)) != 0);
+}
+
+/*
+ * Mark a file descriptor as unused.
+ */
+static void
+fdunused(struct filedesc *fdp, int fd)
+{
+
+	FILEDESC_XLOCK_ASSERT(fdp);
+
+	KASSERT(fdisused(fdp, fd), ("fd=%d is already unused", fd));
+	KASSERT(fdp->fd_ofiles[fd].fde_file == NULL,
+	    ("fd=%d is still in use", fd));
+
+	fdp->fd_map[NDSLOT(fd)] &= ~NDBIT(fd);
+	if (fd < fdp->fd_freefile)
+		fdp->fd_freefile = fd;
+	if (fd == fdp->fd_lastfile)
+		fdp->fd_lastfile = fd_last_used(fdp, fd);
+}
+
+static int
+kern_fdalloc(struct thread *td, int minfd, int *result)
+{
+	struct proc *p = td->td_proc;
+	struct filedesc *fdp = p->p_fd;
+	int rc;
+	FILEDESC_XLOCK(fdp);
+	rc = fdalloc(td, minfd, result);
+	FILEDESC_XUNLOCK(fdp);
+	return (rc);
+}
+
+static void
+kern_fddealloc(struct thread *td, int fd)
+{
+	struct proc *p = td->td_proc;
+	struct filedesc *fdp = p->p_fd;
+	FILEDESC_XLOCK(fdp);
+	fdunused(fdp, fd);
+	FILEDESC_XUNLOCK(fdp);
+}
+
+/*
+ * Install a file in a file descriptor table.
+ */
+static int
+kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
+    struct filecaps *fcaps)
+{
+	struct filedesc *fdp = td->td_proc->p_fd;
+	struct filedescent *fde;
+	int error, min;
+
+	KASSERT(fd != NULL, ("%s: fd == NULL", __func__));
+	KASSERT(fp != NULL, ("%s: fp == NULL", __func__));
+
+	min = (flags & FMINALLOC) ? 16 : 0;
+
+	FILEDESC_XLOCK(fdp);
+	if (!(flags & FNOFDALLOC)) {
+		if ((error = fdalloc(td, min, fd))) {
+			FILEDESC_XUNLOCK(fdp);
+			return (error);
+		}
+	}
+	fhold(fp);
+	fde = &fdp->fd_ofiles[*fd];
+#ifdef CAPABILITIES
+	seq_write_begin(&fde->fde_seq);
+#endif
+	fde->fde_file = fp;
+	if ((flags & O_CLOEXEC) != 0)
+		fde->fde_flags |= UF_EXCLOSE;
+#ifdef CAPABILITIES
+	seq_write_end(&fde->fde_seq);
+#endif
+	FILEDESC_XUNLOCK(fdp);
+	return (0);
+}
+ 
 #if	MACH_KDB
 #include <ddb/db_output.h>
 #define	printf	kdbprintf

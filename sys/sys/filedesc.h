@@ -149,8 +149,6 @@ int	falloc(struct thread *td, struct file **resultfp, int *resultfd,
 int	falloc_noinstall(struct thread *td, struct file **resultfp);
 int	finstall(struct thread *td, struct file *fp, int *resultfp, int flags,
 	    struct filecaps *fcaps);
-int	kern_fdalloc(struct thread *td, int minfd, int *result);
-void	kern_fddealloc(struct thread *td, int fd);
 int	fdalloc(struct thread *td, int minfd, int *result);
 int	fdallocn(struct thread *td, int minfd, int *fds, int n);
 int	fdcheckstd(struct thread *td);
