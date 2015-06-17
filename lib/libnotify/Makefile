@@ -19,7 +19,11 @@ notify_ipc.h notify_ipcUser.c: notify_ipc.defs
 
 notify_client.c: notify_ipc.h notify_ipcUser.c
 
-SRCS= libnotify.c notify_client.c table.c notify_ipcUser.c
+SRCS=	libnotify.c \
+	notify_client.c \
+	table.c \
+	notify_ipcUser.c
+INCS=	notify.h
 
 CLEANFILES+= *User.c *Server.c notify_ipc.h
 
