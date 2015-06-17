@@ -111,7 +111,7 @@
 #ifndef	_MACH_KERN_RETURN_H_
 #define _MACH_KERN_RETURN_H_
 
-#include <machine/mach/kern_return.h>
+typedef int		kern_return_t;
 
 /*
  * N.B.:	If you add errors, please update

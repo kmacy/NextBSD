@@ -103,7 +103,6 @@
  *	in the machine dependent module.
  */
 #include <machine/mach/vm_types.h>
-#include <machine/mach/thread_status.h>
 #include <machine/mach/thread_state.h>
 
 /*
