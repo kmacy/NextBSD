@@ -72,6 +72,10 @@ subsystem
 #include <sys/mach/mach_types.defs>
 #include <sys/mach_debug/mach_debug_types.defs>
 
+#ifdef _KERNEL
+import <sys/mach/task.h>;
+#endif
+
 /*
  *	Create a new task with an empty set of IPC rights,
  *	and having an address space constructed from the

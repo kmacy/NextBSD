@@ -40,6 +40,7 @@
 #include <sys/mach/mig.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach_debug/mach_debug_types.h>
+#include <sys/mach/task.h>
 
 #ifndef	mig_internal
 #define	mig_internal	static __inline__

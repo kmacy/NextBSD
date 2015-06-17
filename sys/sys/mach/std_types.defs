@@ -89,7 +89,7 @@ type unsigned64 = uint64_t;
 type char = MACH_MSG_TYPE_CHAR;
 type boolean_t = MACH_MSG_TYPE_BOOLEAN;
 
-#include <machine/mach/machine_types.defs>
+#include <sys/mach/machine_types.defs>
 
 type kern_return_t = int;
 

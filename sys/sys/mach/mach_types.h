@@ -297,7 +297,6 @@ typedef int mach_absolute_time_t;
 
 
 
-
 /*
  *	Backwards compatibility, for those programs written
  *	before mach/{std,mach}_types.{defs,h} were set up.
@@ -308,7 +307,6 @@ typedef int mach_absolute_time_t;
 #include <sys/mach/processor.h>	/* for processor_array_t,
 				       processor_set_array_t,
 				       processor_set_name_array_t */
-#include <sys/mach/task.h>
 
 #ifdef __MIG_check__Request__vm_map_subsystem__
 #include <sys/mach/ipc/ipc_kmsg.h>

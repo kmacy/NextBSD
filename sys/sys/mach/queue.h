@@ -227,7 +227,7 @@ dequeue_tail(
 
 static __inline__ void
 remqueue(
-	queue_t		que,
+	queue_t		que __unused,
 	queue_entry_t	elt)
 {
 	elt->next->prev = elt->prev;

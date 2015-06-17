@@ -218,7 +218,6 @@
 #include <vm/vm_map.h>
 #endif
 #include <sys/mach/queue.h>
-#include <machine/mach/task.h>
 
 #define MACH_HOST 1
 #define MACH_PROF 0
@@ -226,7 +225,9 @@
 #define FAST_TAS 0
 #define TASK_SWAPPER  0
 
+#include <sys/mach/mach_types.h>
 #include <sys/mach/mach_param.h>
+
 
 extern ipc_port_t convert_task_to_port(task_t);
 extern ipc_port_t convert_task_name_to_port(task_name_t);

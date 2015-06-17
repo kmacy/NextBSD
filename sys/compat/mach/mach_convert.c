@@ -8,6 +8,7 @@
 #include <sys/mach/ipc_sync.h>
 #include <sys/mach/ipc_tt.h>
 #include <sys/mach/ipc/ipc_voucher.h>
+#include <sys/mach/task.h>
 
 ipc_port_t
 convert_clock_ctrl_to_port(mach_clock_t clock)

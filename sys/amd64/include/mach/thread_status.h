@@ -104,8 +104,6 @@
 #ifndef	_MACH_I386_THREAD_STATUS_H_
 #define _MACH_I386_THREAD_STATUS_H_
 
-#include <machine/mach/fp_reg.h>
-#include <machine/mach/thread_state.h>
 /*
  *	i386_thread_state	this is the structure that is exported
  *				to user threads for use in status/mutate
@@ -279,7 +277,7 @@ struct i386_saved_state {
  * Note that the registers are ordered from top-of-stack down, not
  * according to physical register number.
  */
-
+#if 0
 #define FP_STATE_BYTES \
 	(sizeof (struct i386_fp_save) + sizeof (struct i386_fp_regs))
 
@@ -291,7 +289,7 @@ struct i386_float_state {
 };
 #define i386_FLOAT_STATE_COUNT \
 		(sizeof(struct i386_float_state)/sizeof(unsigned int))
-
+#endif
 
 #define PORT_MAP_BITS 0x400
 struct i386_isa_port_map_state {

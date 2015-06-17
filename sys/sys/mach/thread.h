@@ -7,6 +7,8 @@
 #include <vm/pmap.h>
 #include <vm/vm_map.h>
 
+#include <sys/mach/task.h>
+
 
 
 /*
