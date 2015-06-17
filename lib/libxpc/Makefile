@@ -9,6 +9,19 @@ BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I.
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 CFLAGS+= ${BASE_INCLUDE} -fblocks -g -O0
 
-SRCS= xpc_dictionary.c xpc_misc.c xpc_type.c xpc_array.c xpc_connection.c
+SRCS=	xpc_dictionary.c \
+	xpc_misc.c \
+	xpc_type.c \
+	xpc_array.c \
+	xpc_connection.c
+
+INCSDIR= ${INCLUDEDIR}/xpc
+INCS=	activity.h \
+	base.h \
+	connection.h \
+	debug.h \
+	endpoint.h \
+	launchd.h \
+	xpc.h
 
 .include <bsd.lib.mk>
