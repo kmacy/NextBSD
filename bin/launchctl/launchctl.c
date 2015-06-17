@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
@@ -36,6 +37,7 @@
 #include <err.h>
 #include <syslog.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -43,8 +45,13 @@
 #include <netdb.h>
 #include <launch.h>
 #include <jansson.h>
+#include <paths.h>
+#include <termios.h>
+#include <libutil.h>
 
 #define N(x)    ((sizeof(x)) / (sizeof(x[0])))
+
+#define STALL_TIMEOUT	30	// Sleep N seconds after problem
 
 static launch_data_t to_launchd(json_t *json);
 static launch_data_t to_launchd_sockets(json_t *json);
@@ -397,39 +404,244 @@ launch_msg_json(json_t *input)
 	return to_json(result);
 }
 
+static void
+stall(const char *message, ...)
+{
+	va_list ap;
+	va_start(ap, message);
+
+	vsyslog(LOG_ERR, message, ap);
+	va_end(ap);
+	sleep(STALL_TIMEOUT);
+}
+
+static bool
+do_single_user_mode2(void)
+{
+	bool runcom_fsck = true; /* should_fsck(); */
+	// Need to do something about these
+	bool runcom_safe = false;
+	bool runcom_netboot = false;
+	int wstatus;
+	int fd;
+	pid_t p;
+
+	switch ((p = fork())) {
+	case -1:
+		syslog(LOG_ERR, "can't fork single-user shell, trying again: %m");
+		return false;
+	case 0:
+		break;
+	default:
+		(void)waitpid(p, &wstatus, 0);
+		if (WIFEXITED(wstatus)) {
+			if (WEXITSTATUS(wstatus) == EXIT_SUCCESS) {
+				return true;
+			} else {
+				syslog(LOG_NOTICE | LOG_CONSOLE, "single user mode: exit status: %d", WEXITSTATUS(wstatus));
+			}
+		} else {
+			syslog(LOG_NOTICE | LOG_CONSOLE, "single user mode shell: %s", strsignal(WTERMSIG(wstatus)));
+		}
+		return false;
+	}
+
+	revoke(_PATH_CONSOLE);
+	if ((fd = open(_PATH_CONSOLE, O_RDWR)) == -1) {
+		_exit(EXIT_FAILURE);
+	}
+	if (login_tty(fd) == -1) {
+		_exit(EXIT_FAILURE);
+	}
+
+	setenv("TERM", "vt100", 1);
+	setenv("SafeBoot", runcom_safe ? "-x" : "", 1);
+	setenv("VerboseFlag", "-v", 1); /* single user mode implies verbose mode */
+	setenv("FsckSlash", runcom_fsck ? "-F" : "", 1);
+	setenv("NetBoot", runcom_netboot ? "-N" : "", 1);
+
+	if (runcom_fsck) {
+		fprintf(stdout, "Singleuser boot -- fsck not done\n");
+		fprintf(stdout, "Root device is mounted read-only\n");
+		fprintf(stdout, "If you want to make modifications to files:\n");
+		fprintf(stdout, "\t/sbin/fsck -fy\n\t/sbin/mount -uw /\n");
+		fprintf(stdout, "If you wish to boot the system:\n");
+		fprintf(stdout, "\texit\n");
+		fflush(stdout);
+	}
+
+	execl(_PATH_BSHELL, "-sh", NULL);
+	syslog(LOG_CRIT | LOG_CONSOLE, "can't exec %s for single user: %m\n", _PATH_BSHELL);
+	_exit(EXIT_FAILURE);
+}
+
+static void
+do_single_user_mode(bool sflag)
+{
+	if (sflag) {
+		while (!do_single_user_mode2()) {
+			sleep(1);
+		}
+	}
+}
+/*
+ * Start a session and allocate a controlling terminal.
+ * Only called by children of init after forking.
+ */
+static void
+setctty(const char *name, int flags)
+{
+	int fd;
+
+	revoke(name);
+	if ((fd = open(name, flags | O_RDWR)) == -1) {
+		stall("can't open %s: %m", name);
+		_exit(EXIT_FAILURE);
+	}
+	if (login_tty(fd) == -1) {
+		stall("can't get %s for controlling terminal: %m", name);
+		_exit(EXIT_FAILURE);
+	}
+}
+
+static void
+runcom(void)
+{
+#define PATH_RUNCOM	"/etc/rc"
+	bool runcom_fsck = true;
+	bool runcom_safe = false;
+	bool runcom_netboot = false;
+	struct termios term;
+	int vdisable;
+	pid_t runcom_pid;
+
+	if ((runcom_pid = fork()) == -1) {
+		syslog(LOG_ERR | LOG_CONSOLE, "can't fork for %s on %s: %m", _PATH_BSHELL, PATH_RUNCOM);
+		sleep(STALL_TIMEOUT);
+		return;
+	} else if (runcom_pid > 0) {
+		(void)waitpid(runcom_pid, NULL, 0);
+		return;
+	} else {
+		// Run the rc script
+		syslog(LOG_ERR, "setctty()\n");
+		setctty(_PATH_CONSOLE, 0);
+		
+		syslog(LOG_ERR, "fpathconf()\n");
+		sleep(1);
+		if ((vdisable = fpathconf(STDIN_FILENO, _PC_VDISABLE)) == -1) {
+			syslog(LOG_ERR, "fpathconf(\"%s\") %m", _PATH_CONSOLE);
+		} else if (tcgetattr(STDIN_FILENO, &term) == -1) {
+			syslog(LOG_ERR, "tcgetattr(\"%s\") %m", _PATH_CONSOLE);
+		} else {
+			term.c_cc[VINTR] = vdisable;
+			term.c_cc[VKILL] = vdisable;
+			term.c_cc[VQUIT] = vdisable;
+			term.c_cc[VSUSP] = vdisable;
+			term.c_cc[VSTART] = vdisable;
+			term.c_cc[VSTOP] = vdisable;
+			term.c_cc[VDSUSP] = vdisable;
+			sleep(1);
+			syslog(LOG_ERR, "tcsetattr(STDIN_FILENO) ...");
+			if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &term) == -1)
+				syslog(LOG_WARNING, "tcsetattr(\"%s\") %m", _PATH_CONSOLE);
+			syslog(LOG_ERR, "done\n");
+		}
+		sleep(1);
+		syslog(LOG_ERR, "setenv\n");
+		setenv("SafeBoot", runcom_safe ? "-x" : "", 1);
+		setenv("FsckSlash", runcom_fsck ? "-F" : "", 1);
+		setenv("NetBoot", runcom_netboot ? "-N" : "", 1);
+		syslog(LOG_ERR, "execv\n");
+		execl(_PATH_BSHELL, "sh", PATH_RUNCOM, NULL);
+		syslog(LOG_ERR | LOG_CONSOLE, "execv errno=%m");
+		sleep(2);
+		stall("can't exec %s for %s: %m", _PATH_BSHELL, PATH_RUNCOM);
+		_exit(EXIT_FAILURE);
+	}
+	return;
+}
+
+static void
+system_specific_bootstrap(bool sflag)
+{
+#define PATH_BOOTSTRAP	"/etc/bootstrap"
+	
+	// Go into single-user mode if requested
+	do_single_user_mode(sflag);
+	// Apple does a lot in the code, but we'll just call /etc/bootstrap for now
+	system(PATH_BOOTSTRAP);
+	// Then run the rc script(s)
+	runcom();
+}
+
+/*
+ * This is used to bootstrap.  The primary case we care
+ * about is during system boot, in which case launchd will
+ * invoke us with "-S System", and, optionally, "-s" (indicating
+ * single-user mode).  In that case, we need to do single user
+ * mode if desired, and then run the rc scripts (aka runcom).
+ * After that, we want to load the plist/json files and tell
+ * launchd about them.
+ *
+ * If it's not the System session, then we don't do a bunch
+ * of stuff.  Not sure what we do want to do.
+ */
 static int
 cmd_bootstrap(int argc, char * const argv[])
 {
+	char *session = NULL;
+	bool sflag = false;
+	int ch;
+	
 	struct dirent **files;
 	char *args[2] = {__DECONST(char *, "load"), NULL};
 	char *name, *path;
 	unsigned long i;
 	int n;
 
-	(void)argc;
-	(void)argv;
-
-	printf("Bootstrap:\n");
-
-	system("/etc/bootstrap");
-
-	for (i = 0; i < N(bootstrap_paths); i++) {
-		n = scandir(bootstrap_paths[i], &files, NULL, alphasort);
-		if (n < 0)
-			continue;
-
-		while (n--) {
-			name = files[n]->d_name;
-			if (name[0] == '.')
-				continue;
-
-			printf("\t");
-			asprintf(&path, "%s/%s", bootstrap_paths[i], name);
-			args[1] = path;
-			cmd_load(2, args);
+	while ((ch = getopt(argc, (char **)argv, "sS:")) != -1) {
+		switch (ch) {
+		case 's':
+			sflag = true;
+			break;
+		case 'S':
+			session = optarg;
+			break;
+		case '?':
+		default:
+			break;
 		}
 	}
 
+	optind = 1;
+	optreset = 1;
+
+	if (!session) {
+		syslog(LOG_ERR | LOG_CONSOLE, "usage: %s bootstrap [-s] -S <session-type>", getprogname());
+		return 1;
+	}
+
+	if (strcasecmp(session, "System") == 0) {
+		system_specific_bootstrap(sflag);
+		// Perhaps this should go in system_specific_bootstrap
+		for (i = 0; i < N(bootstrap_paths); i++) {
+			n = scandir(bootstrap_paths[i], &files, NULL, alphasort);
+			if (n < 0)
+				continue;
+			
+			while (n--) {
+				name = files[n]->d_name;
+				if (name[0] == '.')
+					continue;
+				
+				printf("\t");
+				asprintf(&path, "%s/%s", bootstrap_paths[i], name);
+				args[1] = path;
+				cmd_load(2, args);
+			}
+		}
+	}
 	return (0);
 }
 

@@ -309,9 +309,11 @@ main(int argc, char *const *argv)
 	monitor_networking_state();
 	jobmgr_init(sflag);
 	launchd_runtime_init2();
+#if 0
 	if (getpid() == 1 /* && !job_active(rlcj) */) {
 			init_pre_kevent(sflag);
 	}
+#endif
 	sleep(1);
 	launchd_runtime();
 }

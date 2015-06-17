@@ -17,6 +17,7 @@ LDFLAGS+= -L${.CURDIR}/../../lib/libdispatch -ldispatch
 LDFLAGS+= -L${.CURDIR}/../../lib/libosxsupport -losxsupport
 LDFLAGS+= -L/usr/local/lib -lBlocksRuntime -pthread
 DPADD+= ${LIBJANSSON}
+LDADD+= -lutil
 LDADD+= -ljansson
 SRCS= launchctl.c
 
