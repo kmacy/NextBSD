@@ -3,6 +3,8 @@
 LIB= xpc
 NO_WERROR= yes
 
+.PATH: ${.CURDIR}/xpc
+
 BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
 BASE_INCLUDE+= -I${.CURDIR}/../libnv
 BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I.
