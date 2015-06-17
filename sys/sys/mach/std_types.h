@@ -113,7 +113,7 @@
 #endif
 #endif
 
-
+#define THREAD_STATE_MAX        32
 
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))

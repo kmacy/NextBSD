@@ -164,7 +164,7 @@ type thread_act_consume_ref_t = mach_port_move_send_t
 		 * mach/machine/???? (currently THREAD_STATE_MAX,
 		 * in mach/thread_state.h)
 		 */
-#include <machine/mach/thread_state.h>
+import <sys/mach/thread_state.h>;
 type thread_state_flavor_t	= int;
 type thread_state_t		= array[*:THREAD_STATE_MAX] of natural_t;
 

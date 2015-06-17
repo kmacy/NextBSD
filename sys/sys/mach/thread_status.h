@@ -104,8 +104,6 @@
  */
 #include <machine/mach/vm_types.h>
 
-#define THREAD_STATE_MAX        32
-
 /*
  *	Generic definition for machine-dependent thread status.
  */
