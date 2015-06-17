@@ -91,6 +91,8 @@
 #include <sys/mach/port.h>
 #include <sys/mach/vm_types.h>
 
+#define THREAD_STATE_MAX        32
+
 #ifdef _KERNEL
 #include <sys/mach/mach_vm.h>
 #include <sys/cdefs.h>
@@ -113,7 +115,6 @@
 #endif
 #endif
 
-#define THREAD_STATE_MAX        32
 
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
