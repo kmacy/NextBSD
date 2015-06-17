@@ -23,44 +23,32 @@
  */
 /* CMU_HIST */
 /*
- * Revision 2.3  91/05/14  17:01:22  mrt
+ * Revision 2.4  91/05/14  16:52:15  mrt
  * 	Correcting copyright
  * 
- * Revision 2.2  91/02/05  17:36:42  mrt
+ * Revision 2.3  91/02/05  17:32:12  mrt
  * 	Changed to new Mach copyright
- * 	[91/02/01  17:21:56  mrt]
+ * 	[91/02/01  17:09:54  mrt]
  * 
- * Revision 2.1  89/08/03  16:06:18  rwd
- * Created.
+ * Revision 2.2  90/05/03  15:47:51  dbg
+ * 	First checkin.
  * 
- * Revision 2.4  89/02/25  18:41:29  gm0w
+ * Revision 1.3  89/03/09  20:19:48  rpd
+ * 	More cleanup.
+ * 
+ * Revision 1.2  89/02/26  13:00:54  gm0w
  * 	Changes for cleanup.
  * 
- * Revision 2.3  89/02/07  00:53:47  mwyoung
- * Relocated from mach/thread_status.h
- * 
- * Revision 2.2  88/08/25  18:21:12  mwyoung
- * 	Adjusted include file references.
- * 	[88/08/16  04:16:13  mwyoung]
- * 	
- * 	Add THREAD_STATE_FLAVOR_LIST; remove old stuff.
- * 	[88/08/11  18:49:48  mwyoung]
- * 
+ *  3-Mar-87  Avadis Tevanian (avie) at Carnegie-Mellon University
+ *	Allow inclusion in assembler input.
  *
- * 15-Jan-88  David Golub (dbg) at Carnegie-Mellon University
- *	Replaced with variable-length array for flexibile interface.
- *
- * 28-Apr-87  Avadis Tevanian (avie) at Carnegie-Mellon University
- *	Latest hacks to keep MiG happy wrt refarrays.
- *
- * 27-Mar-87  Avadis Tevanian (avie) at Carnegie-Mellon University
+ * 14-Oct-85  Michael Wayne Young (mwyoung) at Carnegie-Mellon University
  *	Created.
- *
  */
 /* CMU_ENDHIST */
-/*
+/* 
  * Mach Operating System
- * Copyright (c) 1991,1990,1989,1988 Carnegie Mellon University
+ * Copyright (c) 1991,1990,1989 Carnegie Mellon University
  * All Rights Reserved.
  * 
  * Permission to use, copy, modify and distribute this software and its
@@ -85,39 +73,19 @@
  */
 /*
  */
+
 /*
- *	File:	mach/thread_status.h
- *	Author:	Avadis Tevanian, Jr.
+ *	File:	kern_return.h
+ *	Author:	Avadis Tevanian, Jr., Michael Wayne Young
+ *	Date:	1985
  *
- *	This file contains the structure definitions for the user-visible
- *	thread state.  This thread state is examined with the thread_get_state
- *	kernel call and may be changed with the thread_set_state kernel call.
- *
+ *	Machine-dependent kernel return definitions.
  */
 
-#ifndef	THREAD_STATUS_H_
-#define	THREAD_STATUS_H_
+#ifndef	_MACH_I386_KERN_RETURN_H_
+#define _MACH_I386_KERN_RETURN_H_
 
-/*
- *	The actual structure that comprises the thread state is defined
- *	in the machine dependent module.
- */
-#include <machine/mach/vm_types.h>
-#include <machine/mach/thread_status.h>
-#include <machine/mach/thread_state.h>
-
-/*
- *	Generic definition for machine-dependent thread status.
- */
-
-typedef	natural_t	*thread_state_t;	/* Variable-length array */
-
-/* THREAD_STATE_MAX is now defined in <machine/mach/thread_state.h> */
-typedef	int	thread_state_data_t[THREAD_STATE_MAX];
-
-#define	THREAD_STATE_FLAVOR_LIST	0	/* List of valid flavors */
-
-typedef	int			thread_state_flavor_t;
-typedef thread_state_flavor_t	*thread_state_flavor_array_t;
-
-#endif	/* THREAD_STATUS_H_ */
+#ifndef	ASSEMBLER
+typedef	int		kern_return_t;
+#endif	/* ASSEMBLER */
+#endif	/* _MACH_I386_KERN_RETURN_H_ */
