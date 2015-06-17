@@ -288,7 +288,7 @@ copies:
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${DESTDIR}${INCLUDEDIR}/machine/mach
 	cd ${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach ; \
-	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
+	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
 		${DESTDIR}${INCLUDEDIR}/machine/mach
 .endif
 
