@@ -253,6 +253,7 @@ distribution:
 	${_+_}cd ${.CURDIR}/dma; ${MAKE} install
 .endif
 	${_+_}cd ${.CURDIR}/gss; ${MAKE} install
+	${_+_}cd ${.CURDIR}/launchd.d; ${MAKE} install
 	${_+_}cd ${.CURDIR}/periodic; ${MAKE} install
 .if ${MK_PKGBOOTSTRAP} != "no"
 	${_+_}cd ${.CURDIR}/pkg; ${MAKE} install
