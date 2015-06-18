@@ -150,7 +150,7 @@ ZFS_C=		${CC} -c ${ZFS_CFLAGS} ${WERROR} ${PROF} ${.IMPSRC}
 ZFS_S=		${CC} -c ${ZFS_ASM_CFLAGS} ${WERROR} ${.IMPSRC}
 
 
-MACH_FLAGS= -I$S/apsl/include -I$S/sys
+MACH_FLAGS= -I$S../include/apple -I$S/sys
 MACH_C = ${NORMAL_C} ${MACH_FLAGS}
 
 .if ${MK_CTF} != "no"

@@ -23,5 +23,5 @@ SRCS+= mach_debug.c mach_msg.c mach_port.c
 # compat/mach/kern
 SRCS+= ipc_tt.c ipc_host.c task.c thread_pool.c
 .include <bsd.kmod.mk>
-CFLAGS+= -I${SYSDIR}/apsl/include -DCOMPAT_MACH
+CFLAGS+= -I${SYSDIR}/../include/apple -DCOMPAT_MACH
 DEBUG_FLAGS+= -g -O0
