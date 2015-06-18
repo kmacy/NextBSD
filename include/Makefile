@@ -318,6 +318,8 @@ copies:
 
 symlinks:
 	@${ECHO} "Setting up symlinks to kernel source tree..."
+	mkdir -p ${DESTDIR}${INCLUDEDIR}/System
+	ln -fs ../sys ${DESTDIR}${INCLUDEDIR}/System/sys
 .for i in ${LDIRS}
 	cd ${.CURDIR}/../sys/$i; \
 	for h in *.h; do \
