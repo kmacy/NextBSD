@@ -26,6 +26,30 @@ INCS=	a.out.h ar.h assert.h bitstring.h complex.h cpio.h _ctype.h ctype.h \
 	uchar.h ulimit.h unistd.h utime.h utmpx.h uuid.h varargs.h \
 	wchar.h wctype.h wordexp.h xlocale.h
 
+# APSL headers
+INCS+=	Availability.h \
+	AvailabilityInternal.h \
+	AvailabilityMacros.h \
+	CrashReporterClient.h \
+	MacTypes.h \
+	NSSystemDirectories.h \
+	TargetConditionals.h \
+	_simple.h \
+	_types.h \
+	aliasdb.h \
+	ils.h \
+	libinfo.h \
+	libproc.h \
+	libproc_internal.h \
+	si_data.h \
+	si_module.h \
+	spawn.h \
+	spawn_private.h \
+	util.h \
+	utmp.h
+
+SUBDIR+= gen libkern os servers sys uuid
+
 .PATH: ${.CURDIR}/../contrib/libc-vis
 INCS+=	vis.h
 
