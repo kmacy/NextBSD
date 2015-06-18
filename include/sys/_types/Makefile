@@ -38,7 +38,7 @@ INCS=	_blkcnt_t.h \
 	_mbstate_t.h \
 	_mode_t.h \
 	_nlink_t.h \
-	_null.h \ 
+	_null.h \
 	_o_dsync.h \
 	_o_sync.h \
 	_off_t.h \
