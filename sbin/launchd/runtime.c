@@ -1104,7 +1104,9 @@ launchd_mig_demux(mach_msg_header_t *request, mach_msg_header_t *reply)
 	boolean_t result = false;
 
 	time_of_mach_msg_return = runtime_get_opaque_time();
+#ifdef _EXTRA_LAUNCHD_SPEW
 	_launchd_syslog(LOG_DEBUG, "MIG callout: %u", request->msgh_id);
+#endif
 	mig_callback the_demux = mig_cb_table[MACH_PORT_INDEX(request->msgh_local_port)];
 	mach_msg_audit_trailer_t *tp = (mach_msg_audit_trailer_t *)((vm_offset_t)request + round_msg(request->msgh_size));
 	runtime_record_caller_creds(&tp->msgh_audit);
@@ -1124,7 +1126,9 @@ launchd_mig_demux(mach_msg_header_t *request, mach_msg_header_t *reply)
 			_launchd_syslog(LOG_ERR, "Cannot handle MIG request with ID: 0x%x", request->msgh_id);
 		}
 	} else {
+#ifdef _EXTRA_LAUNCHD_SPEW
 		_launchd_syslog(LOG_DEBUG, "MIG demux succeeded.");
+#endif
 	}
 
 	return result;

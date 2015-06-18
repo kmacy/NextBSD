@@ -1,4 +1,3 @@
-.include <src.opts.mk>
 PROG= launchd
 
 .PATH: .
@@ -8,7 +7,7 @@ PROG= launchd
 .PATH: ${.CURDIR}/init
 
 
-MK_MAN= no
+MAN1=
 
 BASE_INCLUDE=  -I. -I${.CURDIR} -I${.CURDIR}/init -I${.CURDIR}/../../include/apple
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
@@ -53,7 +52,8 @@ SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
 SRCS+= init.c
 LDADD+= -lutil -lauditd -lbsm -ldispatch -lmach -lBlocksRuntime -llaunch -losxsupport -lxpc -lnv -lsbuf
 
-
+launchd.1:
+	@echo No man page for you
 
 CLEANFILES+= *Server.c *User.c job.h helper.h job_reply.h job_forward.h notify.h \
 	internal.h mach_exc.h *Server.h *~ cscope.*
