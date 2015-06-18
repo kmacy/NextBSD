@@ -8,5 +8,6 @@ INCS=	spawn.h \
 	libproc.h \
 	libproc_internal.h
 INCSDIR=${INCLUDEDIR}/apple
+SUBDIR=uuid sys
 
 .include <bsd.prog.mk>
