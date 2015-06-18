@@ -55,6 +55,18 @@ INCS=	base.h \
 	source.h \
 	time.h
 
+INCS+=	benchmark.h \
+	data_private.h \
+	introspection_private.h \
+	io_private.h \
+	layout_private.h \
+	mach_private.h \
+	private.h \
+	queue_private.h \
+	source_private.h \
+	voucher_activity_private.h \
+	voucher_private.h
+
 CLEANFILES+= protocol.h protocolServer.c protocolServer.h protocolUser.c
 
 .include <bsd.lib.mk>
