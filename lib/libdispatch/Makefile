@@ -8,7 +8,7 @@ LIB= dispatch
 .PATH: ${.CURDIR}/src
 .PATH: ${.CURDIR}/resolver
 
-CFLAGS+=	-I${.CURDIR}/../../apsl/include -I${.CURDIR}/os -I${.CURDIR}/private
+CFLAGS+=	-I${.CURDIR}/../../include/apple -I${.CURDIR}/os -I${.CURDIR}/private
 CFLAGS+=	-I${.CURDIR} -I${MACHINE_INCLUDES} -I${.CURDIR}/../../include -I${.CURDIR}/../../sys 
 CFLAGS+=	-I. -I${.CURDIR}/include -fblocks
 CFLAGS+=	-D__APPLE__ -DDISPATCH_USE_DTRACE=0

@@ -5,8 +5,8 @@ LIB=	osxsupport
 .PATH: ${.CURDIR}/uuid
 .PATH: ../../sbin/launchd
 
-BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
-BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
+BASE_INCLUDE= -I${.CURDIR}/../../include/apple
+BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
 DEFINES= -D__APPLE__ -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}  -DHAVE_INTTYPES_H -fblocks

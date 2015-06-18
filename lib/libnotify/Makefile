@@ -7,7 +7,7 @@ NO_WTHREAD_SAFETY=yes
 .PATH: .
 .PATH: ../../sbin/launchd
 
-BASE_INCLUDE= -I${.CURDIR}/../../apsl/include -I${MACHINE_INCLUDES}
+BASE_INCLUDE= -I${.CURDIR}/../../include/apple -I${MACHINE_INCLUDES}
 BASE_INCLUDE+= -I${.CURDIR} -I. -I${.CURDIR}/../liblaunch -I${.CURDIR}/../libosxsupport
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
 DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE

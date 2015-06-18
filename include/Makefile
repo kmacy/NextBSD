@@ -44,7 +44,7 @@ INCS+=	Availability.h \
 	util.h \
 	utmp.h
 
-SUBDIR+= apple gen libkern os servers sys uuid
+SUBDIR+= apple gen libkern os servers
 
 .PATH: ${.CURDIR}/../contrib/libc-vis
 INCS+=	vis.h
@@ -314,8 +314,8 @@ copies:
 
 symlinks:
 	@${ECHO} "Setting up symlinks to kernel source tree..."
-	mkdir -p ${DESTDIR}${INCLUDEDIR}/System
-	ln -fs ../sys ${DESTDIR}${INCLUDEDIR}/System/sys
+	mkdir -p ${DESTDIR}${INCLUDEDIR}/apple/System
+	ln -fs ../sys ${DESTDIR}${INCLUDEDIR}/apple/System/sys
 .for i in ${LDIRS}
 	cd ${.CURDIR}/../sys/$i; \
 	for h in *.h; do \

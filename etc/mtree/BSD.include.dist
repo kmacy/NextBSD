@@ -8,6 +8,12 @@
     altq
     ..
     apple
+        sys
+            _pthread
+            ..
+            _types
+            ..
+        ..
     ..
     arpa
     ..
@@ -342,10 +348,6 @@
     ssp
     ..
     sys
-        _pthread
-        ..
-        _types
-        ..
     ..
     teken
     ..

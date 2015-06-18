@@ -6,7 +6,8 @@ SHLIBDIR?= /usr/lib
 NO_WERROR=yes
 
 DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
-BASE_INCLUDE= -I${.CURDIR} -I${.CURDIR}/../../include -I${MACHINE_INCLUDES} -I${.CURDIR}/../../sys
+BASE_INCLUDE= -I${.CURDIR}/../../include/apple
+BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../include -I${MACHINE_INCLUDES} -I${.CURDIR}/../../sys
 BASE_INCLUDE+= -I${.CURDIR}/../../apsl/include -I${.CURDIR}/../liblaunch
 BASE_INCLUDE+= -I${.CURDIR}/../libdispatch -I${.CURDIR}/../libxpc
 BASE_INCLUDE+= -I${.CURDIR}/../libosxsupport -I${.CURDIR}/../libnotify
