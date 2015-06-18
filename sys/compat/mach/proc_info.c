@@ -56,7 +56,6 @@ proc_terminate(int pid)
 		/* p_cansignal returns 0 if you can, or an error if you can't. */
 		kern_psignal(p, SIGTERM);
 	}
-done:
 	PROC_UNLOCK(p);
 	return (err);
 }
