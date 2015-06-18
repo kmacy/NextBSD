@@ -52,11 +52,10 @@ proc_terminate(int pid)
 		return (EPERM);
 	if ((p = pfind(pid)) == NULL)
 		return (ESRCH);
-	if (!p_cansignal(curthread, p, SIGKILL)) {
-		err = EPERM;
-		goto done;
+	if ((err = p_cansignal(curthread, p, SIGKILL)) == 0) {
+		/* p_cansignal returns 0 if you can, or an error if you can't. */
+		kern_psignal(p, SIGTERM);
 	}
-	kern_psignal(p, SIGTERM);
 done:
 	PROC_UNLOCK(p);
 	return (err);
