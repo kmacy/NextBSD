@@ -165,6 +165,9 @@ type thread_act_consume_ref_t = mach_port_move_send_t
 		 * in mach/thread_state.h)
 		 */
 import <sys/mach/thread_status.h>;
+#ifndef THREAD_STATE_MAX
+#define THREAD_STATE_MAX 32
+#endif
 type thread_state_flavor_t	= int;
 type thread_state_t		= array[*:THREAD_STATE_MAX] of natural_t;
 

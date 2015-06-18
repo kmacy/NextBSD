@@ -109,6 +109,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/syslog.h>
+#include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/mach_param.h>
 #include <sys/mach/task_special_ports.h>

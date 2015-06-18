@@ -176,6 +176,10 @@
 #include <sys/malloc.h>
 #include <vm/vm.h>
 
+#ifndef THREAD_STATE_MAX
+#define THREAD_STATE_MAX 32
+#endif
+
 #include <sys/mach/host_info.h>
 #include <sys/mach/machine.h>
 #include <machine/mach/vm_types.h>

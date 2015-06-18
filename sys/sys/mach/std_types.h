@@ -91,8 +91,6 @@
 #include <sys/mach/port.h>
 #include <sys/mach/vm_types.h>
 
-#define THREAD_STATE_MAX        32
-
 #ifdef _KERNEL
 #include <sys/mach/mach_vm.h>
 #include <sys/cdefs.h>
