@@ -4,6 +4,7 @@ LIB= dispatch
 
 .PATH: ${.CURDIR}
 .PATH: ${.CURDIR}/dispatch
+.PATH: ${.CURDIR}/private
 .PATH: ${.CURDIR}/src
 .PATH: ${.CURDIR}/resolver
 
@@ -48,6 +49,7 @@ INCS=	base.h \
 	io.h \
 	object.h \
 	once.h \
+	private.h \
 	queue.h \
 	semaphore.h \
 	source.h \
