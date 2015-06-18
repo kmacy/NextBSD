@@ -249,7 +249,7 @@
     ..
     libkern
         i386
-        ...
+        ..
     ..
     libmilter
     ..
@@ -341,7 +341,7 @@
     ..
     sys
         _pthread
-        ...
+        ..
         _types
         ..
     ..
