@@ -1,152 +1,120 @@
-/*
- * Copyright (c) 2006, 2010 Apple Inc. All rights reserved.
+/*-
+ * Copyright (c) 2008 Ed Schouten <ed@FreeBSD.org>
+ * All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
- * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
- * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
- * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ * $FreeBSD$
  */
 
+#ifndef _SPAWN_H_
+#define _SPAWN_H_
 
-#ifndef	_SPAWN_H_
-#define	_SPAWN_H_
+#include <sys/cdefs.h>
+#include <sys/types.h>
+#include <sys/_types.h>
+#include <sys/_sigset.h>
 
-/*
- * [SPN] Support for _POSIX_SPAWN
- */
-
-#include <sys/cdefs.h> 
-#include <_types.h>
-#include <sys/spawn.h>	/* shared types */
-
-#include <Availability.h>
-
-/*
- * [SPN] Inclusion of the <spawn.h> header may make visible symbols defined
- * in the <sched.h>, <signal.h>, and <sys/types.h> headers.
- */
-#ifndef __FreeBSD__
-#ifndef _PID_T
-typedef __darwin_pid_t		pid_t;
-#define _PID_T
+#ifndef _MODE_T_DECLARED
+typedef	__mode_t	mode_t;
+#define	_MODE_T_DECLARED
 #endif
 
-#ifndef _SIGSET_T
-#define _SIGSET_T
-typedef __darwin_sigset_t	sigset_t;
+#ifndef _PID_T_DECLARED
+typedef	__pid_t		pid_t;
+#define	_PID_T_DECLARED
 #endif
 
-#ifndef _MODE_T
-typedef __darwin_mode_t		mode_t;
-#define _MODE_T
-#endif
+#ifndef _SIGSET_T_DECLARED
+#define	_SIGSET_T_DECLARED
+typedef	__sigset_t	sigset_t;
 #endif
 
-/*
- * Opaque types for use with posix_spawn() family functions.  Internals are
- * not defined, and should not be accessed directly.  Types are defined as
- * mandated by POSIX.
- */
-typedef  void *posix_spawnattr_t;
-typedef  void *posix_spawn_file_actions_t;
+struct sched_param;
+
+typedef struct __posix_spawnattr		*posix_spawnattr_t;
+typedef struct __posix_spawn_file_actions	*posix_spawn_file_actions_t;
+
+#define POSIX_SPAWN_RESETIDS		0x01
+#define POSIX_SPAWN_SETPGROUP		0x02
+#define POSIX_SPAWN_SETSCHEDPARAM	0x04
+#define POSIX_SPAWN_SETSCHEDULER	0x08
+#define POSIX_SPAWN_SETSIGDEF		0x10
+#define POSIX_SPAWN_SETSIGMASK		0x20
+#define POSIX_SPAWN_SETEXEC		0x40
 
 __BEGIN_DECLS
 /*
- * gcc under c99 mode won't compile "[ __restrict]" by itself.  As a workaround,
- * a dummy argument name is added.
+ * Spawn routines
+ *
+ * XXX both arrays should be __restrict, but this does not work when GCC
+ * is invoked with -std=c99.
  */
-int	posix_spawn(pid_t * __restrict, const char * __restrict,
-		const posix_spawn_file_actions_t *,
-		const posix_spawnattr_t * __restrict,
-		char *const __argv[ __restrict],
-		char *const __envp[ __restrict]) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnp(pid_t * __restrict, const char * __restrict,
-		const posix_spawn_file_actions_t *,
-		const posix_spawnattr_t * __restrict,
-		char *const __argv[ __restrict],
-		char *const __envp[ __restrict]) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *, int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *, int,
-		int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawn_file_actions_addopen(
-		posix_spawn_file_actions_t * __restrict, int,
-		const char * __restrict, int, mode_t) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawn_file_actions_init(posix_spawn_file_actions_t *) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_destroy(posix_spawnattr_t *) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_getsigdefault(const posix_spawnattr_t * __restrict,
-		sigset_t * __restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_getflags(const posix_spawnattr_t * __restrict,
-		short * __restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_getpgroup(const posix_spawnattr_t * __restrict,
-		pid_t * __restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_getsigmask(const posix_spawnattr_t * __restrict,
-		sigset_t * __restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_init(posix_spawnattr_t *) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setsigdefault(posix_spawnattr_t * __restrict,
-		const sigset_t * __restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setflags(posix_spawnattr_t *, short) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setpgroup(posix_spawnattr_t *, pid_t) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setsigmask(posix_spawnattr_t * __restrict,
-		const sigset_t * __restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
+int posix_spawn(pid_t * __restrict, const char * __restrict,
+    const posix_spawn_file_actions_t *, const posix_spawnattr_t * __restrict,
+    char * const [], char * const []);
+int posix_spawnp(pid_t * __restrict, const char * __restrict,
+    const posix_spawn_file_actions_t *, const posix_spawnattr_t * __restrict,
+    char * const [], char * const []);
 
-#if 0	/* _POSIX_PRIORITY_SCHEDULING [PS] : not supported */
-int	posix_spawnattr_setschedparam(posix_spawnattr_t * __restrict,
-		const struct sched_param * __restrict);
-int	posix_spawnattr_setschedpolicy(posix_spawnattr_t *, int);
-int	posix_spawnattr_getschedparam(const posix_spawnattr_t * __restrict,
-		struct sched_param * __restrict);
-int	posix_spawnattr_getschedpolicy(const posix_spawnattr_t * __restrict,
-		int * __restrict);
-#endif	/* 0 */
-
-__END_DECLS
-
-#if	!defined(_POSIX_C_SOURCE) || defined(_DARWIN_C_SOURCE)
 /*
- * Darwin-specific extensions below
+ * File descriptor actions
  */
-#include <mach/exception_types.h>
-#include <mach/machine.h>
-#include <mach/port.h>
+int posix_spawn_file_actions_init(posix_spawn_file_actions_t *);
+int posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *);
 
-#ifndef __FreeBSD__
-#ifndef _SIZE_T
-typedef __darwin_size_t		size_t;
-#define _SIZE_T
-#endif 
-#endif
-__BEGIN_DECLS
+int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t * __restrict,
+    int, const char * __restrict, int, mode_t);
+int posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *, int, int);
+int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *, int);
 
-int	posix_spawnattr_getbinpref_np(const posix_spawnattr_t * __restrict,
-		size_t, cpu_type_t *__restrict, size_t *__restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setauditsessionport_np(posix_spawnattr_t *__restrict,
-		mach_port_t) __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_2);
-int	posix_spawnattr_setbinpref_np(posix_spawnattr_t * __restrict,
-		size_t, cpu_type_t *__restrict, size_t *__restrict) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setexceptionports_np(posix_spawnattr_t *__restrict,
-		exception_mask_t, mach_port_t,
-		exception_behavior_t, thread_state_flavor_t) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawnattr_setspecialport_np(posix_spawnattr_t *__restrict,
-		mach_port_t, int) __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
-int	posix_spawn_file_actions_addinherit_np(posix_spawn_file_actions_t *,
-		int) __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
+/*
+ * Spawn attributes
+ */
+int posix_spawnattr_init(posix_spawnattr_t *);
+int posix_spawnattr_destroy(posix_spawnattr_t *);
 
+int posix_spawnattr_getflags(const posix_spawnattr_t * __restrict,
+    short * __restrict);
+int posix_spawnattr_getpgroup(const posix_spawnattr_t * __restrict,
+    pid_t * __restrict);
+int posix_spawnattr_getschedparam(const posix_spawnattr_t * __restrict,
+    struct sched_param * __restrict);
+int posix_spawnattr_getschedpolicy(const posix_spawnattr_t * __restrict,
+    int * __restrict);
+int posix_spawnattr_getsigdefault(const posix_spawnattr_t * __restrict,
+    sigset_t * __restrict);
+int posix_spawnattr_getsigmask(const posix_spawnattr_t * __restrict,
+    sigset_t * __restrict sigmask);
+
+int posix_spawnattr_setflags(posix_spawnattr_t *, short);
+int posix_spawnattr_setpgroup(posix_spawnattr_t *, pid_t);
+int posix_spawnattr_setschedparam(posix_spawnattr_t * __restrict,
+    const struct sched_param * __restrict);
+int posix_spawnattr_setschedpolicy(posix_spawnattr_t *, int);
+int posix_spawnattr_setsigdefault(posix_spawnattr_t * __restrict,
+    const sigset_t * __restrict);
+int posix_spawnattr_setsigmask(posix_spawnattr_t * __restrict,
+    const sigset_t * __restrict);
 __END_DECLS
 
-#endif /* (!_POSIX_C_SOURCE || _DARWIN_C_SOURCE) */
-#endif	/* _SPAWN_H_ */
+#endif /* !_SPAWN_H_ */
