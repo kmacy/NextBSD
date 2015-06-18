@@ -39,16 +39,12 @@ INCS+=	Availability.h \
 	aliasdb.h \
 	ils.h \
 	libinfo.h \
-	libproc.h \
-	libproc_internal.h \
 	si_data.h \
 	si_module.h \
-	spawn.h \
-	spawn_private.h \
 	util.h \
 	utmp.h
 
-SUBDIR+= gen libkern os servers sys uuid
+SUBDIR+= apple gen libkern os servers sys uuid
 
 .PATH: ${.CURDIR}/../contrib/libc-vis
 INCS+=	vis.h
