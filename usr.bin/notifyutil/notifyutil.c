@@ -679,8 +679,12 @@ main(int argc, const char *argv[])
 			i++;
 
 			status = notify_post(argv[i]);
-			if (status != NOTIFY_STATUS_OK) printf("%s: %s\n", argv[i], notify_status_strerror(status));
-			else if (nap > 0) usleep(nap);
+			if (status != NOTIFY_STATUS_OK) {
+				fprintf(stderr, "%s: %s\n", argv[i], notify_status_strerror(status));
+				exit(1);
+			}
+			else if (nap > 0)
+				usleep(nap);
 		}
 		else if ((argv[i][0] == '-') && ((argv[i][1] == 'w') || ((argv[i][1] >= '0') && (argv[i][1] <= '9'))))
 		{
@@ -704,7 +708,10 @@ main(int argc, const char *argv[])
 			}
 
 			status = do_register(argv[i], ntype, signum, n);
-			if (status != NOTIFY_STATUS_OK) printf("%s: %s\n", argv[i], notify_status_strerror(status));
+			if (status != NOTIFY_STATUS_OK) {
+				printf("%s: %s\n", argv[i], notify_status_strerror(status));
+				exit(1);
+			}
 		}
 		else if (!strcmp(argv[i], "-g"))
 		{
@@ -726,7 +733,10 @@ main(int argc, const char *argv[])
 			}
 
 			if (status == NOTIFY_STATUS_OK) printf("%s %llu\n", argv[i], (unsigned long long)state);
-			else printf("%s: %s\n", argv[i], notify_status_strerror(status));
+			else {
+				printf("%s: %s\n", argv[i], notify_status_strerror(status));
+				exit(1);
+			}
 		}
 		else if (!strcmp(argv[i], "-s"))
 		{
@@ -746,7 +756,10 @@ main(int argc, const char *argv[])
 				notify_cancel(tid);
 			}
 
-			if (status != NOTIFY_STATUS_OK)  printf("%s: %s\n", argv[i], notify_status_strerror(status));
+			if (status != NOTIFY_STATUS_OK) {
+				printf("%s: %s\n", argv[i], notify_status_strerror(status));
+				exit(1);
+			}
 			i++;
 		}
 	}
