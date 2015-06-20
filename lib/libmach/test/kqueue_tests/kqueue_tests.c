@@ -7,14 +7,17 @@
  *
  */
 
+typedef int boolean_t;
+#include <sys/types.h>
 #include "tests.h"
 #include <pthread.h>
 #include <assert.h>
 #include <sys/event.h>		/* for kqueue tests */
 #include <sys/sysctl.h>		/* for determining hw */
 #include <mach/mach.h>
+#include <mach/mach_traps.h>
 #include <AvailabilityMacros.h>	/* for determination of Mac OS X version (tiger, leopard, etc.) */
-#include <libkern/OSByteOrder.h> /* for OSSwap32() */
+
 
 char		g_target_path[ PATH_MAX ];
 extern int		g_skip_setuid_tests;
@@ -105,7 +108,7 @@ kmsg_send(mach_port_t remote_port, int index)
         mach_msg_header_t * my_kmsg = NULL;
 	mach_msg_size_t size = sizeof(mach_msg_header_t) + sizeof(int)*index;
         
-        my_kr = vm_allocate( mach_task_self(),
+        my_kr = mach_vm_allocate( mach_task_self(),
                              (vm_address_t *)&my_kmsg,
                              size,
                              VM_MAKE_TAG(VM_MEMORY_MACH_MSG) | TRUE );
@@ -125,7 +128,7 @@ kmsg_send(mach_port_t remote_port, int index)
                           MACH_PORT_NULL,
                           MACH_MSG_TIMEOUT_NONE,
                           MACH_PORT_NULL );
-        vm_deallocate( mach_task_self(), (vm_address_t)my_kmsg, size );
+        mach_vm_deallocate( mach_task_self(), (vm_address_t)my_kmsg, size );
         return my_kr;
 }
 
@@ -135,7 +138,7 @@ kmsg_recv(mach_port_t portset, mach_port_t port, int * msgh_id_return)
         kern_return_t my_kr;
         mach_msg_header_t * my_kmsg = NULL;
         
-        my_kr = vm_allocate( mach_task_self(),
+        my_kr = mach_vm_allocate( mach_task_self(),
                              (vm_address_t *)&my_kmsg,
                              PAGE_SIZE,
                              VM_MAKE_TAG(VM_MEMORY_MACH_MSG) | TRUE );
@@ -151,7 +154,7 @@ kmsg_recv(mach_port_t portset, mach_port_t port, int * msgh_id_return)
         if ( my_kr == KERN_SUCCESS &&
              msgh_id_return != NULL )
                 *msgh_id_return = my_kmsg->msgh_id;
-        vm_deallocate( mach_task_self(), (vm_address_t)my_kmsg, PAGE_SIZE );
+        mach_vm_deallocate( mach_task_self(), (vm_address_t)my_kmsg, PAGE_SIZE );
         return my_kr;
 }
 
@@ -227,7 +230,7 @@ int kqueue_tests( void * the_argp )
 	char			my_buffer[ 16 ];
 	kern_return_t kr;	
 
-	kr = vm_allocate((mach_vm_map_t) mach_task_self(), (vm_address_t*)&my_pathp, PATH_MAX, VM_FLAGS_ANYWHERE);
+	kr = mach_vm_allocate((mach_vm_map_t) mach_task_self(), (vm_address_t*)&my_pathp, PATH_MAX, VM_FLAGS_ANYWHERE);
         if(kr != KERN_SUCCESS){
                 printf( "vm_allocate failed with error %d - \"%s\" \n", errno, strerror( errno) );
                 goto test_failed_exit;
@@ -466,7 +469,7 @@ int kqueue_tests( void * the_argp )
 	/* try to register for events on my_port directly -- this should fail */
 	EV_SET( &my_keventv[0], my_port, EVFILT_MACHPORT, (EV_ADD | EV_DISPATCH), 0, 0, 0 );
 	my_err = kevent( my_kqueue, my_keventv, 1, NULL, 0, NULL );
-	if ( my_err != -1 || errno != ENOTSUP ) {
+	if ( my_err != -1 || (errno != ENOTCAPABLE && errno != ENOTSUP) ) {
 		printf( "kevent call to register my_port should have failed, but got %s \n", strerror(errno) );
 		goto test_failed_exit;
 	}
@@ -598,7 +601,7 @@ test_passed_exit:
 		close( my_fd );
 	if ( my_pathp != NULL ) {
 		remove( my_pathp );	
-		vm_deallocate(mach_task_self(), (vm_address_t)my_pathp, PATH_MAX);	
+		mach_vm_deallocate(mach_task_self(), (vm_address_t)my_pathp, PATH_MAX);	
 	 }
 	return( my_err );
 }
