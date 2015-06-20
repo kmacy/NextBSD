@@ -354,6 +354,14 @@
     ssp
     ..
     sys
+        mach
+            ipc
+            ..
+            device
+            ..
+        ..
+        mach_debug
+        ..
     ..
     teken
     ..

@@ -102,6 +102,7 @@
  *	The actual structure that comprises the thread state is defined
  *	in the machine dependent module.
  */
+#include <sys/mach/mach_types.h>
 #include <machine/mach/vm_types.h>
 /*
  *	Generic definition for machine-dependent thread status.

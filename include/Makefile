@@ -74,9 +74,10 @@ LSUBDIRS=	cam/ata cam/scsi \
 	security/audit \
 	security/mac_biba security/mac_bsdextended security/mac_lomac \
 	security/mac_mls security/mac_partition \
-	ufs/ffs ufs/ufs
+	ufs/ffs ufs/ufs \
+	sys/mach sys/mach_debug
 
-LSUBSUBDIRS=	dev/mpt/mpilib
+LSUBSUBDIRS=	dev/mpt/mpilib sys/mach/ipc sys/mach/device
 
 .if ${MK_BLUETOOTH} != "no"
 LSUBSUBDIRS+=	netgraph/bluetooth/include
