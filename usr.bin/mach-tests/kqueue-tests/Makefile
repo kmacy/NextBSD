@@ -4,7 +4,7 @@ SRCS= kqueue-tests.c
 BINDIR?= /usr/bin
 
 MK_MAN=no
-CFLAGS+= -D__APPLE__
+CFLAGS+= -D__APPLE__ -I${.CURDIR}/../../../include/apple
 LDADD+= -lmach -pthread
 
 .include <bsd.prog.mk>
