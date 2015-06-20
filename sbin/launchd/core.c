@@ -6316,8 +6316,14 @@ job_active(job_t j)
 		 * shutdown can proceed. See <rdar://problem/11126530>.
 		 */
 		if (!j->workaround9359725 && ms->recv && machservice_active(ms)) {
-			job_log(j, LOG_INFO, "Mach service is still active: %s", ms->name);
-			return "Mach service is still active";
+			job_log(j, LOG_INFO, "Mach service is still active despite being killed: %s", ms->name);
+			/*
+			 * It is not at all clear to me why this returns a string.  The process
+			 * has been killed, and the loop at this point doesn't do anything other
+			 * than wait.  Which is probably not going to do anything useful.
+			 */
+			return NULL;
+			// return "Mach service is still active despite being killed";
 		}
 	}
 
