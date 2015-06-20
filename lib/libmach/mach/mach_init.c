@@ -12,15 +12,23 @@
 #include <unistd.h>
 #include <stdio.h>
 
+
+#include <syslog.h>
+#include <stdarg.h>
+
+
+
+
+
 #include <machine/mach/ndr_def.h>
 void mach_init(void) __attribute__((constructor));
 mach_port_t mach_reply_port(void);
 mach_port_t task_self_trap(void);
 
 extern mach_port_t _task_reply_port;
+extern mach_port_t bootstrap_port;
+extern mach_port_t mach_task_self_;
 
-mach_port_t bootstrap_port = MACH_PORT_NULL;
-mach_port_t mach_task_self_ = MACH_PORT_NULL;
  __attribute__((visibility("hidden"))) mach_port_t _task_reply_port;
 extern void mig_init(void);
 
@@ -44,8 +52,10 @@ mach_init(void)
 		_task_reply_port = mach_reply_port();
 		if (pid != 1 && root_bootstrap == false) {
 			kr = task_get_special_port(mach_task_self_, TASK_BOOTSTRAP_PORT, &bootstrap_port);
-			if (kr != KERN_SUCCESS)
-				return;
+			if (kr != KERN_SUCCESS) {
+				syslog(LOG_EMERG, "get_special_port failed - mach_task_self_: %d", mach_task_self_);
+			  return;
+			}
 		}
 		mach_inited_pid = pid;
 	}
