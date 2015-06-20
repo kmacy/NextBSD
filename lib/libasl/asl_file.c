@@ -291,7 +291,7 @@ asl_file_open_write_fd(int fd, asl_file_t **s)
 __private_extern__ int
 asl_file_create(const char *path, uid_t uid, gid_t gid, mode_t mode)
 {
-#if TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE || defined(__FreeBSD__)
 	return open(path, O_RDWR | O_CREAT | O_EXCL, mode);
 #else
 	acl_t acl;

@@ -13,6 +13,7 @@ SUBDIR=	${_addr2line} \
 	alias \
 	apply \
 	asa \
+	aslutil \
 	awk \
 	banner \
 	basename \
