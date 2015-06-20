@@ -664,25 +664,25 @@ ipc_mqueue_receive(
 		if (max_size == 0) {
 		restart:
 			TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
+				mtx_assert(&port->port_comm.rcd_io_lock_data, MA_NOTOWNED);
 				if (port->ip_msgcount != 0) {
 					if (ip_lock_try(port) == 0) {
-
 						ips_unlock(pset);
 						ip_lock(port);
 						ips_lock(pset);
-						if (port->ip_msgcount == 0) {
-							ip_unlock(port);
-							goto restart;
-						}
-					} else if (port->ip_msgcount == 0) {
-						ip_unlock(port);
-						goto restart;
-					} else
-						break;
+					}
+					/* one way or another we have the lock */
+					break;
 				}
+			}
+			if (port != NULL && port->ip_msgcount == 0) {
+				mtx_assert(&port->port_comm.rcd_io_lock_data, MA_OWNED);
+				ip_unlock(port);
+				goto restart;
 			}
 			ips_release(pset);
 			if (port != NULL) {
+				mtx_assert(&port->port_comm.rcd_io_lock_data, MA_OWNED);
 				mqueue = &port->ip_messages;
 				kmsgs = &mqueue->imq_messages;
 				kmsg = ipc_kmsg_queue_first(kmsgs);
