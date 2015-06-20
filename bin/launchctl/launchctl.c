@@ -36,6 +36,7 @@
 #include <dirent.h>
 #include <err.h>
 #include <syslog.h>
+#include <sysexits.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -117,7 +118,7 @@ to_launchd_sockets(json_t *json)
 				break;
 
 			default:
-				errx(1, "Invalid jlist specification");
+				errx(EX_OSERR, "Invalid jlist specification");
 		}
 
 		launch_data_dict_insert(result, arr, key);
@@ -160,7 +161,7 @@ create_socket(json_t *json)
 		strncpy(sun.sun_path, json_string_value(val), sizeof(sun.sun_path));
 
 		if ((sfd = socket(AF_UNIX, st, 0)) == -1)
-			errx(1, "socket(): %s", strerror(errno));
+			errx(EX_OSERR, "socket(): %s", strerror(errno));
 
 		if ((val = json_object_get(json, LAUNCH_JOBSOCKETKEY_PATHMODE))) {
 			sun_mode = (mode_t)json_integer_value(val);
@@ -171,14 +172,14 @@ create_socket(json_t *json)
 			if (unlink(sun.sun_path) == -1 && errno != ENOENT) {
 				saved_errno = errno;
 				close(sfd);
-				errx(1, "unlink(): %s", strerror(saved_errno));
+				errx(EX_OSERR, "unlink(): %s", strerror(saved_errno));
 			}
 			oldmask = umask(S_IRWXG|S_IRWXO);
 			if (bind(sfd, (struct sockaddr *)&sun, (socklen_t) sizeof sun) == -1) {
 				saved_errno = errno;
 				close(sfd);
 				umask(oldmask);
-				errx(1, "bind(): %s", strerror(saved_errno));
+				errx(EX_OSERR, "bind(): %s", strerror(saved_errno));
 			}
 			umask(oldmask);
 			if (setm)
@@ -187,12 +188,12 @@ create_socket(json_t *json)
 			if ((st == SOCK_STREAM || st == SOCK_SEQPACKET) && listen(sfd, -1) == -1) {
 				saved_errno = errno;
 				close(sfd);
-				errx(1, "listen(): %s", strerror(saved_errno));
+				errx(EX_OSERR, "listen(): %s", strerror(saved_errno));
 			}
 		} else if (connect(sfd, (struct sockaddr *)&sun, (socklen_t) sizeof sun) == -1) {
 			saved_errno = errno;
 			close(sfd);
-			errx(1, "connect(): %s", strerror(saved_errno));
+			errx(EX_OSERR, "connect(): %s", strerror(saved_errno));
 		}
 
 		return launch_data_new_fd(sfd);
@@ -239,50 +240,50 @@ create_socket(json_t *json)
 		}
 
 		if ((gerr = getaddrinfo(node, serv, &hints, &res0)) != 0)
-			errx(1, "getaddrinfo(): %s", gai_strerror(gerr));
+			errx(EX_OSERR, "getaddrinfo(): %s", gai_strerror(gerr));
 
 		for (res = res0; res; res = res->ai_next) {
 			if ((sfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) == -1)
-				errx(1, "socket(): %s", strerror(errno));
+				errx(EX_OSERR, "socket(): %s", strerror(errno));
 
 			if (hints.ai_flags & AI_PASSIVE) {
 				if (AF_INET6 == res->ai_family && -1 == setsockopt(sfd, IPPROTO_IPV6, IPV6_V6ONLY,
 				    (void *)&sock_opt, (socklen_t) sizeof sock_opt))
-					errx(1, "setsockopt(IPV6_V6ONLY): %m");
+					errx(EX_OSERR, "setsockopt(IPV6_V6ONLY): %m");
 
 				if (mgroup) {
 					if (setsockopt(sfd, SOL_SOCKET, SO_REUSEPORT, (void *)&sock_opt, (socklen_t) sizeof sock_opt) == -1)
-						errx(1, "setsockopt(SO_REUSEPORT): %s", strerror(errno));
+						errx(EX_OSERR, "setsockopt(SO_REUSEPORT): %s", strerror(errno));
 				} else {
 					if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (void *)&sock_opt, (socklen_t) sizeof sock_opt) == -1)
-						errx(1, "setsockopt(SO_REUSEADDR): %s", strerror(errno));
+						errx(EX_OSERR, "setsockopt(SO_REUSEADDR): %s", strerror(errno));
 				}
 
 				if (bind(sfd, res->ai_addr, res->ai_addrlen) == -1)
-					errx(1, "bind(): %s", strerror(errno));
+					errx(EX_OSERR, "bind(): %s", strerror(errno));
 
 				/* The kernel may have dynamically assigned some part of the
 				 * address. (The port being a common example.)
 				 */
 				if (getsockname(sfd, res->ai_addr, &res->ai_addrlen) == -1)
-					errx(1, "getsockname(): %s", strerror(errno));
+					errx(EX_OSERR, "getsockname(): %s", strerror(errno));
 
 				//if (mgroup) {
 				//	do_mgroup_join(sfd, res->ai_family, res->ai_socktype, res->ai_protocol, mgroup);
 				//}
 				if ((res->ai_socktype == SOCK_STREAM || res->ai_socktype == SOCK_SEQPACKET) && listen(sfd, -1) == -1)
-					errx(1, "listen(): %s", strerror(errno));
+					errx(EX_OSERR, "listen(): %s", strerror(errno));
 
 			} else {
 				if (connect(sfd, res->ai_addr, res->ai_addrlen) == -1)
-					errx(1, "connect(): %s", strerror(errno));
+					errx(EX_OSERR, "connect(): %s", strerror(errno));
 			}
 
 			return launch_data_new_fd(sfd);
 		}
 	}
 
-	errx(1, "Invalid socket specification");
+	errx(EX_OSERR, "Invalid socket specification");
 	return (NULL);
 }
 
@@ -384,6 +385,11 @@ to_json(launch_data_t ld)
 		asprintf(&txt, "<mach port %d>", launch_data_get_machport(ld));
 		return json_string(txt);
 
+	case LAUNCH_DATA_ERRNO:
+		/* Could only happen in top-level node */
+		errno = launch_data_get_errno(ld);
+		return (NULL);
+
 	default:
 		return json_null();
 	}
@@ -396,11 +402,9 @@ launch_msg_json(json_t *input)
 
 	result = launch_msg(to_launchd(input));
 
-	if (result == NULL) {
-		fprintf(stderr, "launchd returned NULL in response\n");
+	if (result == NULL)
 		return (NULL);
-	}
-
+	
 	return to_json(result);
 }
 
@@ -649,17 +653,17 @@ static int
 cmd_load(int argc, char * const argv[])
 {
 	FILE *input;
-	json_error_t err;
+	json_error_t error;
 	json_t *msg, *plist;
 
 	if (argc < 2)
-		errx(1, "Usage: launchctl load <plist>");
+		errx(EX_USAGE, "Usage: launchctl load <plist>");
 
 	input = strcmp(argv[1], "-") ? fopen(argv[1], "r") : stdin;
 	if (input == NULL)
-		errx(1, "Cannot open file %s: %s\n", argv[1], strerror(errno));
+		err(EX_OSERR, "Cannot open file %s", argv[1]);
 
-	plist = json_loadf(input, JSON_DECODE_ANY, &err);
+	plist = json_loadf(input, JSON_DECODE_ANY, &error);
 	msg = json_object();
 	json_object_set_new(msg, "SubmitJob", plist);
 
@@ -678,7 +682,7 @@ cmd_start_stop(int argc, char * const argv[])
 	msg = json_object();
 
 	if (argc < 2)
-		errx(1, "Usage: %s <jobname>\n", argv[0]);
+		errx(EX_USAGE, "Usage: %s <jobname>", argv[0]);
 
 	if (!strcmp(argv[0], "start"))
 		json_object_set(msg, "StartJob", json_string(argv[1]));
@@ -698,7 +702,7 @@ cmd_remove(int argc, char * const argv[])
 	msg = json_object();
 
 	if (argc < 2)
-		errx(1, "Usage: remove <jobname>");
+		errx(EX_USAGE, "Usage: remove <jobname>");
 
 	json_object_set(msg, "RemoveJob", json_string(argv[1]));
 	launch_msg_json(msg);
@@ -718,7 +722,7 @@ cmd_list(int argc, char * const argv[])
 	result = launch_msg_json(msg);
 
 	if (result == NULL)
-		errx(1, "Invalid response from launchd");
+		err(EX_OSERR, "Error getting job list");
 
 	json_object_foreach(result, key, job) {
 		printf("%s\n", key);
@@ -742,6 +746,9 @@ cmd_dump(int argc, char * const argv[])
 	}
 
 	result = launch_msg_json(msg);
+	if (result == NULL)
+		err(EX_OSERR, "Error getting job information");
+
 	json_dumpf(result, stdout, JSON_INDENT(4));
 	return (0);
 }
@@ -755,7 +762,6 @@ cmd_help(int argc, char * const argv[])
 	(void)argv;
 
 	fprintf(stderr, "Usage: launchctl <subcommand> [arguments...]\n");
-	fprintf(stderr, "\n");
 
 	for (i = 0; i < N(cmds); i++) {
 		fprintf(stderr, "%s - %s\n", cmds[i].name, cmds[i].desc);
@@ -788,6 +794,6 @@ main(int argc, char * const argv[])
 			return (cmds[i].func(argc - optind, argv + optind));
 	}
 
-	fprintf(stderr, "Usage: launchctl <subcommand> [arguments...]\n");
+	errx(EX_USAGE, "Usage: launchctl <subcommand> [arguments...]");
 	return (1);
 }
