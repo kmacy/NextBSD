@@ -123,6 +123,7 @@ static int kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
 			 struct filecaps *fcaps);
 
 #define MODERN (__FreeBSD_version >= 1100000)
+#define FNOFDALLOC    0x80000000
 
 static void
 ipc_entry_hash_delete(
@@ -332,7 +333,7 @@ ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_nam
 	} else {
 		/* maintain the reference added at ipc_entry_copyin */
 		/* Are sent file O_CLOEXEC? */
-		if ((kr = kern_finstall(curthread, fp, namep, FMINALLOC, NULL)) != 0) {
+		if ((kr = kern_finstall(curthread, fp, namep, 0, NULL)) != 0) {
 			fdrop(fp, curthread);
 			kr = KERN_RESOURCE_SHORTAGE;
 		}
@@ -377,27 +378,32 @@ ipc_entry_get(
 	ipc_entry_t	*entryp)
 {	
 	ipc_entry_t free_entry;
-	int fd, flags;
+	int fd;
 	struct file *fp;
 	struct thread *td;
 
 	assert(space->is_active);
 
-	flags = 0;
 	td  = curthread;
 	if ((free_entry = malloc(sizeof(*free_entry), M_MACH_IPC_ENTRY, M_WAITOK|M_ZERO)) == NULL)
 		return KERN_RESOURCE_SHORTAGE;
 
-	if (*namep != MACH_PORT_NAME_NULL) {
-		fd = *namep;
-		flags = FNOFDALLOC|O_CLOEXEC;
-	} else
-		flags = FMINALLOC|O_CLOEXEC;
-
-	if (falloc(td, &fp, &fd, flags)) {
-		free(free_entry, M_MACH_IPC_ENTRY);
-		return KERN_RESOURCE_SHORTAGE;
+	if (kern_fdalloc(td, 16, &fd)) {
+		log(LOG_WARNING, "%s:%d failed to allocate fd\n", __FILE__, __LINE__);
+		return (KERN_RESOURCE_SHORTAGE);
 	}
+	if (falloc_noinstall(td, &fp)) {
+		kern_fddealloc(td, fd);
+		log(LOG_WARNING, "%s:%d failed to allocate fp\n", __FILE__, __LINE__);
+		return (KERN_RESOURCE_SHORTAGE);
+	}
+	if (kern_finstall(td, fp, &fd, FNOFDALLOC, NULL)) {
+		log(LOG_WARNING, "%s:%d failed to allocate fp:%p at fd:%d \n", __FILE__, __LINE__, fp, fd);
+		kern_fddealloc(td, fd);
+		fdrop(fp, td);
+		return (KERN_RESOURCE_SHORTAGE);
+	}
+
 	free_entry->ie_bits = 0;
 	free_entry->ie_request = 0;
 	free_entry->ie_name = fd;
@@ -477,32 +483,33 @@ ipc_entry_alloc_name(
 	kern_return_t kr;
 	struct thread *td = curthread;
 
+	if (!space->is_active) {
+		return (KERN_INVALID_TASK);
+	}
 	assert(MACH_PORT_NAME_VALID(name));
 	is_write_lock(space);
 	if ((*entryp = ipc_entry_lookup(space, name)) != NULL)
 		return (KERN_SUCCESS);
+
 	is_write_unlock(space);
 
 	/* name could technically be a ridiculously large value */
-	if (kern_fdalloc(td, name, &newname))
+	if (kern_fdalloc(td, name, &newname)) {
+		log(LOG_WARNING, "%s:%d failed to allocate %d\n", __FILE__, __LINE__, name);
 		return (KERN_RESOURCE_SHORTAGE);
-
+	}
 	if (newname != name) {
 		kern_fddealloc(td, newname);
 		return (KERN_NAME_EXISTS);
 	}
 	if (falloc_noinstall(td, &fp)) {
-	  kern_fddealloc(td, newname);
-	  return (KERN_RESOURCE_SHORTAGE);
-	}
-	if (kern_finstall(td, fp, &name, FNOFDALLOC|O_CLOEXEC, NULL)) {
-	  kern_fddealloc(td, newname);
-	  fdrop(fp, td);
+		kern_fddealloc(td, newname);
 		return (KERN_RESOURCE_SHORTAGE);
 	}
-	if (!space->is_active) {
+	if (kern_finstall(td, fp, &name, FNOFDALLOC, NULL)) {
 		kern_fddealloc(td, newname);
-		return (KERN_INVALID_TASK);
+		fdrop(fp, td);
+		return (KERN_RESOURCE_SHORTAGE);
 	}
 	kr = ipc_entry_get(space, 0, &name, entryp);
 	if (kr != KERN_SUCCESS) {
@@ -572,7 +579,7 @@ ipc_entry_dealloc(
 }
 
 static void
-ipc_entry_exit(void *arg __unused, struct proc *p)
+ipc_entry_list_close(void *arg __unused, struct proc *p)
 {
 	struct filedesc *fdp;
 	struct filedescent *fde;
@@ -595,7 +602,7 @@ ipc_entry_exit(void *arg __unused, struct proc *p)
 		fp = fde->fde_file;
 		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
 			if (fp->f_data == NULL) {
-				printf("%s:%d fd: %d has NULL f_data\n", p->p_comm, p->p_pid, i);
+				log(LOG_WARNING, "%s:%d fd: %d has NULL f_data\n", p->p_comm, p->p_pid, i);
 				kern_close(td, i);
 				continue;
 			}
@@ -604,7 +611,7 @@ ipc_entry_exit(void *arg __unused, struct proc *p)
 			if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET)
 				continue;
 			if (fp->f_count > 1)
-				printf("%s:%d fd: %d port refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+				log(LOG_WARNING, "%s:%d fd: %d port refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
 			kern_close(td, i);
 		}
 	}
@@ -616,7 +623,7 @@ ipc_entry_exit(void *arg __unused, struct proc *p)
 			MPASS(fp->f_data != NULL);
 			entry = fp->f_data;
 			if (fp->f_count > 1)
-				printf("%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+				log(LOG_WARNING, "%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
 			kern_close(td, i);
 		}
 	}
@@ -645,7 +652,8 @@ static void
 ipc_entry_sysinit(void *arg __unused)
 {
 
-	EVENTHANDLER_REGISTER(process_exit, ipc_entry_exit, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_exit, ipc_entry_list_close, NULL, EVENTHANDLER_PRI_ANY);
+	EVENTHANDLER_REGISTER(process_exec, ipc_entry_list_close, NULL, EVENTHANDLER_PRI_ANY);
 }
 
 SYSINIT(ipc_entry, SI_SUB_KLD, SI_ORDER_ANY, ipc_entry_sysinit, NULL);
@@ -751,7 +759,7 @@ kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
 	KASSERT(fd != NULL, ("%s: fd == NULL", __func__));
 	KASSERT(fp != NULL, ("%s: fp == NULL", __func__));
 
-	min = (flags & FMINALLOC) ? 16 : 0;
+	min = 16;
 
 	FILEDESC_XLOCK(fdp);
 	if (!(flags & FNOFDALLOC)) {
