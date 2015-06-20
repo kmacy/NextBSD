@@ -633,6 +633,7 @@ ipc_object_copyout(
 		goto done;
 	}
 	is_write_unlock(space);
+	/* we don't wish to specify a name to allocate */ 
 	name = MACH_PORT_NAME_NULL;
 	kr = ipc_entry_get(space,
 			msgt_name == MACH_MSG_TYPE_PORT_SEND_ONCE,
