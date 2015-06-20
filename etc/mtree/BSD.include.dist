@@ -266,6 +266,12 @@
     lzma
     ..
     mach
+        device
+        ..
+        i386
+        ..
+    ..
+    mach_debug
     ..
     machine
         pc

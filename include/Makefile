@@ -6,7 +6,7 @@
 .include <src.opts.mk>
 
 CLEANFILES= osreldate.h version vers.c
-SUBDIR= arpa protocols rpcsvc rpc xlocale
+SUBDIR= arpa mach mach_debug protocols rpcsvc rpc xlocale
 INCS=	a.out.h ar.h assert.h bitstring.h complex.h cpio.h _ctype.h ctype.h \
 	db.h \
 	dirent.h dlfcn.h elf.h elf-hints.h err.h fmtmsg.h fnmatch.h fstab.h \
@@ -251,27 +251,6 @@ copies:
 	cd ${.CURDIR}/../sys/teken; \
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 teken.h \
 	    ${DESTDIR}${INCLUDEDIR}/teken
-.if exists(${.CURDIR}/mach)
-	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
-		${DESTDIR}${INCLUDEDIR}/mach
-	cd ${.CURDIR}/mach ; \
-		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
-		${DESTDIR}${INCLUDEDIR}/mach
-.endif
-.if exists(${.CURDIR}/mach_debug)
-	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
-		${DESTDIR}${INCLUDEDIR}/mach_debug
-	cd ${.CURDIR}/mach_debug ; \
-		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
-		${DESTDIR}${INCLUDEDIR}/mach_debug
-.endif
-.if exists(${.CURDIR}/mach/device)
-	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
-		${DESTDIR}${INCLUDEDIR}/mach/device
-	cd ${.CURDIR}/mach/device ; \
-		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
-		${DESTDIR}${INCLUDEDIR}/mach/device
-.endif
 .if exists(${.CURDIR}/../sys/sys/mach)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${DESTDIR}${INCLUDEDIR}/sys/mach
