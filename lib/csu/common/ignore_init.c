@@ -44,8 +44,6 @@ extern int _DYNAMIC;
 
 char **environ;
 const char *__progname = "";
-int bootstrap_port = 0;
-int mach_task_self_ = 0;
 
 
 

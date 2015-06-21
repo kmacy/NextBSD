@@ -26,8 +26,8 @@ mach_port_t mach_reply_port(void);
 mach_port_t task_self_trap(void);
 
 extern mach_port_t _task_reply_port;
-extern mach_port_t bootstrap_port;
-extern mach_port_t mach_task_self_;
+mach_port_t bootstrap_port = 0;
+mach_port_t mach_task_self_ = 0;
 
  __attribute__((visibility("hidden"))) mach_port_t _task_reply_port;
 extern void mig_init(void);
