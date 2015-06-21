@@ -744,7 +744,10 @@ XXX
 	 * with a communication channel that we can trigger with a dispatch source.
 	 */
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-		forever _vprocmgr_log_drain(NULL, NULL, launchd_callback);
+		for(;;) {
+			_vprocmgr_log_drain(NULL, NULL, launchd_callback);
+			sleep(1);
+		}
 	});
 #endif
 
