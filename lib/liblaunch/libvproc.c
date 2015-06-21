@@ -761,7 +761,7 @@ _vprocmgr_log_drain(vproc_t vp __attribute__((unused)), pthread_mutex_t *mutex, 
 	struct timeval tv;
 	struct logmsg_s *lm;
 
-		if (!func) {
+	if (!func) {
 		return _vprocmgr_log_drain;
 	}
 
