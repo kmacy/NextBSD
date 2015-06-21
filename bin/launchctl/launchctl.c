@@ -49,6 +49,9 @@
 #include <paths.h>
 #include <termios.h>
 #include <libutil.h>
+#include "vproc.h"
+#include "vproc_priv.h"
+#include "vproc_internal.h"
 
 #define N(x)    ((sizeof(x)) / (sizeof(x[0])))
 
@@ -67,6 +70,7 @@ static int cmd_load(int argc, char * const argv[]);
 static int cmd_remove(int argc, char * const argv[]);
 static int cmd_list(int argc, char * const argv[]);
 static int cmd_dump(int argc, char * const argv[]);
+static int cmd_log(int argc, char * const argv[]);
 static int cmd_help(int argc, char * const argv[]);
 
 mach_port_t bootstrap_port;
@@ -83,6 +87,7 @@ static const struct {
 	{ "bootstrap",	cmd_bootstrap,	"Bootstrap launchd" },
 	{ "list",	cmd_list,	"List jobs and information about jobs" },
 	{ "dump",	cmd_dump,       "Dumps job(s) plist(s)"},
+	{ "log",	cmd_log,	"Adjust logging level of launchd"},
 	{ "help",	cmd_help,	"This help output" },
 };
 
@@ -768,6 +773,92 @@ cmd_help(int argc, char * const argv[])
 	}
 
 	return (0);
+}
+
+static int
+cmd_log(int argc, char * const argv[])
+{
+	int64_t inval, outval;
+	bool badargs = false, maskmode = false, onlymode = false, levelmode = false;
+
+	static const struct {
+		const char *name;
+		int level;
+	} logtbl[] = {
+		{ "debug",	LOG_DEBUG },
+		{ "info",	LOG_INFO },
+		{ "notice",	LOG_NOTICE },
+		{ "warning",	LOG_WARNING },
+		{ "error",	LOG_ERR },
+		{ "critical",	LOG_CRIT },
+		{ "alert",	LOG_ALERT },
+		{ "emergency",	LOG_EMERG },
+	};
+
+	size_t i, j, logtblsz = sizeof logtbl / sizeof logtbl[0];
+	int m = 0;
+
+	if (argc >= 2) {
+		if (!strcmp(argv[1], "mask"))
+			maskmode = true;
+		else if (!strcmp(argv[1], "only"))
+			onlymode = true;
+		else if (!strcmp(argv[1], "level"))
+			levelmode = true;
+		else
+			badargs = true;
+	}
+
+	if (maskmode)
+		m = LOG_UPTO(LOG_DEBUG);
+
+	if (argc > 2 && (maskmode || onlymode)) {
+		for (i = 2; i < (size_t)argc; i++) {
+			for (j = 0; j < logtblsz; j++) {
+				if (!strcmp(argv[i], logtbl[j].name)) {
+					if (maskmode)
+						m &= ~(LOG_MASK(logtbl[j].level));
+					else
+						m |= LOG_MASK(logtbl[j].level);
+					break;
+				}
+			}
+			if (j == logtblsz) {
+				badargs = true;
+				break;
+			}
+		}
+	} else if (argc > 2 && levelmode) {
+		for (j = 0; j < logtblsz; j++) {
+			if (!strcmp(argv[2], logtbl[j].name)) {
+				m = LOG_UPTO(logtbl[j].level);
+				break;
+			}
+		}
+		if (j == logtblsz)
+			badargs = true;
+	} else if (argc != 1) {
+		badargs = true;
+	}
+
+	if (badargs)
+		errx(EX_USAGE, "Usage: log [[mask loglevels...] | [only loglevels...] [level loglevel]]");
+
+	inval = m;
+
+	if (vproc_swap_integer(NULL, VPROC_GSK_GLOBAL_LOG_MASK, argc != 1 ? &inval : NULL, &outval) == NULL) {
+		if (argc == 1) {
+			for (j = 0; j < logtblsz; j++) {
+				if (outval & LOG_MASK(logtbl[j].level)) {
+					printf("%s ", logtbl[j].name);
+				}
+			}
+			printf("\n");
+		}
+		return 0;
+	} else {
+		return 1;
+	}
 }
 
 int

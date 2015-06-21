@@ -3,12 +3,9 @@
 PROG= launchctl
 MAN=
 
-BASE_INCLUDE= -I${.CURDIR}/../../apsl/include
-BASE_INCLUDE+=  -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${.CURDIR}
+BASE_INCLUDE= -I${.CURDIR}/../../include/apple
 
-DEBUG_FLAGS=-g -O0
-
-CFLAGS+= ${BASE_INCLUDE}
+CFLAGS+= ${BASE_INCLUDE} -fblocks
 CFLAGS+= -I${.CURDIR}/../../lib/liblaunch
 CFLAGS+= -I${.CURDIR}/../../include/mach
 LDFLAGS+= -L${.CURDIR}/../../lib/liblaunch -llaunch
