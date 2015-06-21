@@ -198,8 +198,6 @@ device		miibus			# MII bus support
 # Pseudo devices.
 device		loop			# Network loopback
 device		random			# Entropy device
-device		padlock_rng		# VIA Padlock RNG
-device		rdrand_rng		# Intel Bull Mountain RNG
 device		ether			# Ethernet support
 device		vlan			# 802.1Q VLAN support
 device		tun			# Packet tunnel.
