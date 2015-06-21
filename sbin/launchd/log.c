@@ -234,9 +234,6 @@ launchd_vsyslog(struct launchd_syslog_attr *attr, const char *fmt, va_list args)
 		fprintf(log2here, "%-8zd %-32s %-8u %-24s %-8u  %s\n", delta, attr->from_name, attr->from_pid, attr->about_name, attr->about_pid, message);
 	}
 
-	/* XXX: temporary aid until asl becomes available */
-	syslog(LOG_ERR, "%-32s %-8u %-24s %-8u  %s", attr->from_name, attr->from_pid, attr->about_name, attr->about_pid, message);
-
 	if ((LOG_MASK(attr->priority) & _launchd_log_up2)) {
 		_logmsg_add(attr, saved_errno, message);
 	}
