@@ -41,6 +41,7 @@ typedef function_table_entry   *function_table_t;
 
 #include <sys/mach/std_types.h>
 #include <sys/mach/mig.h>
+#include <sys/mach/thread_status.h>
 #include <sys/mach/mig.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach/mach_types.h>
