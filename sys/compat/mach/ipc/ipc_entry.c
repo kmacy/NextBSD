@@ -596,6 +596,15 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	 * bar this from happening in the first place?
 	 **/
 	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
+	/* clear portset referencing kqfd */
+	for (i = 0; i <= fdp->fd_lastfile; i++) {
+		fde = &fdp->fd_ofiles[i];
+		fp = fde->fde_file;
+		if (fp == NULL || (fp->f_type != DTYPE_KQUEUE))
+			continue;
+		MPASS(fp->f_data != NULL);
+		kern_close(td, i);
+	}
 	/* clear ports first as they reference the portset */
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
@@ -621,7 +630,6 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		fp = fde->fde_file;
 		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
 			MPASS(fp->f_data != NULL);
-			entry = fp->f_data;
 			if (fp->f_count > 1)
 				log(LOG_WARNING, "%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
 			kern_close(td, i);
