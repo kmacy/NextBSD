@@ -2,6 +2,8 @@
 
 SUBDIR= ipc-hello \
 	kqueue-tests \
-	set-bport
+	set-bport \
+	bootstrap \
+	bootstrap-kqueue
 
 .include <bsd.subdir.mk>
