@@ -10,5 +10,5 @@ typedef int OSSpinLock;
 #define OSAtomicDecrement32(v) atomic_fetchadd_32((volatile int *)v, -1)
 #define OSAtomicCompareAndSwapLongBarrier(o, i, v) atomic_cmpset_long(v, o, i)
 #define OSAtomicCompareAndSwap32Barrier(o, i, v) atomic_cmpset_32(v, o, i)
-#define OSSpinLockLock(l)
-#define OSSpinLockUnlock(l)
+#define OSSpinLockLock(l) while (atomic_testandset_int((volatile int *)&l, 1) == 1)
+#define OSSpinLockUnlock(l) atomic_clear_int((volatile int *)&l, 1)
