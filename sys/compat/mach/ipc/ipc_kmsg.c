@@ -2880,8 +2880,8 @@ ipc_kmsg_copyout_pseudo(
 
 	assert(IO_VALID(dest));
 
-	mr = (ipc_kmsg_copyout_object(space, dest, dest_type, &dest_name, TRUE) |
-	      ipc_kmsg_copyout_object(space, reply, reply_type, &reply_name, TRUE));
+	mr = (ipc_kmsg_copyout_object(space, dest, dest_type, &dest_name, FALSE) |
+	      ipc_kmsg_copyout_object(space, reply, reply_type, &reply_name, FALSE));
 
 	kmsg->ikm_header->msgh_bits = mbits &~ MACH_MSGH_BITS_CIRCULAR;
 	kmsg->ikm_header->msgh_remote_port = CAST_MACH_NAME_TO_PORT(dest_name);
