@@ -33,11 +33,16 @@
 extern void xpc_connection_bind_mach_service(xpc_connection_t connection, const char *name);
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 	xpc_connection_t conn;
 
-	conn = xpc_connection_create_mach_service("foo", NULL,
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <mach service name>\n", argv[0]);
+		return (1);
+	}
+
+	conn = xpc_connection_create_mach_service(argv[1], NULL,
 	    XPC_CONNECTION_MACH_SERVICE_LISTENER);
 
 	xpc_connection_set_event_handler(conn, ^(xpc_object_t peer) {

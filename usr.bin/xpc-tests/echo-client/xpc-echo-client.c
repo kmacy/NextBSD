@@ -60,17 +60,20 @@ main(int argc, char *argv[])
 	}
 	
 	xpc_connection_set_event_handler(conn, ^(xpc_object_t obj) {
-		printf("yay, message!\n");
+		printf("Received message in generic event handler: %p\n", obj);
+		printf("%s\n", xpc_copy_description(obj));
 	});
 
 	xpc_connection_resume(conn);
 	xpc_connection_send_message_with_reply(conn, msg, NULL, ^(xpc_object_t resp) {
-		printf("yay, message!\n");
+		printf("Received first message: %p\n", resp);
 		printf("%s\n", xpc_copy_description(resp));
 	});
 
+	//sleep(2);
+
 	xpc_connection_send_message_with_reply(conn, msg, NULL, ^(xpc_object_t resp) {
-		printf("yay, another message!\n");
+		printf("Received second message: %p\n", resp);
 		printf("%s\n", xpc_copy_description(resp));
 	});
 
