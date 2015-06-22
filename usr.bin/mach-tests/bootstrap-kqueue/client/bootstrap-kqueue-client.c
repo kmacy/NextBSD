@@ -22,6 +22,11 @@ int main(int argc, char *argv[])
 	mach_port_t bport, port, reply_port;
 	struct msg_recv message;
 
+	if (argc < 3) {
+		fprintf(stderr, "Usage: %s <first message> <second message>\n", argv[0]);
+		exit(1);
+	}
+
 	task_get_special_port(mach_task_self(), TASK_BOOTSTRAP_PORT, &bport);
 	printf("bootstrap port: %d\n", bport);
 
@@ -64,7 +69,7 @@ int main(int argc, char *argv[])
 	message.hdr.msgh_remote_port = port;
 	message.hdr.msgh_size = sizeof(struct msg_send);
 	message.hdr.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MAKE_SEND);
-	strcpy(message.body, argv[1]);
+	strcpy(message.body, argv[2]);
 
 	kr = mach_msg((mach_msg_header_t *)&message, MACH_SEND_MSG | MACH_RCV_MSG,
 	    sizeof(struct msg_send), sizeof(struct msg_recv), reply_port,
