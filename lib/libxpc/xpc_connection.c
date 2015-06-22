@@ -425,7 +425,7 @@ xpc_connection_recv_message(void *context)
 		TAILQ_FOREACH(call, &conn->xc_pending, xp_link) {
 			if (call->xp_id == id) {
 				dispatch_async(conn->xc_target_queue, ^{
-					conn->xc_handler(result);
+					call->xp_handler(result);
 					TAILQ_REMOVE(&conn->xc_pending, call,
 					    xp_link);
 					free(call);
