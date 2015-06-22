@@ -13,6 +13,7 @@ CFLAGS+=	-I${.CURDIR} -I${MACHINE_INCLUDES} -I${.CURDIR}/../../include -I${.CURD
 CFLAGS+=	-I. -I${.CURDIR}/include -fblocks
 CFLAGS+=	-D__APPLE__ -DDISPATCH_USE_DTRACE=0
 CFLAGS+=	-DDISPATCH_USE_SIMPLE_ASL=0 -DUSE_OBJC=0 -D__BLOCKS__=1
+CFLAGS+=	-DDISPATCH_DEBUG=1
 
 protocolServer.c protocolUser.c protocol.h protocolServer.h: ${.CURDIR}/src/protocol.defs 
 	mig ${CFLAGS}  -user protocolUser.c \
