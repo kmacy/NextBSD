@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <mach/mach.h>
 #include <servers/bootstrap.h>
 
@@ -21,11 +22,15 @@ int main(int argc, char *argv[])
 	kern_return_t kr;
 	mach_port_t bport, port, reply_port;
 	struct msg_recv message;
+	int delay = 0;
 
 	if (argc < 3) {
-		fprintf(stderr, "Usage: %s <first message> <second message>\n", argv[0]);
+		fprintf(stderr, "Usage: %s <first message> <second message> [<delay>]\n", argv[0]);
 		exit(1);
 	}
+
+	if (argc == 4)
+		delay = atoi(argv[3]);
 
 	task_get_special_port(mach_task_self(), TASK_BOOTSTRAP_PORT, &bport);
 	printf("bootstrap port: %d\n", bport);
@@ -64,6 +69,9 @@ int main(int argc, char *argv[])
 
 	if (kr != KERN_SUCCESS)
 		printf("first mach_msg_send failure: kr=%d\n", kr);
+
+	if (delay)
+		sleep(delay);
 
 	message.hdr.msgh_local_port = reply_port;
 	message.hdr.msgh_remote_port = port;
