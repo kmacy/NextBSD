@@ -196,7 +196,7 @@ main(int argc, char *const *argv)
 
 	if (uflag == false && getpid() != 1 && getppid() != 1) {
 		fprintf(stderr, "%s: This program is not meant to be run directly.\n", getprogname());
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 	}
 
 	launchd_runtime_init();
@@ -421,10 +421,10 @@ do_pid1_crash_diagnosis_mode2(const char *msg)
 	int fd;
 	revoke(_PATH_CONSOLE);
 	if ((fd = open(_PATH_CONSOLE, O_RDWR)) == -1) {
-		launchd_exit(2);
+		DEBUG_EXIT(2);
 	}
 	if (login_tty(fd) == -1) {
-		launchd_exit(3);
+		DEBUG_EXIT(3);
 	}
 
 	setenv("TERM", "vt100", 1);
@@ -442,7 +442,7 @@ do_pid1_crash_diagnosis_mode2(const char *msg)
 
 	execl(_PATH_BSHELL, "-sh", NULL);
 	syslog(LOG_ERR, "can't exec %s for PID 1 crash debugging: %m", _PATH_BSHELL);
-	launchd_exit(EXIT_FAILURE);
+	DEBUG_EXIT(EXIT_FAILURE);
 }
 
 void
@@ -465,7 +465,7 @@ fatal_signal_handler(int sig, siginfo_t *si, void *uap __attribute__((unused)))
 	switch ((sample_p = vfork())) {
 	case 0:
 		execve(sample_args[0], sample_args, environ);
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 		break;
 	default:
 		waitpid(sample_p, &wstatus, 0);
@@ -518,7 +518,7 @@ pid1_magic_init(void)
 
 	if (setaudit_addr(&auinfo, sizeof(auinfo)) == -1) {
 		launchd_syslog(LOG_WARNING | LOG_CONSOLE, "Could not set audit session: %d: %s.", errno, strerror(errno));
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 	}
 
 	launchd_audit_session = auinfo.ai_asid;

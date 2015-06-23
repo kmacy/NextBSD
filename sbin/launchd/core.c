@@ -4495,7 +4495,7 @@ job_start(job_t j)
 	case 0:
 		if (unlikely(_vproc_post_fork_ping())) {
 			syslog(LOG_ERR, "_vproc_post_fork_ping() fail");
-			launchd_exit(EXIT_FAILURE);
+			DEBUG_EXIT(EXIT_FAILURE);
 		} else
 			syslog(LOG_ERR, "_vproc_post_fork_ping() success");
 
@@ -4646,7 +4646,7 @@ job_start_child(job_t j)
 			if (glob(j->argv[i], gflags, NULL, &g) != 0) {
 				job_log_error(j, LOG_ERR, "glob(\"%s\")", j->argv[i]);
 				syslog(LOG_ERR, "glob error");
-				launchd_exit(EXIT_FAILURE);
+				DEBUG_EXIT(EXIT_FAILURE);
 			}
 		}
 		g.gl_pathv[0] = (char *)file2exec;
@@ -4817,7 +4817,7 @@ job_start_child(job_t j)
 out_bad:
 #endif
 	syslog(LOG_ERR, "errno=%d", errno);
-	launchd_exit(errno);
+	DEBUG_EXIT(errno);
 }
 
 void
@@ -5062,7 +5062,7 @@ job_postfork_test_user(job_t j)
 out_bad:
 #if 0
 	(void)job_assumes_zero_p(j, kill2(getppid(), SIGTERM));
-	launchd_exit(EXIT_FAILURE);
+	DEBUG_EXIT(EXIT_FAILURE);
 #else
 	job_log(j, LOG_WARNING, "In a future build of the OS, this error will be fatal.");
 #endif
@@ -5095,13 +5095,13 @@ job_postfork_become_user(job_t j)
 	if (j->username) {
 		if ((pwe = job_getpwnam(j, j->username)) == NULL) {
 			job_log(j, LOG_ERR, "getpwnam(\"%s\") failed", j->username);
-			launchd_exit(ESRCH);
+			DEBUG_EXIT(ESRCH);
 		}
 	} else if (j->mach_uid) {
 		if ((pwe = getpwuid(j->mach_uid)) == NULL) {
 			job_log(j, LOG_ERR, "getpwuid(\"%u\") failed", j->mach_uid);
 			job_log_pids_with_weird_uids(j);
-			launchd_exit(ESRCH);
+			DEBUG_EXIT(ESRCH);
 		}
 	} else {
 		return;
@@ -5124,7 +5124,7 @@ job_postfork_become_user(job_t j)
 
 	if (unlikely(pwe->pw_expire && time(NULL) >= pwe->pw_expire)) {
 		job_log(j, LOG_ERR, "Expired account");
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 	}
 
 
@@ -5139,18 +5139,18 @@ job_postfork_become_user(job_t j)
 
 		if (unlikely((gre = job_getgrnam(j, j->groupname)) == NULL)) {
 			job_log(j, LOG_ERR, "getgrnam(\"%s\") failed", j->groupname);
-			launchd_exit(ESRCH);
+			DEBUG_EXIT(ESRCH);
 		}
 
 		desired_gid = gre->gr_gid;
 	}
 
 	if (job_assumes_zero_p(j, setlogin(loginname)) == -1) {
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 	}
 
 	if (job_assumes_zero_p(j, setgid(desired_gid)) == -1) {
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 	}
 
 	/*
@@ -5161,7 +5161,7 @@ job_postfork_become_user(job_t j)
 	if (likely(!j->no_init_groups)) {
 #if 1
 		if (job_assumes_zero_p(j, initgroups(loginname, desired_gid)) == -1) {
-			launchd_exit(EXIT_FAILURE);
+			DEBUG_EXIT(EXIT_FAILURE);
 		}
 #else
 		/* Do our own little initgroups(). We do this to guarantee that we're
@@ -5174,13 +5174,13 @@ job_postfork_become_user(job_t j)
 		(void)job_assumes_zero_p(j, getgrouplist(j->username, desired_gid, groups, &ngroups));
 
 		if (job_assumes_zero_p(j, syscall(SYS_initgroups, ngroups, groups, desired_uid)) == -1) {
-			launchd_exit(EXIT_FAILURE);
+			DEBUG_EXIT(EXIT_FAILURE);
 		}
 #endif
 	}
 
 	if (job_assumes_zero_p(j, setuid(desired_uid)) == -1) {
-		launchd_exit(EXIT_FAILURE);
+		DEBUG_EXIT(EXIT_FAILURE);
 	}
 
 	r = confstr(_CS_DARWIN_USER_TEMP_DIR, tmpdirpath, sizeof(tmpdirpath));
