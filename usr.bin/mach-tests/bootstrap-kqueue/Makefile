@@ -2,6 +2,7 @@
 
 SUBDIR=	client \
 	server \
-	server-libdispatch
+	server-libdispatch \
+	server-portset-fiddling
 
 .include <bsd.subdir.mk>
