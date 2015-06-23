@@ -26,6 +26,7 @@
 #ifndef __NOTIFICATION_H__
 #define __NOTIFICATION_H__
 
+#include <stdbool.h>
 #include <sys/cdefs.h>
 #include <stdint.h>
 #include <mach/message.h>
