@@ -133,7 +133,8 @@ ipc_pset_alloc(
 
 	pset->ips_local_name = name;
 	TAILQ_INIT(&pset->ips_ports);
-	knlist_init(&pset->ips_note, &pset->pset_comm.rcd_io_lock_data,
+	mtx_init(&pset->ips_note_lock, "pset knote lock", NULL, MTX_DEF|MTX_DUPOK);
+	knlist_init(&pset->ips_note, &pset->ips_note_lock,
 				NULL, NULL, NULL, NULL);
 	thread_pool_init(&pset->ips_thread_pool);
 	*namep = name;
@@ -356,10 +357,8 @@ ipc_pset_destroy(
 {
 	ipc_port_t port;
 
-	assert(ips_active(pset));
 
 	pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-	KNOTE_LOCKED(&pset->ips_note, 0);
 
 	while (!TAILQ_EMPTY(&pset->ips_ports)) {
 		port = TAILQ_FIRST(&pset->ips_ports);
@@ -406,32 +405,44 @@ filt_machportattach(struct knote *kn)
 	note = &pset->ips_note;
 	ips_unlock(pset);
 
+	/* need the actual entry for knote */
 	if ((entry = ipc_entry_lookup(current_space(), name)) == NULL)
 		return (ENOENT);
 	KASSERT(entry->ie_object == (ipc_object_t)pset, ("entry->ie_object == pset"));
+
 	kn->kn_fp = entry->ie_fp;
-	ips_lock(pset);
-	knlist_add(note, kn, 1);
-	ips_unlock(pset);
+	knlist_add(note, kn, 0);
+
 	return (0);
 }
 
+extern void kdb_backtrace(void);
 
 static void
 filt_machportdetach(struct knote *kn)
 {
 	mach_port_name_t	name = (mach_port_name_t)kn->kn_kevent.ident;
 	ipc_pset_t		pset = IPS_NULL;
-	kern_return_t kr;
+	ipc_entry_t entry = NULL;;
 
-	kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
-							  (ipc_object_t *)&pset);
 
-	if (kr != KERN_SUCCESS)
-		return;
 
-	knlist_remove(&pset->ips_note, kn, 1);
-	ips_unlock(pset);
+	if (kn->kn_fp->f_type != DTYPE_MACH_IPC)
+		goto fail;
+
+	entry = kn->kn_fp->f_data;
+	if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0)
+		goto fail;
+	if ((pset = (ipc_pset_t)entry->ie_object) == NULL)
+		goto fail;
+
+
+	knlist_remove(&pset->ips_note, kn, 0);
+	printf("kqdetach success for: %d\n", name);
+	return;
+fail:
+	kdb_backtrace();
+	printf("kqdetach fail for: %d pset: %p entry: %p\n", name, pset, entry);
 }
 
 
@@ -440,13 +451,20 @@ filt_machport(struct knote *kn, long hint)
 {
 	mach_port_name_t        name = (mach_port_name_t)kn->kn_kevent.ident;
 	ipc_entry_t				entry = kn->kn_fp->f_data;
-	ipc_pset_t              pset = (ipc_pset_t)entry->ie_object;
+	ipc_pset_t              pset = IPS_NULL;
 	kern_return_t           kr;
 	mach_msg_option_t	option;
 	mach_msg_size_t		size;
 	mach_port_name_t	lportname;
+	int needlock;
 
-	if (hint == 0) {
+	if (hint == EV_EOF) {
+		kn->kn_data = 0;
+		kn->kn_flags |= (EV_EOF | EV_ONESHOT);
+		return (1);
+	} else if (hint == 0) {
+		needlock = 1;
+
 		kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 								  (ipc_object_t *)&pset);
 		if (kr != KERN_SUCCESS || !ips_active(pset)) {
@@ -454,14 +472,23 @@ filt_machport(struct knote *kn, long hint)
 			kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 			return (1);
 		}
+	} else /* we know the pset is valid */ {
+		pset = (ipc_pset_t)entry->ie_object;
+		/* we don't have any context for this callback */
+		needlock = !ips_lock_owned(pset);
+		if (needlock)
+			ips_lock(pset);
 	}
-
 	ips_reference(pset);
+
 	/* force a return - we have no callers directly receiving messages now */
 	option = MACH_RCV_LARGE | MACH_RCV_TIMEOUT;
 	size = 0;
 	kr = ipc_mqueue_receive((ipc_object_t)pset, MACH_PORT_TYPE_PORT_SET, option, size,
 							0, /* immediate timeout */NULL, NULL, &lportname);
+
+	if (needlock)
+		ips_unlock(pset);
 	ips_release(pset);
 	/* XXX FIXME we're using the message queue lock for the knlist
 	   kqueue expects this to be held on return but receive

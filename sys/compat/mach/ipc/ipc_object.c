@@ -123,28 +123,21 @@ ipc_object_translate(
 {
 	ipc_entry_t entry;
 	ipc_object_t object;
-	kern_return_t kr;
 
-	kr = ipc_right_lookup_read(space, name, &entry);
-	if (kr != KERN_SUCCESS)
-		return kr;
-	/* space is read-locked and active */
+	if ((entry = ipc_entry_lookup(space, name)) == NULL)
+		return KERN_INVALID_NAME;
 
 	if ((entry->ie_bits & MACH_PORT_TYPE(right)) == (mach_port_right_t) 0) {
-		is_read_unlock(space);
 		return KERN_INVALID_RIGHT;
 	}
 
 	object = entry->ie_object;
-	if (object == IO_NULL) {
-		is_read_unlock(space);
+	if (object == IO_NULL)
 		return (KERN_TERMINATED);
-	}
 
 	/* caller already holds locked reference */
 	if (*objectp != object)
 		io_lock(object);
-	is_read_unlock(space);
 
 	*objectp = object;
 	return KERN_SUCCESS;
@@ -436,12 +429,14 @@ ipc_object_copyin(
 		     &soright);
 
 	if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
+		/* drops the lock */
 		ipc_entry_dealloc(space, name, entry);
-	if (xlock)
-		is_write_unlock(space);
-	else
-		is_read_unlock(space);
-
+	else {
+		if (xlock)
+			is_write_unlock(space);
+		else
+			is_read_unlock(space);
+	}
 	if ((kr == KERN_SUCCESS) && (soright != IP_NULL))
 		ipc_notify_port_deleted(soright, name);
 
@@ -648,6 +643,7 @@ ipc_object_copyout(
 	io_lock(object);
 	if (!io_active(object)) {
 		io_unlock(object);
+		is_write_lock(space);
 		ipc_entry_dealloc(space, name, entry);
 			return KERN_INVALID_CAPABILITY;
 	}
@@ -711,8 +707,8 @@ ipc_object_copyout_name(
 			if (IE_BITS_TYPE(entry->ie_bits)
 						== MACH_PORT_TYPE_NONE)
 				ipc_entry_dealloc(space, name, entry);
-
-			is_write_unlock(space);
+			else
+				is_write_unlock(space);
 			return KERN_RIGHT_EXISTS;
 		}
 
@@ -729,7 +725,6 @@ ipc_object_copyout_name(
 		if (!io_active(object)) {
 			io_unlock(object);
 			ipc_entry_dealloc(space, name, entry);
-			is_write_unlock(space);
 			return KERN_INVALID_CAPABILITY;
 		}
 
@@ -879,7 +874,6 @@ ipc_object_rename(
 	if ((oname == nname) ||
 	    ((oentry = ipc_entry_lookup(space, oname)) == IE_NULL)) {
 		ipc_entry_dealloc(space, nname, nentry);
-		is_write_unlock(space);
 		return KERN_INVALID_NAME;
 	}
 

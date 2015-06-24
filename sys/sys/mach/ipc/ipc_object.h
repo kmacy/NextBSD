@@ -148,6 +148,8 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 	mtx_init(&((rpc_common_t)(io))->rcd_io_lock_data, "ETAP_IPC_RPC", NULL, MTX_DEF|MTX_DUPOK)
 #define	io_lock(io) \
 	mtx_lock(&((rpc_common_t)(io))->rcd_io_lock_data)
+#define	io_lock_owned(io) \
+	mtx_owned(&((rpc_common_t)(io))->rcd_io_lock_data)
 #define	io_lock_try(io) \
 	mtx_trylock(&((rpc_common_t)(io))->rcd_io_lock_data)
 #define	io_unlock(io) \

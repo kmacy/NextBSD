@@ -454,8 +454,8 @@ ipc_mqueue_deliver(
 	port->ip_msgcount++;
 	ip_unlock(port);
 	if (pset) {
-		KNOTE_LOCKED(&pset->ips_note, 1);
 		ips_unlock(pset);
+		KNOTE_UNLOCKED(&pset->ips_note, 1);
 	}
 
 	TR_IPC_MQEX("exit: wakeup 0x%x", receiver);

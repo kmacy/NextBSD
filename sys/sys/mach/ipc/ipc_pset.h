@@ -111,6 +111,7 @@ typedef struct ipc_pset {
 
 	mach_port_name_t		ips_local_name;
 	struct knlist			ips_note;
+	struct mtx				ips_note_lock;
 	TAILQ_HEAD(_ips_ports, ipc_port) ips_ports;
 } *ipc_pset_t;
 
@@ -125,6 +126,7 @@ typedef struct ipc_pset {
 
 #define	ips_active(pset)	io_active(&(pset)->ips_object)
 #define	ips_lock(pset)		io_lock(&(pset)->ips_object)
+#define	ips_lock_owned(pset)		io_lock_owned(&(pset)->ips_object)
 #define	ips_lock_try(pset)	io_lock_try(&(pset)->ips_object)
 #define	ips_unlock(pset)	io_unlock(&(pset)->ips_object)
 #define	ips_reference(pset)	io_reference(&(pset)->ips_object)

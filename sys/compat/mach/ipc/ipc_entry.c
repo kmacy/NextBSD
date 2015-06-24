@@ -101,9 +101,6 @@
 #include <sys/mach/mach_types.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
-#if 0
-#include <kern/assert.h>
-#endif
 #include <sys/mach/message.h>
 #include <sys/mach/mach_port_server.h>
 #include <vm/uma.h>
@@ -114,11 +111,15 @@
 #include <sys/mach/ipc/ipc_hash.h>
 #include <sys/mach/ipc/ipc_table.h>
 #include <sys/mach/ipc/ipc_port.h>
+#include <sys/mach/ipc/ipc_pset.h>
 #include <sys/mach/thread.h>
+
+#include <security/audit/audit.h>
 
 static void fdunused(struct filedesc *fdp, int fd);
 static int kern_fdalloc(struct thread *td, int minfd, int *result);
 static void kern_fddealloc(struct thread *td, int fd);
+static inline void kern_fdfree(struct filedesc *fdp, int fd);
 static int kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
 			 struct filecaps *fcaps);
 
@@ -182,6 +183,7 @@ static int
 mach_port_close(struct file *fp, struct thread *td)
 {
 	ipc_entry_t entry;
+	ipc_object_t object;
 
 	MACH_VERIFY(fp->f_data != NULL, ("expected fp->f_data != NULL - got NULL\n"));
 	if ((entry = fp->f_data) == NULL)
@@ -192,8 +194,13 @@ mach_port_close(struct file *fp, struct thread *td)
 	PROC_LOCK(td->td_proc);
 	LIST_REMOVE(entry, ie_space_link);
 	PROC_UNLOCK(td->td_proc);
-	if (entry->ie_object != NULL) {
-		ipc_object_release(entry->ie_object);
+	if ((object = entry->ie_object) != NULL) {
+		if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET) {
+			ips_lock((ipc_pset_t)object);
+			ipc_pset_destroy((ipc_pset_t) object);
+		} else {
+			ipc_object_release(object);
+		}
 		entry->ie_object = NULL;
 	}
 	free(entry, M_MACH_IPC_ENTRY);
@@ -520,13 +527,31 @@ ipc_entry_alloc_name(
 	return (kr);
 }
 
-static void
+void
 ipc_entry_close(
-	ipc_space_t space __unused,
-	mach_port_name_t name)
+	ipc_space_t space,
+	mach_port_name_t fd)
 {
+	struct filedesc *fdp;
+	struct file *fp;
+	struct thread *td;
 
-	kern_close(curthread, name);
+	td = curthread;
+	fdp = td->td_proc->p_fd;
+
+	AUDIT_SYSCLOSE(td, fd);
+
+	FILEDESC_XLOCK(fdp);
+	if ((fp = fget_locked(fdp, fd)) == NULL) {
+		FILEDESC_XUNLOCK(fdp);
+		return;
+	}
+	/* we deliberately skip closing the knote so that it will
+	 * have the last reference to the fp
+	 */
+	kern_fdfree(fdp, fd);
+	FILEDESC_XUNLOCK(fdp);
+	fdrop(fp, td);
 }
 
 int
@@ -558,7 +583,8 @@ ipc_entry_hold(ipc_entry_t entry)
  *	Purpose:
  *		Deallocates an entry from a space.
  *	Conditions:
- *		The space must be write-locked throughout.
+ *		The space must be write-locked.
+ *		The space is unlocked on return.
  *		The space must be active.
  */
 
@@ -575,6 +601,7 @@ ipc_entry_dealloc(
 	ipc_entry_hash_delete(space, entry);
 	MPASS(entry->ie_link == NULL);
 
+	is_write_unlock(space);
 	ipc_entry_close(space, name);
 }
 
@@ -596,15 +623,6 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	 * bar this from happening in the first place?
 	 **/
 	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
-	/* clear portset referencing kqfd */
-	for (i = 0; i <= fdp->fd_lastfile; i++) {
-		fde = &fdp->fd_ofiles[i];
-		fp = fde->fde_file;
-		if (fp == NULL || (fp->f_type != DTYPE_KQUEUE))
-			continue;
-		MPASS(fp->f_data != NULL);
-		kern_close(td, i);
-	}
 	/* clear ports first as they reference the portset */
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
@@ -632,6 +650,8 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 			MPASS(fp->f_data != NULL);
 			if (fp->f_count > 1)
 				log(LOG_WARNING, "%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+			/* remove from kq */
+			knote_fdclose(td, i);
 			kern_close(td, i);
 		}
 	}
@@ -751,6 +771,21 @@ kern_fddealloc(struct thread *td, int fd)
 	FILEDESC_XLOCK(fdp);
 	fdunused(fdp, fd);
 	FILEDESC_XUNLOCK(fdp);
+}
+
+/*
+ * Free a file descriptor.
+ *
+ * Avoid some work if fdp is about to be destroyed.
+ */
+static inline void
+kern_fdfree(struct filedesc *fdp, int fd)
+{
+	struct filedescent *fde;
+
+	fde = &fdp->fd_ofiles[fd];
+	bzero(fde, fde_change_size);
+	fdunused(fdp, fd);
 }
 
 /*

@@ -1193,7 +1193,7 @@ ipc_kmsg_copyin_header(
 			/* the entry might need to be deallocated */
 
 			if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
-				ipc_entry_dealloc(space, name, entry);
+				ipc_entry_close(space, name);
 
 			reply_port = dest_port;
 			reply_soright = IP_NULL;
@@ -1220,7 +1220,7 @@ ipc_kmsg_copyin_header(
 			/* the entry might need to be deallocated */
 
 			if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
-				ipc_entry_dealloc(space, name, entry);
+				ipc_entry_close(space, name);
 
 			/*
 			 *	It's OK if the port we got is dead now,
@@ -1397,10 +1397,10 @@ ipc_kmsg_copyin_header(
 		/* the entries might need to be deallocated */
 
 		if (IE_BITS_TYPE(reply_entry->ie_bits) == MACH_PORT_TYPE_NONE)
-			ipc_entry_dealloc(space, reply_name, reply_entry);
+			ipc_entry_close(space, reply_name);
 
 		if (IE_BITS_TYPE(dest_entry->ie_bits) == MACH_PORT_TYPE_NONE)
-			ipc_entry_dealloc(space, dest_name, dest_entry);
+			ipc_entry_close(space, dest_name);
 
 		if (saved_reply != IP_NULL)
 			ipc_port_release(saved_reply);
@@ -2273,9 +2273,9 @@ ipc_kmsg_copyout_header(
 			kr = ipc_port_dnrequest(reply, reply_name,
 						notify_port, &request);
 			if (kr != KERN_SUCCESS) {
-
-				ipc_entry_dealloc(space, reply_name, entry);
 				is_write_unlock(space);
+
+				ipc_entry_close(space, reply_name);
 
 				ip_lock(reply);
 				if (!ip_active(reply)) {

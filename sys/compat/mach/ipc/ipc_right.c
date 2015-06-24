@@ -140,35 +140,25 @@ ipc_right_lookup(
 
 	assert(space != IS_NULL);
 
+
+	if (!space->is_active)
+		return KERN_INVALID_TASK;
+	if ((entry = ipc_entry_lookup(space, name)) == IE_NULL)
+		return KERN_INVALID_NAME;
+
+	/* we can only write lock a port belonging to the caller's space */
+	if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0 &&
+		xlock && (port = (ipc_port_t)entry->ie_object) != NULL &&
+		port->ip_receiver != space) {
+		printf("KERN_INVALID_RIGHT %s:%s:%d space: %p receiver: %p \n", __FUNCTION__, __FILE__, __LINE__,
+			   space, port->ip_receiver);
+		return KERN_INVALID_RIGHT;
+	}
+
 	if (xlock)
 		is_write_lock(space);
 	else
 		is_read_lock(space);
-
-	if (!space->is_active) {
-		if (xlock)
-			is_write_unlock(space);
-		else
-			is_read_unlock(space);
-		return KERN_INVALID_TASK;
-	}
-
-	if ((entry = ipc_entry_lookup(space, name)) == IE_NULL) {
-		if (xlock)
-			is_write_unlock(space);
-		else
-			is_read_unlock(space);
-		return KERN_INVALID_NAME;
-	}
-
-	/* we can only write lock a port belonging to the caller's space */
-	if (xlock && (port = (ipc_port_t)entry->ie_object) != NULL &&
-		port->ip_receiver != space) {
-		is_write_unlock(space);
-		printf("KERN_INVALID_RIGHT %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__);
-		return KERN_INVALID_RIGHT;
-	}
-
 	*entryp = entry;
 	return KERN_SUCCESS;
 }
@@ -523,10 +513,15 @@ ipc_right_clean(
 
 		assert(entry->ie_request == 0);
 		assert(pset != IPS_NULL);
+		assert(ips_active(pset));
+		/* clear active so kevent will signal close */
+		ips_lock(pset);
+		pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
+		ips_unlock(pset);
+		printf("signalling knote on destroy!\n");
+		KNOTE_UNLOCKED(&pset->ips_note, 2);
 
 		ips_lock(pset);
-		assert(ips_active(pset));
-
 		ipc_pset_destroy(pset); /* consumes ref, unlocks */
 		break;
 	    }
@@ -634,10 +629,17 @@ ipc_right_destroy(
 		OBJECT_CLEAR(entry, name);
 		ipc_entry_dealloc(space, name, entry);
 
-		ips_lock(pset);
+		/* clear active so kevent will signal close */
 		assert(ips_active(pset));
-		is_write_unlock(space);
+		ips_lock(pset);
+		pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
+		ips_unlock(pset);
 
+		printf("signalling knote on destroy!\n");
+		KNOTE_UNLOCKED(&pset->ips_note, 0);
+
+		ips_lock(pset);
+		is_write_unlock(space);
 		ipc_pset_destroy(pset); /* consumes ref, unlocks */
 		break;
 	    }
@@ -755,12 +757,12 @@ ipc_right_dealloc(
 		assert(entry->ie_request == 0);
 		assert(entry->ie_object == IO_NULL);
 
-		if (ipc_entry_refs(entry) > 1)
+		if (ipc_entry_refs(entry) > 1) {
 			ipc_entry_release(entry);
-		else
+			is_write_unlock(space);
+		} else
 			ipc_entry_dealloc(space, name, entry);
 
-		is_write_unlock(space);
 		break;
 	    }
 
@@ -785,8 +787,8 @@ ipc_right_dealloc(
 		ip_unlock(port);
 
 		OBJECT_CLEAR(entry, name);
+		/* drops the lock */
 		ipc_entry_dealloc(space, name, entry);
-		is_write_unlock(space);
 
 		ipc_notify_send_once(port);
 
@@ -817,8 +819,9 @@ ipc_right_dealloc(
 		assert(port->ip_srights > 0);
 
 		if (ipc_entry_refs(entry) > 1) {
-			ipc_entry_release(entry); /* decrement urefs */
 			ip_unlock(port);
+			ipc_entry_release(entry); /* decrement urefs */
+			is_write_unlock(space);
 		} else {
 			if (--port->ip_srights == 0
 			    ) {
@@ -827,6 +830,7 @@ ipc_right_dealloc(
 					port->ip_nsrequest = IP_NULL;
 					mscount = port->ip_mscount;
 				}
+
 			}
 
 			dnrequest = ipc_right_dncancel_macro(space, port,
@@ -837,11 +841,11 @@ ipc_right_dealloc(
 			ip_unlock(port);
 			ip_release(port);
 			OBJECT_CLEAR(entry, name);
+			/* drops the space lock */
 			ipc_entry_dealloc(space, name, entry);
 		}
 		/* even if dropped a ref, port is active */
 
-		is_write_unlock(space);
 
 		if (nsrequest != IP_NULL)
 			ipc_notify_no_senders(nsrequest, mscount);
@@ -956,15 +960,25 @@ ipc_right_delta(
 
 		pset = (ipc_pset_t) entry->ie_object;
 		assert(pset != IPS_NULL);
+		assert(ips_active(pset));
 
+		/* space must be unlocked when calling KNOTE & close */
+		is_write_unlock(space);
+		KNOTE_UNLOCKED(&pset->ips_note, EV_EOF);
+
+		ipc_entry_close(space, name);
+
+#if 0
 		OBJECT_CLEAR(entry, name);
-		ipc_entry_dealloc(space, name, entry);
+		ipc_entry_release(entry);
+		/* clear active so kevent will signal close */
+		ips_lock(pset);
+		pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
+		ips_unlock(pset);
 
 		ips_lock(pset);
-		assert(ips_active(pset));
-		is_write_unlock(space);
-
 		ipc_pset_destroy(pset); /* consumes ref, unlocks */
+#endif
 		break;
 	    }
 
@@ -1019,16 +1033,17 @@ ipc_right_delta(
 
 			entry->ie_bits = bits;
 			OBJECT_CLEAR(entry, name);
+			is_write_unlock(space);
 		} else {
 			assert(IE_BITS_TYPE(bits) == MACH_PORT_TYPE_RECEIVE);
 
 			dnrequest = ipc_right_dncancel_macro(space, port,
 							     name, entry);
 			OBJECT_CLEAR(entry, name);
+			/* drops the space lock */
 			ipc_entry_dealloc(space, name, entry);
 		}
 
-		is_write_unlock(space);
 
 		ipc_port_clear_receiver(port);
 		ipc_port_destroy(port);	/* consumes ref, unlocks */
@@ -1072,8 +1087,8 @@ ipc_right_delta(
 		ip_unlock(port);
 
 		OBJECT_CLEAR(entry, name);
+		/* drops the space lock */
 		ipc_entry_dealloc(space, name, entry);
-		is_write_unlock(space);
 
 		ipc_notify_send_once(port);
 
@@ -1108,12 +1123,13 @@ ipc_right_delta(
 		if (MACH_PORT_UREFS_UNDERFLOW(urefs, delta))
 			goto invalid_value;
 
-		if ((urefs + delta) == 0)
+		if ((urefs + delta) == 0) {
+			/* drops the space lock */
 			ipc_entry_dealloc(space, name, entry);
-		else
+		} else {
 			ipc_entry_add_refs(entry, delta);
-
-		is_write_unlock(space);
+			is_write_unlock(space);
+		}
 		break;
 	    }
 
@@ -1165,6 +1181,8 @@ ipc_right_delta(
 				entry->ie_bits = bits &~ (IE_BITS_UREFS_MASK|
 										  MACH_PORT_TYPE_SEND);
 				ip_unlock(port);
+				is_write_unlock(space);
+
 			} else {
 				assert(IE_BITS_TYPE(bits) ==
 						MACH_PORT_TYPE_SEND);
@@ -1177,14 +1195,14 @@ ipc_right_delta(
 				ip_unlock(port);
 				ip_release(port);
 				OBJECT_CLEAR(entry, name);
+				/* drops the space lock */
 				ipc_entry_dealloc(space, name, entry);
 			}
-		} else
+		} else 
 			ipc_entry_add_refs(entry, delta);
 
 		/* even if dropped a ref, port is active */
 
-		is_write_unlock(space);
 
 
 		if (nsrequest != IP_NULL)
@@ -2083,8 +2101,8 @@ ipc_right_rename(
 
 	assert(oentry->ie_request == 0);
 	OBJECT_CLEAR(oentry, oname);
+	/* drops the space lock */
 	ipc_entry_dealloc(space, oname, oentry);
-	is_write_unlock(space);
 
 	return KERN_SUCCESS;
 }

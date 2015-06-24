@@ -248,5 +248,9 @@ kern_return_t ipc_entry_copyout(
 ipc_object_t ipc_entry_handle_to_object(
 	void *handle);
 
+void ipc_entry_close(
+	ipc_space_t space __unused,
+	mach_port_name_t name);
+
 
 #endif	/* _IPC_IPC_ENTRY_H_ */
