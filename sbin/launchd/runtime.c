@@ -125,7 +125,8 @@ static double tbi_float_val;
 
 
 static const int init_compat_signals[] = {
-	SIGUSR2,	// halt
+	SIGUSR1,	// halt
+	SIGUSR2,	// halt & power off
 	SIGTERM,	// Go to single user mode
 	SIGINT,	// Reboot
 	SIGTSTP,	// Stop further logins
@@ -133,7 +134,7 @@ static const int init_compat_signals[] = {
 
 static const int sigigns[] = { SIGHUP, SIGPIPE, SIGALRM,
 	SIGURG, SIGTSTP, SIGCONT, SIGTTIN, SIGTTOU, SIGIO, SIGXCPU,
-	SIGXFSZ, SIGVTALRM, SIGPROF, SIGWINCH, SIGINFO, SIGUSR1,
+	SIGXFSZ, SIGVTALRM, SIGPROF, SIGWINCH, SIGINFO,
 };
 static sigset_t sigign_set;
 bool pid1_magic;
@@ -267,11 +268,15 @@ static void
 sighandler_init_compat(int signo)
 {
 	int kr;
+	int rflags = 0;
 	_launchd_syslog(LOG_CRIT, "%s(%d)", __FUNCTION__, signo);
 	switch (signo) {
 	case SIGUSR2:
+		rflags = RB_POWEROFF;
+	case SIGUSR1:
+		rflags |= RB_HALT;
 		// halt and power off
-		kr = job_mig_reboot2(root_jobmgr, RB_HALT | RB_POWEROFF);
+		kr = job_mig_reboot2(root_jobmgr, rflags);
 		if (kr != KERN_SUCCESS) {
 			_launchd_syslog(LOG_CRIT, "%s(%d):  kr = %d", __FUNCTION__, __LINE__, kr);
 		}
