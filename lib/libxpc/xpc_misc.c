@@ -458,21 +458,12 @@ xpc_pipe_receive(mach_port_t local, mach_port_t *remote, xpc_object_t *result,
 	LOG("unpacking data_size=%d", data_size);
 	xo = xpc_unpack(&message.data, data_size);
 
-	/* is padding for alignment enforced in the kernel?*/
-	tr = (mach_msg_trailer_t *)(uintptr_t)(((uint8_t *)request) + sizeof(request) + data_size);
-	LOG("created xpc_object %p", xo);
-	switch(tr->msgh_trailer_type) {
-	case MACH_RCV_TRAILER_AUDIT:
-	case MACH_RCV_TRAILER_CTX:
-	case MACH_RCV_TRAILER_LABELS:
-		auditp = &((mach_msg_audit_trailer_t *)tr)->msgh_audit;
-	default:
-		auditp = NULL;
-	}
-	if (auditp) {
-		xo->xo_audit_token = malloc(sizeof(*auditp));
-		memcpy(xo->xo_audit_token, auditp, sizeof(*auditp));
-	}
+	tr = (mach_msg_trailer_t *)(((char *)&message) + request->msgh_size);
+	auditp = &((mach_msg_audit_trailer_t *)tr)->msgh_audit;
+
+	xo->xo_audit_token = malloc(sizeof(*auditp));
+	memcpy(xo->xo_audit_token, auditp, sizeof(*auditp));
+
 	xpc_dictionary_set_mach_send(xo, XPC_RPORT, request->msgh_remote_port);
 	xpc_dictionary_set_uint64(xo, XPC_SEQID, message.id);
 	*result = xo;

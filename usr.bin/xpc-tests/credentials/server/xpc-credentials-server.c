@@ -27,58 +27,37 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <dispatch/dispatch.h>
 #include <xpc/xpc.h>
-
-static void
-connection_handler(xpc_connection_t peer)
-{
-	xpc_connection_set_event_handler(peer, ^(xpc_object_t event) {
-		printf("Message received: %p\n", event);
-	});
-
-	xpc_connection_resume(peer);
-}
 
 int
 main(int argc, char *argv[])
 {
 	xpc_connection_t conn;
-	xpc_object_t msg;
-
-	msg = xpc_dictionary_create(NULL, NULL, 0);
-	xpc_dictionary_set_string(msg, "Hello", "world");
 
 	if (argc < 2) {
 		fprintf(stderr, "Usage: %s <mach service name>\n", argv[0]);
 		return (1);
 	}
 
-	conn = xpc_connection_create_mach_service(argv[1], NULL, 0);
-	if (conn == NULL) {
-		perror("xpc_connection_create_mach_service");
-		return (1);
-	}
-	
-	xpc_connection_set_event_handler(conn, ^(xpc_object_t obj) {
-		printf("Received message in generic event handler: %p\n", obj);
-		printf("%s\n", xpc_copy_description(obj));
+	conn = xpc_connection_create_mach_service(argv[1], NULL,
+	    XPC_CONNECTION_MACH_SERVICE_LISTENER);
+
+	xpc_connection_set_event_handler(conn, ^(xpc_object_t peer) {
+		xpc_connection_set_event_handler(peer, ^(xpc_object_t event) {
+			printf("Message received: %p\n", event);
+			printf("Client UID: %d\n", xpc_connection_get_euid(peer));
+			printf("Client GID: %d\n", xpc_connection_get_guid(peer));
+			printf("Client PID: %d\n", xpc_connection_get_pid(peer));
+
+			xpc_object_t resp = xpc_dictionary_create(NULL, NULL, 0);
+			xpc_dictionary_set_string(resp, "foo", "bar");
+			xpc_connection_send_message(peer, resp);
+		});
+
+		xpc_connection_resume(peer);
 	});
 
 	xpc_connection_resume(conn);
-	xpc_connection_send_message_with_reply(conn, msg, NULL, ^(xpc_object_t resp) {
-		printf("Received first message: %p\n", resp);
-		printf("%s\n", xpc_copy_description(resp));
-	});
-
-	xpc_connection_send_message_with_reply(conn, msg, NULL, ^(xpc_object_t resp) {
-		printf("Received second message: %p\n", resp);
-		printf("%s\n", xpc_copy_description(resp));
-	});
-
-	xpc_connection_send_message_with_reply(conn, msg, NULL, ^(xpc_object_t resp) {
-		printf("Received third message: %p\n", resp);
-		printf("%s\n", xpc_copy_description(resp));
-	});
-
 	dispatch_main();
 }
