@@ -770,7 +770,7 @@ static SLIST_HEAD(, job_s) s_curious_jobs;
 static LIST_HEAD(, job_s) managed_actives[ACTIVE_JOB_HASH_SIZE];
 
 #define job_assumes(j, e) os_assumes_ctx(job_log_bug, j, (e))
-#if 0
+#if 1
 #define job_assumes_zero(j, e) os_assumes_zero_ctx(job_log_bug, j, (e))
 #else
 static int
