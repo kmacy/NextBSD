@@ -650,8 +650,10 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 			MPASS(fp->f_data != NULL);
 			if (fp->f_count > 1)
 				log(LOG_WARNING, "%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+#if 0
 			/* remove from kq */
 			knote_fdclose(td, i);
+#endif
 			kern_close(td, i);
 		}
 	}
