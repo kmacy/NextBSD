@@ -248,6 +248,7 @@ ipc_pset_move(
 {
 	ipc_pset_t oset;
 	int active;
+	int knotify;
 	/*
 	 *	While we've got the space locked, it holds refs for
 	 *	the port and nset (because of the entries).  Also,
@@ -255,6 +256,7 @@ ipc_pset_move(
 	 *	holds a ref for oset, which might not be alive.
 	 */
 
+	knotify = FALSE;
 	ip_lock(port);
 	assert(ip_active(port));
 
@@ -272,7 +274,8 @@ ipc_pset_move(
 		is_read_unlock(space);
 
 		ipc_pset_add(nset, port);
-
+		if (port->ip_msgcount != 0)
+			knotify = TRUE;
 		ips_unlock(nset);
 	} else if (nset == IPS_NULL) {
 		/* just remove port from the old set */
@@ -302,14 +305,16 @@ ipc_pset_move(
 
 		ipc_pset_remove(oset, port);
 		ipc_pset_add(nset, port);
-
+		if (port->ip_msgcount != 0)
+			knotify = TRUE;
 		ips_unlock(nset);
 		ips_unlock(oset);	/* KERN_NOT_IN_SET not a possibility */
 		ips_release(oset);
 	}
 
 	ip_unlock(port);
-
+	if (knotify == TRUE)
+		KNOTE_UNLOCKED(&nset->ips_note, 1);
 	return (((nset == IPS_NULL) && (oset == IPS_NULL)) ?
 		KERN_NOT_IN_SET : KERN_SUCCESS);
 }
