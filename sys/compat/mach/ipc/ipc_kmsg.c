@@ -402,8 +402,8 @@ ipc_kmsg_alloc(
 		max_expanded_size = msg_and_trailer_size + max_desc;
 	} else
 		max_expanded_size = msg_and_trailer_size;
-
-	kmsg = malloc(ikm_plus_overhead(max_expanded_size), M_MACH_IPC_KMSG, mflags);
+	/* fudge factor */
+	kmsg = malloc(ikm_plus_overhead(max_expanded_size) + MAX_TRAILER_SIZE, M_MACH_IPC_KMSG, mflags);
 	if (kmsg != IKM_NULL) {
 		ikm_init(kmsg, max_expanded_size);
 		ikm_set_header(kmsg, msg_and_trailer_size);
