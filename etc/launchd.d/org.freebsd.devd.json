@@ -1,0 +1,8 @@
+{
+	"Label": "org.freebsd.devd",
+	"ProgramArguments": [
+		"/sbin/devd",
+		"-d"
+	],
+	"RunAtLoad": true
+}

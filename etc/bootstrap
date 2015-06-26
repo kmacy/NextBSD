@@ -2,4 +2,4 @@
 /sbin/zfs mount -a
 /sbin/mount -uw /
 /sbin/ifconfig lo0 inet 127.0.0.1 netmask 255.0.0.0 up
-
+/bin/ln -fs /var/run/log /var/run/logpriv
