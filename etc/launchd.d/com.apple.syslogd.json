@@ -16,7 +16,7 @@
   "Sockets": {
     "BSDSystemLogger": {
       "SockPathMode": 438,
-      "SockPathName": "/var/run/syslog",
+      "SockPathName": "/var/run/log",
       "SockType": "dgram"
     }
   },
