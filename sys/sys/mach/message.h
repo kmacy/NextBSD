@@ -508,9 +508,6 @@ typedef mach_msg_security_trailer_t mach_msg_format_0_trailer_t;
 
 #define MACH_MSG_TRAILER_FORMAT_0_SIZE sizeof(mach_msg_format_0_trailer_t)
 #define MACH_MSG_TRAILER_MINIMUM_SIZE  sizeof(mach_msg_trailer_t)
-#if 0
-#define MAX_TRAILER_SIZE 	       MACH_MSG_TRAILER_FORMAT_0_SIZE	
-#endif
 #define   KERNEL_SECURITY_TOKEN_VALUE  { {0, 1} }
 extern security_token_t KERNEL_SECURITY_TOKEN;
 
