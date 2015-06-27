@@ -173,6 +173,7 @@
 #include <sys/types.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
+#include <sys/sx.h>
 #include <sys/malloc.h>
 #include <vm/vm.h>
 
