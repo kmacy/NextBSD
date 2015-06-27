@@ -122,6 +122,7 @@ struct ipc_space {
 	ipc_entry_t *is_table;		/* an array of entries */
 	ipc_entry_num_t is_table_size;	/* current size of table */
 	struct ipc_table_size *is_table_next; /* info for larger table */
+	task_t is_task;
 	ipc_entry_num_t is_tree_total;	/* number of entries in the tree */
 	ipc_entry_num_t is_tree_small;	/* # of small entries in the tree */
 	ipc_entry_num_t is_tree_hash;	/* # of hashed entries in the tree */

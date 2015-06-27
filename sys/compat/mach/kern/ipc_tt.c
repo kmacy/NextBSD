@@ -171,6 +171,7 @@ ipc_task_init(
 	task->itk_self = kport;
 	task->itk_sself = ipc_port_make_send(kport);
 	task->itk_space = space;
+	space->is_task = task;
 
 	if (parent == TASK_NULL) {
 		for (i = FIRST_EXCEPTION; i < EXC_TYPES_COUNT; i++) {

@@ -238,6 +238,8 @@ ipc_space_create_special(
 
 	is_lock_init(space);
 	space->is_active = FALSE;
+	space->is_task = current_task();
+	LIST_INIT(&space->is_entry_list);
 
 	*spacep = space;
 	return KERN_SUCCESS;
