@@ -107,6 +107,8 @@
 #include <sys/mach/ipc/ipc_notify.h>
 #include <sys/mach/ipc/ipc_table.h>
 
+#include <sys/mach/task.h>
+
 #ifdef INVARIANTS
 #define OBJECT_CLEAR(entry, name) do {									\
 		/* printf("clearing object %p name: %d %s:%d\n", entry->ie_object, name, __FILE__, __LINE__); */ \
@@ -136,7 +138,7 @@ ipc_right_lookup(
 	int xlock)
 {
 	ipc_entry_t entry;
-	ipc_port_t port;
+
 
 	assert(space != IS_NULL);
 
@@ -146,14 +148,29 @@ ipc_right_lookup(
 	if ((entry = ipc_entry_lookup(space, name)) == IE_NULL)
 		return KERN_INVALID_NAME;
 
+#if 0
+	{
+	ipc_port_t port;
+	ipc_space_t dspace;
+
 	/* we can only write lock a port belonging to the caller's space */
 	if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0 &&
-		xlock && (port = (ipc_port_t)entry->ie_object) != NULL &&
-		port->ip_receiver != space) {
-		printf("KERN_INVALID_RIGHT %s:%s:%d space: %p receiver: %p \n", __FUNCTION__, __FILE__, __LINE__,
-			   space, port->ip_receiver);
+		(port = (ipc_port_t)entry->ie_object) != NULL &&
+		(dspace = port->ip_receiver) != space &&
+		space != ipc_space_kernel &&
+		dspace != ipc_space_kernel && xlock) {
+
+		MPASS(dspace->is_task != NULL);
+		MPASS(dspace->is_task->itk_p != NULL);
+		printf("ipc_space_kernel: %p\n", ipc_space_kernel);
+		printf("KERN_INVALID_RIGHT %s:%s:%d %s space: %p pid: %d %s receiver: %p pid: %d\n",
+			   __FUNCTION__, __FILE__, __LINE__,
+			   space->is_task->itk_p->p_comm, space, space->is_task->itk_p->p_pid,
+			   dspace->is_task->itk_p->p_comm, dspace, dspace->is_task->itk_p->p_pid);
 		return KERN_INVALID_RIGHT;
 	}
+	}
+#endif
 
 	if (xlock)
 		is_write_lock(space);
@@ -262,6 +279,7 @@ ipc_right_dnrequest(
 	ipc_port_t	*previousp)
 {
 	ipc_port_t previous;
+	ipc_port_t port = NULL;
 
 	for (;;) {
 		ipc_entry_t entry;
@@ -269,13 +287,14 @@ ipc_right_dnrequest(
 		kern_return_t kr;
 
 		kr = ipc_right_lookup_write(space, name, &entry);
+		ip_unlock_assert(port);
 		if (kr != KERN_SUCCESS)
 			return kr;
 		/* space is write-locked and active */
 
 		bits = entry->ie_bits;
 		if (bits & MACH_PORT_TYPE_PORT_RIGHTS) {
-			ipc_port_t port;
+
 			ipc_port_request_index_t request;
 
 			port = (ipc_port_t) entry->ie_object;
@@ -314,6 +333,7 @@ ipc_right_dnrequest(
 
 					kr = ipc_port_dngrow(port,
 							     ITS_SIZE_NONE);
+					ip_unlock_assert(port);
 					/* port is unlocked */
 					if (kr != KERN_SUCCESS)
 						return kr;
@@ -348,12 +368,15 @@ ipc_right_dnrequest(
 		}
 
 		is_write_unlock(space);
+		if (port)
+			ip_unlock_assert(port);
 		if (bits & MACH_PORT_TYPE_PORT_OR_DEAD)
 			return KERN_INVALID_ARGUMENT;
 		else
 			return KERN_INVALID_RIGHT;
 	}
-
+	if (port)
+		ip_unlock_assert(port);
 	*previousp = previous;
 	return KERN_SUCCESS;
 }
@@ -438,8 +461,9 @@ ipc_right_check(
 	assert(port == (ipc_port_t) entry->ie_object);
 
 	ip_lock(port);
-	if (ip_active(port))
+	if (ip_active(port)) {
 		return FALSE;
+	}
 	ip_unlock(port);
 
 	/* this was either a pure send right or a send-once right */
@@ -521,6 +545,7 @@ ipc_right_clean(
 		printf("signalling knote on destroy!\n");
 		KNOTE_UNLOCKED(&pset->ips_note, 2);
 
+		/* XXX FIXME see ipc_right_delta */
 		ips_lock(pset);
 		ipc_pset_destroy(pset); /* consumes ref, unlocks */
 		break;
@@ -637,7 +662,7 @@ ipc_right_destroy(
 
 		printf("signalling knote on destroy!\n");
 		KNOTE_UNLOCKED(&pset->ips_note, 0);
-
+		/* XXX FIXME see ipc_right_delta */
 		ips_lock(pset);
 		is_write_unlock(space);
 		ipc_pset_destroy(pset); /* consumes ref, unlocks */
@@ -1198,11 +1223,12 @@ ipc_right_delta(
 				/* drops the space lock */
 				ipc_entry_dealloc(space, name, entry);
 			}
-		} else 
+		} else {
+			is_write_unlock(space);
+			ip_unlock(port);
 			ipc_entry_add_refs(entry, delta);
-
+		}
 		/* even if dropped a ref, port is active */
-
 
 
 		if (nsrequest != IP_NULL)
@@ -1374,7 +1400,6 @@ ipc_right_copyin_check(
  */
 
 #define ELOG printf("%s:%d bits: %08x\n", __FILE__, __LINE__, bits)
-extern void kdb_backtrace(void);
 #if defined(KDB) && defined(WITNESS)
 extern int witness_trace;
 #endif
@@ -1763,8 +1788,9 @@ ipc_right_copyin_undo(
 		 *	(Or if it is a compat entry, destroy it.)
 		 */
 
-		(void) ipc_right_check(space, (ipc_port_t) object,
-				       name, entry);
+		if (!ipc_right_check(space, (ipc_port_t) object,
+							 name, entry))
+			ip_unlock((ipc_port_t) object);
 		/* object is dead so it is not locked */
 	}
 
