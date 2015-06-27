@@ -89,9 +89,6 @@
 
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
-#if 0
-#include <kern/ipc_kobject.h>
-#endif
 #include <sys/mach/ipc/ipc_object.h>
 #include <sys/mach/ipc/ipc_mqueue.h>
 #if 0
@@ -111,7 +108,7 @@ typedef struct ipc_pset {
 
 	mach_port_name_t		ips_local_name;
 	struct knlist			ips_note;
-	struct mtx				ips_note_lock;
+	struct sx				ips_note_lock;
 	TAILQ_HEAD(_ips_ports, ipc_port) ips_ports;
 } *ipc_pset_t;
 

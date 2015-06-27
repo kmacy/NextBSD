@@ -93,6 +93,39 @@
 
 #include <sys/mach/thread.h>
 
+static void
+kn_sx_lock(void *arg)
+{
+	struct sx *lock = arg;
+
+	sx_xlock(lock);
+}
+
+
+static void
+kn_sx_unlock(void *arg)
+{
+	struct sx *lock = arg;
+
+	sx_xunlock(lock);
+}
+
+static void
+sx_assert_locked(void *arg)
+{
+	struct sx *lock = arg;
+
+	sx_assert(lock, SX_LOCKED);
+}
+
+static void
+sx_assert_unlocked(void *arg)
+{
+	struct sx *lock = arg;
+
+	sx_assert(lock, SX_UNLOCKED);
+}
+
 /*
  * Forward declarations
  */
@@ -133,9 +166,9 @@ ipc_pset_alloc(
 
 	pset->ips_local_name = name;
 	TAILQ_INIT(&pset->ips_ports);
-	mtx_init(&pset->ips_note_lock, "pset knote lock", NULL, MTX_DEF|MTX_DUPOK);
+	sx_init(&pset->ips_note_lock, "pset knote lock");
 	knlist_init(&pset->ips_note, &pset->ips_note_lock,
-				NULL, NULL, NULL, NULL);
+				kn_sx_lock, kn_sx_unlock, sx_assert_locked, sx_assert_unlocked);
 	thread_pool_init(&pset->ips_thread_pool);
 	*namep = name;
 	*psetp = pset;
