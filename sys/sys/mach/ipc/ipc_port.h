@@ -276,6 +276,8 @@ struct ipc_port {
 #define	ip_unlock(port)		io_unlock(&(port)->ip_object)
 #define	ip_reference(port)	io_reference(&(port)->ip_object)
 #define	ip_release(port)	io_release(&(port)->ip_object)
+#define ip_lock_assert(port) io_lock_assert(&(port)->ip_object)
+#define ip_unlock_assert(port) io_unlock_assert(&(port)->ip_object)
 
 #define	ip_kotype(port)		io_kotype(&(port)->ip_object)
 

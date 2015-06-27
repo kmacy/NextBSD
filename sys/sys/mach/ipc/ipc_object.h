@@ -154,6 +154,8 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 	mtx_trylock(&((rpc_common_t)(io))->rcd_io_lock_data)
 #define	io_unlock(io) \
 	mtx_unlock(&((rpc_common_t)(io))->rcd_io_lock_data)
+#define io_unlock_assert(io) mtx_assert(&((rpc_common_t)(io))->rcd_io_lock_data, MA_NOTOWNED)
+#define io_lock_assert(io) mtx_assert(&((rpc_common_t)(io))->rcd_io_lock_data, MA_OWNED)
 
 #ifdef SMP
 #define _VOLATILE_ volatile
