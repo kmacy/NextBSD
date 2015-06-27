@@ -229,12 +229,19 @@ typedef struct clock                    *clock_ctrl_t;
 typedef struct ledger					*ledger_t;
 typedef processor_set_t         processor_set_name_t;
 MALLOC_DECLARE(M_MACH_TMP);
+#ifdef INVARIANTS
+#define M_MACH_IPC_KMSG M_MACH_TMP
+#define M_MACH_IPC_ENTRY M_MACH_TMP
+#define M_MACH_IPC_TABLE M_MACH_TMP
+#define M_MACH_KALLOC M_MACH_TMP
+#define M_MACH_VM M_MACH_TMP
+#else
 MALLOC_DECLARE(M_MACH_IPC_KMSG);
 MALLOC_DECLARE(M_MACH_IPC_ENTRY);
 MALLOC_DECLARE(M_MACH_IPC_TABLE);
 MALLOC_DECLARE(M_MACH_KALLOC);
 MALLOC_DECLARE(M_MACH_VM);
-
+#endif
 #else	/* MACH_KERNEL */
 
 typedef mach_port_t		task_t;
