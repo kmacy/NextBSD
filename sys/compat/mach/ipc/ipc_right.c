@@ -538,16 +538,11 @@ ipc_right_clean(
 		assert(entry->ie_request == 0);
 		assert(pset != IPS_NULL);
 		assert(ips_active(pset));
-		/* clear active so kevent will signal close */
-		ips_lock(pset);
-		pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-		ips_unlock(pset);
-		printf("signalling knote on destroy!\n");
-		KNOTE_UNLOCKED(&pset->ips_note, 2);
 
-		/* XXX FIXME see ipc_right_delta */
-		ips_lock(pset);
-		ipc_pset_destroy(pset); /* consumes ref, unlocks */
+		sx_slock(&pset->ips_note_lock);
+		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		sx_sunlock(&pset->ips_note_lock);
+		ipc_entry_close(space, name);
 		break;
 	    }
 
@@ -651,21 +646,15 @@ ipc_right_destroy(
 		assert(entry->ie_request == 0);
 		assert(pset != IPS_NULL);
 
-		OBJECT_CLEAR(entry, name);
-		ipc_entry_dealloc(space, name, entry);
 
-		/* clear active so kevent will signal close */
-		assert(ips_active(pset));
-		ips_lock(pset);
-		pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-		ips_unlock(pset);
-
-		printf("signalling knote on destroy!\n");
-		KNOTE_UNLOCKED(&pset->ips_note, 0);
-		/* XXX FIXME see ipc_right_delta */
-		ips_lock(pset);
 		is_write_unlock(space);
-		ipc_pset_destroy(pset); /* consumes ref, unlocks */
+
+		assert(ips_active(pset));
+		sx_slock(&pset->ips_note_lock);
+		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		sx_sunlock(&pset->ips_note_lock);
+		ipc_entry_close(space, name);
+
 		break;
 	    }
 
@@ -989,21 +978,13 @@ ipc_right_delta(
 
 		/* space must be unlocked when calling KNOTE & close */
 		is_write_unlock(space);
-		KNOTE_UNLOCKED(&pset->ips_note, EV_EOF);
+
+		sx_slock(&pset->ips_note_lock);
+		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		sx_sunlock(&pset->ips_note_lock);
 
 		ipc_entry_close(space, name);
 
-#if 0
-		OBJECT_CLEAR(entry, name);
-		ipc_entry_release(entry);
-		/* clear active so kevent will signal close */
-		ips_lock(pset);
-		pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-		ips_unlock(pset);
-
-		ips_lock(pset);
-		ipc_pset_destroy(pset); /* consumes ref, unlocks */
-#endif
 		break;
 	    }
 
