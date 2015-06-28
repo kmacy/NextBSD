@@ -44,6 +44,7 @@ jobmgr_t jobmgr_shutdown(jobmgr_t jm);
 void jobmgr_dispatch_all_semaphores(jobmgr_t jm);
 void jobmgr_dispatch_all_interested(jobmgr_t jm, job_t j);
 jobmgr_t jobmgr_delete_anything_with_port(jobmgr_t jm, mach_port_t port);
+void jobmgr_reap_pid(jobmgr_t jm, pid_t pid);
 
 launch_data_t job_export_all(void);
 

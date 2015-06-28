@@ -48,6 +48,7 @@
 #include <sys/reboot.h>
 #include <sys/fcntl.h>
 #include <sys/kdebug.h>
+#include <sys/wait.h>
 #include <bsm/libbsm.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -92,10 +93,12 @@ static int bulk_kev_i;
 static int bulk_kev_cnt;
 
 static pthread_t kqueue_demand_thread;
+static pthread_t waitpid_thread;
 
 static void mportset_callback(void);
 static kq_callback kqmportset_callback = (kq_callback)mportset_callback;
 static void *kqueue_demand_loop(void *arg);
+static void *waitpid_loop(void *arg);
 
 boolean_t launchd_internal_demux(mach_msg_header_t *Request, mach_msg_header_t *Reply);
 static void launchd_runtime2(mach_msg_size_t msg_size);
@@ -254,11 +257,13 @@ launchd_runtime_init(void)
 	}
 #endif
 	os_assert_zero(runtime_add_mport(launchd_internal_port, launchd_internal_demux));
-	syslog(LOG_ERR, "runtime_add_mport() success");
-	os_assert_zero(pthread_create(&kqueue_demand_thread, NULL, kqueue_demand_loop, NULL));	syslog(LOG_ERR, "pthread_create() success");
-	
-	syslog(LOG_ERR, "pthread_detach(kqueue_demand_thread)\n");
+
+	os_assert_zero(pthread_create(&kqueue_demand_thread, NULL, kqueue_demand_loop, NULL));
 	os_assert_zero(pthread_detach(kqueue_demand_thread));
+
+	os_assert_zero(pthread_create(&waitpid_thread, NULL, waitpid_loop, NULL));
+	os_assert_zero(pthread_detach(waitpid_thread));
+
 #ifdef notyet
 	(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
 #endif
@@ -640,6 +645,19 @@ kqueue_demand_loop(void *arg __attribute__((unused)))
 	}
 
 	return NULL;
+}
+
+void *
+waitpid_loop(void *arg __attribute__((unused)))
+{
+	pid_t pid;
+
+	for (;;) {
+		if ((pid = waitpid(-1, (int *) 0, WNOWAIT)) != -1)
+			jobmgr_reap_pid(root_jobmgr, pid);
+	}
+
+	return (NULL);
 }
 
 kern_return_t

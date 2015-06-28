@@ -7208,6 +7208,16 @@ jobmgr_delete_anything_with_port(jobmgr_t jm, mach_port_t port)
 	return jm;
 }
 
+void
+jobmgr_reap_pid(jobmgr_t jm, pid_t pid)
+{
+	if (jobmgr_find_by_pid_deep(jm, pid, true) != NULL)
+		return;
+
+	waitpid(pid, (int *) 0, 0);
+	jobmgr_log(jm, LOG_DEBUG, "Reaping PID %d", pid);	
+}
+
 struct machservice *
 jobmgr_lookup_service(jobmgr_t jm, const char *name, bool check_parent, pid_t target_pid)
 {
