@@ -126,6 +126,11 @@ bool nvlist_exists_type(const nvlist_t *nvl, const char *name, int type);
 bool nvlist_exists_null(const nvlist_t *nvl, const char *name);
 bool nvlist_exists_bool(const nvlist_t *nvl, const char *name);
 bool nvlist_exists_number(const nvlist_t *nvl, const char *name);
+bool nvlist_exists_ptr(const nvlist_t *nvl, const char *name);
+bool nvlist_exists_uint64(const nvlist_t *nvl, const char *name);
+bool nvlist_exists_int64(const nvlist_t *nvl, const char *name);
+bool nvlist_exists_endpoint(const nvlist_t *nvl, const char *name);
+bool nvlist_exists_date(const nvlist_t *nvl, const char *name);
 bool nvlist_exists_string(const nvlist_t *nvl, const char *name);
 bool nvlist_exists_nvlist(const nvlist_t *nvl, const char *name);
 #ifndef _KERNEL
@@ -143,7 +148,11 @@ bool nvlist_exists_uuid(const nvlist_t *nvl, const char *name);
 void nvlist_add_null(nvlist_t *nvl, const char *name);
 void nvlist_add_bool(nvlist_t *nvl, const char *name, bool value);
 void nvlist_add_number(nvlist_t *nvl, const char *name, uint64_t value);
-void nvlist_add_number_type(nvlist_t *nvl, const char *name, uint64_t value, int type);
+void nvlist_add_ptr(nvlist_t *nvl, const char *name, uintptr_t value);
+void nvlist_add_int64(nvlist_t *nvl, const char *name, int64_t value);
+void nvlist_add_uint64(nvlist_t *nvl, const char *name, uint64_t value);
+void nvlist_add_endpoint(nvlist_t *nvl, const char *name, int value);
+void nvlist_add_date(nvlist_t *nvl, const char *name, uint64_t value);
 void nvlist_add_string(nvlist_t *nvl, const char *name, const char *value);
 void nvlist_add_stringf(nvlist_t *nvl, const char *name, const char *valuefmt, ...) __printflike(3, 4);
 #ifdef _VA_LIST_DECLARED
@@ -178,6 +187,12 @@ void nvlist_move_uuid(nvlist_t *nvl, const char *name, uuid_t *value);
 
 bool		 nvlist_get_bool(const nvlist_t *nvl, const char *name);
 uint64_t	 nvlist_get_number(const nvlist_t *nvl, const char *name);
+uintptr_t	 nvlist_get_ptr(const nvlist_t *nvl, const char *name);
+uint64_t	 nvlist_get_uint64(const nvlist_t *nvl, const char *name);
+int64_t		 nvlist_get_int64(const nvlist_t *nvl, const char *name);
+int		 nvlist_get_endpoint(const nvlist_t *nvl, const char *name);
+uint64_t	 nvlist_get_date(const nvlist_t *nvl, const char *name);
+
 const char	*nvlist_get_string(const nvlist_t *nvl, const char *name);
 const nvlist_t	*nvlist_get_nvlist(const nvlist_t *nvl, const char *name);
 #ifndef _KERNEL
@@ -194,6 +209,11 @@ const uuid_t	*nvlist_get_uuid(const nvlist_t *nvl, const char *name);
 
 bool		 nvlist_take_bool(nvlist_t *nvl, const char *name);
 uint64_t	 nvlist_take_number(nvlist_t *nvl, const char *name);
+uintptr_t	 nvlist_take_ptr(const nvlist_t *nvl, const char *name);
+uint64_t	 nvlist_take_uint64(const nvlist_t *nvl, const char *name);
+int64_t		 nvlist_take_int64(const nvlist_t *nvl, const char *name);
+int		 nvlist_take_endpoint(const nvlist_t *nvl, const char *name);
+uint64_t	 nvlist_take_date(const nvlist_t *nvl, const char *name);
 char		*nvlist_take_string(nvlist_t *nvl, const char *name);
 nvlist_t	*nvlist_take_nvlist(nvlist_t *nvl, const char *name);
 #ifndef _KERNEL
@@ -213,6 +233,12 @@ void nvlist_free_type(nvlist_t *nvl, const char *name, int type);
 void nvlist_free_null(nvlist_t *nvl, const char *name);
 void nvlist_free_bool(nvlist_t *nvl, const char *name);
 void nvlist_free_number(nvlist_t *nvl, const char *name);
+void nvlist_free_ptr(nvlist_t *nvl, const char *name);
+void nvlist_free_uint64(nvlist_t *nvl, const char *name);
+void nvlist_free_int64(nvlist_t *nvl, const char *name);
+void nvlist_free_endpoint(nvlist_t *nvl, const char *name);
+void nvlist_free_date(nvlist_t *nvl, const char *name);
+
 void nvlist_free_string(nvlist_t *nvl, const char *name);
 void nvlist_free_nvlist(nvlist_t *nvl, const char *name);
 #ifndef _KERNEL
@@ -237,6 +263,11 @@ bool nvlist_existsf_type(const nvlist_t *nvl, int type, const char *namefmt, ...
 bool nvlist_existsf_null(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 bool nvlist_existsf_bool(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 bool nvlist_existsf_number(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+bool nvlist_existsf_ptr(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+bool nvlist_existsf_uint64(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+bool nvlist_existsf_int64(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+bool nvlist_existsf_endpoint(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+bool nvlist_existsf_date(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 bool nvlist_existsf_string(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 bool nvlist_existsf_nvlist(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 bool nvlist_existsf_descriptor(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
@@ -249,6 +280,11 @@ bool nvlist_existsv_type(const nvlist_t *nvl, int type, const char *namefmt, va_
 bool nvlist_existsv_null(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 bool nvlist_existsv_bool(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 bool nvlist_existsv_number(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+bool nvlist_existsv_ptr(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+bool nvlist_existsv_uint64(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+bool nvlist_existsv_int64(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+bool nvlist_existsv_endpoint(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+bool nvlist_existsv_date(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 bool nvlist_existsv_string(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 bool nvlist_existsv_nvlist(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 bool nvlist_existsv_descriptor(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
@@ -259,7 +295,11 @@ bool nvlist_existsv_uuid(const nvlist_t *nvl, const char *namefmt, va_list namea
 void nvlist_addf_null(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 void nvlist_addf_bool(nvlist_t *nvl, bool value, const char *namefmt, ...) __printflike(3, 4);
 void nvlist_addf_number(nvlist_t *nvl, uint64_t value, const char *namefmt, ...) __printflike(3, 4);
-void nvlist_addf_number_type(nvlist_t *nvl, uint64_t value, int type, const char *namefmt, ...) __printflike(4, 5);
+void nvlist_addf_ptr(nvlist_t *nvl, uintptr_t value, const char *namefmt, ...) __printflike(3, 4);
+void nvlist_addf_uint64(nvlist_t *nvl, uint64_t value, const char *namefmt, ...) __printflike(3, 4);
+void nvlist_addf_int64(nvlist_t *nvl, int64_t value, const char *namefmt, ...) __printflike(3, 4);
+void nvlist_addf_endpoint(nvlist_t *nvl, int value, const char *namefmt, ...) __printflike(3, 4);
+void nvlist_addf_date(nvlist_t *nvl, uint64_t value, const char *namefmt, ...) __printflike(3, 4);
 void nvlist_addf_string(nvlist_t *nvl, const char *value, const char *namefmt, ...) __printflike(3, 4);
 void nvlist_addf_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt, ...) __printflike(3, 4);
 void nvlist_addf_nvlist_type(nvlist_t *nvl, const nvlist_t *value, int type, const char *namefmt, ...) __printflike(4, 5);
@@ -273,7 +313,11 @@ void nvlist_addf_uuid(nvlist_t *nvl, const uuid_t *value, const char *namefmt, .
 void nvlist_addv_null(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 void nvlist_addv_bool(nvlist_t *nvl, bool value, const char *namefmt, va_list nameap) __printflike(3, 0);
 void nvlist_addv_number(nvlist_t *nvl, uint64_t value, const char *namefmt, va_list nameap) __printflike(3, 0);
-void nvlist_addv_number_type(nvlist_t *nvl, uint64_t value, int type, const char *namefmt, va_list nameap) __printflike(4, 0);
+void nvlist_addv_ptr(nvlist_t *nvl, uintptr_t value, const char *namefmt, va_list nameap) __printflike(3, 0);
+void nvlist_addv_uint64(nvlist_t *nvl, uint64_t value, const char *namefmt, va_list nameap) __printflike(3, 0);
+void nvlist_addv_int64(nvlist_t *nvl, int64_t value, const char *namefmt, va_list nameap) __printflike(3, 0);
+void nvlist_addv_endpoint(nvlist_t *nvl, int value, const char *namefmt, va_list nameap) __printflike(3, 0);
+void nvlist_addv_date(nvlist_t *nvl, uint64_t value, const char *namefmt, va_list nameap) __printflike(3, 0);
 void nvlist_addv_string(nvlist_t *nvl, const char *value, const char *namefmt, va_list nameap) __printflike(3, 0);
 void nvlist_addv_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt, va_list nameap) __printflike(3, 0);
 
@@ -307,6 +351,11 @@ void nvlist_movev_uuid(nvlist_t *nvl, uuid_t *value, const char *namefmt, va_lis
 #ifndef _KERNEL
 bool		 nvlist_getf_bool(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 uint64_t	 nvlist_getf_number(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+uintptr_t	 nvlist_getf_ptr(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+uint64_t	 nvlist_getf_uint64(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+int64_t		 nvlist_getf_int64(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+int		 nvlist_getf_endpoint(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+uint64_t	 nvlist_getf_date(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 const char	*nvlist_getf_string(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 const nvlist_t	*nvlist_getf_nvlist(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 int		 nvlist_getf_descriptor(const nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
@@ -315,6 +364,11 @@ const uuid_t	*nvlist_getf_uuid(const nvlist_t *nvl, const char *namefmt, ...) __
 
 bool		 nvlist_getv_bool(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 uint64_t	 nvlist_getv_number(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+uintptr_t	 nvlist_getv_ptr(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+uint64_t	 nvlist_getv_uint64(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+int64_t	 	 nvlist_getv_int64(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+int	 	 nvlist_getv_endpoint(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+uint64_t	 nvlist_getv_date(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 const char	*nvlist_getv_string(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 const nvlist_t	*nvlist_getv_nvlist(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 int		 nvlist_getv_descriptor(const nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
@@ -323,6 +377,11 @@ const uuid_t	*nvlist_getv_uuid(const nvlist_t *nvl, const char *namefmt, va_list
 
 bool		 nvlist_takef_bool(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 uint64_t	 nvlist_takef_number(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+uintptr_t	 nvlist_takef_ptr(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+uint64_t	 nvlist_takef_uint64(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+int64_t	 	 nvlist_takef_int64(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+int		 nvlist_takef_endpoint(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+uint64_t	 nvlist_takef_date(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 char		*nvlist_takef_string(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 nvlist_t	*nvlist_takef_nvlist(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 int		 nvlist_takef_descriptor(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
@@ -331,6 +390,11 @@ uuid_t		*nvlist_takef_uuid(nvlist_t *nvl, const char *namefmt, ...) __printflike
 
 bool		 nvlist_takev_bool(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 uint64_t	 nvlist_takev_number(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+uintptr_t	 nvlist_takev_ptr(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+uint64_t	 nvlist_takev_uint64(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+int64_t		 nvlist_takev_int64(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+int		 nvlist_takev_endpoint(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+uint64_t	 nvlist_takev_date(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 char		*nvlist_takev_string(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvlist_t	*nvlist_takev_nvlist(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 int		 nvlist_takev_descriptor(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
@@ -343,6 +407,11 @@ void nvlist_freef_type(nvlist_t *nvl, int type, const char *namefmt, ...) __prin
 void nvlist_freef_null(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 void nvlist_freef_bool(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 void nvlist_freef_number(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+void nvlist_freef_ptr(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+void nvlist_freef_uint64(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+void nvlist_freef_int64(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+void nvlist_freef_endpoint(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
+void nvlist_freef_date(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 void nvlist_freef_string(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 void nvlist_freef_nvlist(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
 void nvlist_freef_descriptor(nvlist_t *nvl, const char *namefmt, ...) __printflike(2, 3);
@@ -355,6 +424,11 @@ void nvlist_freev_type(nvlist_t *nvl, int type, const char *namefmt, va_list nam
 void nvlist_freev_null(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 void nvlist_freev_bool(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 void nvlist_freev_number(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+void nvlist_freev_ptr(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+void nvlist_freev_uint64(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+void nvlist_freev_int64(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+void nvlist_freev_endpoint(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
+void nvlist_freev_date(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 void nvlist_freev_string(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 void nvlist_freev_nvlist(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
 void nvlist_freev_descriptor(nvlist_t *nvl, const char *namefmt, va_list nameap) __printflike(2, 0);
