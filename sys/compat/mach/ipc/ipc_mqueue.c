@@ -854,11 +854,12 @@ noblock:
 	mr = ipc_mqueue_finish_receive(kmsgp, port, option, max_size);
 	io_unlock(object);
 	io_release(object);
-	return mr;
+	return (mr);
 error:
+	mr = ipc_mqueue_receive_error(self, save_wait_result, option);
 	io_unlock(object);
 	io_release(object);
-	return (ipc_mqueue_receive_error(self, save_wait_result, option));
+	return (mr);
 }
 
 
