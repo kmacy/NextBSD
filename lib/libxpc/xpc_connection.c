@@ -112,6 +112,11 @@ xpc_connection_create_mach_service(const char *name, dispatch_queue_t targetq,
 		return (conn);	
 	}
 
+	if (!strcmp(name, "bootstrap")) {
+		conn->xc_remote_port = bootstrap_port;
+		return (conn);
+	}
+
 	/* Look up named mach service */
 	kr = bootstrap_look_up(bootstrap_port, name, &conn->xc_remote_port);
 	if (kr != KERN_SUCCESS) {
@@ -120,6 +125,20 @@ xpc_connection_create_mach_service(const char *name, dispatch_queue_t targetq,
 		return (NULL);
 	}
 
+	return (conn);
+}
+
+xpc_connection_t
+xpc_connection_create_from_endpoint(xpc_endpoint_t endpoint)
+{
+	kern_return_t kr;
+	struct xpc_connection *conn;
+
+	conn = xpc_connection_create("anonymous", NULL);
+	if (conn == NULL)
+		return (NULL);
+
+	conn->xc_remote_port = (mach_port_t)endpoint;
 	return (conn);
 }
 
