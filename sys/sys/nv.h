@@ -209,11 +209,11 @@ const uuid_t	*nvlist_get_uuid(const nvlist_t *nvl, const char *name);
 
 bool		 nvlist_take_bool(nvlist_t *nvl, const char *name);
 uint64_t	 nvlist_take_number(nvlist_t *nvl, const char *name);
-uintptr_t	 nvlist_take_ptr(const nvlist_t *nvl, const char *name);
-uint64_t	 nvlist_take_uint64(const nvlist_t *nvl, const char *name);
-int64_t		 nvlist_take_int64(const nvlist_t *nvl, const char *name);
-int		 nvlist_take_endpoint(const nvlist_t *nvl, const char *name);
-uint64_t	 nvlist_take_date(const nvlist_t *nvl, const char *name);
+uintptr_t	 nvlist_take_ptr(nvlist_t *nvl, const char *name);
+uint64_t	 nvlist_take_uint64(nvlist_t *nvl, const char *name);
+int64_t		 nvlist_take_int64(nvlist_t *nvl, const char *name);
+int		 nvlist_take_endpoint(nvlist_t *nvl, const char *name);
+uint64_t	 nvlist_take_date(nvlist_t *nvl, const char *name);
 char		*nvlist_take_string(nvlist_t *nvl, const char *name);
 nvlist_t	*nvlist_take_nvlist(nvlist_t *nvl, const char *name);
 #ifndef _KERNEL

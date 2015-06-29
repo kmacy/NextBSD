@@ -151,7 +151,6 @@ nvpair_t *nvpair_createf_uuid(const uuid_t *value, const char *namefmt, ...) __p
 
 nvpair_t *nvpair_createv_null(const char *namefmt, va_list nameap) __printflike(1, 0);
 nvpair_t *nvpair_createv_bool(bool value, const char *namefmt, va_list nameap) __printflike(2, 0);
-nvpair_t *nvpair_createv_number(uint64_t value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_createv_number_type(uint64_t value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
 nvpair_t *nvpair_createv_string(const char *value, const char *namefmt, va_list nameap) __printflike(2, 0);
 nvpair_t *nvpair_createv_nvlist_type(const nvlist_t *value, int type, const char *namefmt, va_list nameap) __printflike(3, 0);
