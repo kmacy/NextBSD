@@ -113,17 +113,13 @@ kn_sx_unlock(void *arg)
 static void
 sx_assert_locked(void *arg)
 {
-	struct sx *lock = arg;
-
-	sx_assert(lock, SX_LOCKED);
+	sx_assert((struct sx *)arg, SX_LOCKED);
 }
 
 static void
 sx_assert_unlocked(void *arg)
 {
-	struct sx *lock = arg;
-
-	sx_assert(lock, SX_UNLOCKED);
+	sx_assert((struct sx *)arg, SX_UNLOCKED);
 }
 
 /*
