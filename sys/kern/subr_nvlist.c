@@ -126,12 +126,23 @@ struct nvlist_header {
 nvlist_t *
 nvlist_create(int flags)
 {
+	nvlist_t *nvl;
 
-	return (nvlist_create_type(flags, NV_TYPE_NVLIST));
+	PJDLOG_ASSERT((flags & ~(NV_FLAG_PUBLIC_MASK)) == 0);
+
+	nvl = nv_malloc(sizeof(*nvl));
+	nvl->nvl_error = 0;
+	nvl->nvl_flags = flags;
+	nvl->nvl_parent = NULL;
+	nvl->nvl_type = NV_TYPE_NVLIST;
+	TAILQ_INIT(&nvl->nvl_head);
+	nvl->nvl_magic = NVLIST_MAGIC;
+
+	return (nvl);
 }
 
 nvlist_t *
-nvlist_create_type(int flags, int type)
+nvlist_create_array(int flags)
 {
 	nvlist_t *nvl;
 
@@ -141,10 +152,29 @@ nvlist_create_type(int flags, int type)
 	nvl->nvl_error = 0;
 	nvl->nvl_flags = flags;
 	nvl->nvl_parent = NULL;
-	nvl->nvl_type = type;
+	nvl->nvl_type = NV_TYPE_NVLIST_ARRAY;
 	TAILQ_INIT(&nvl->nvl_head);
 	nvl->nvl_magic = NVLIST_MAGIC;
 
+	return (nvl);
+}
+
+nvlist_t *
+nvlist_create_dictionary(int flags)
+{
+	nvlist_t *nvl;
+
+	PJDLOG_ASSERT((flags & ~(NV_FLAG_PUBLIC_MASK)) == 0);
+
+	nvl = nv_malloc(sizeof(*nvl));
+	nvl->nvl_error = 0;
+	nvl->nvl_flags = flags;
+	nvl->nvl_parent = NULL;
+	nvl->nvl_type = NV_TYPE_NVLIST_DICTIONARY;
+	TAILQ_INIT(&nvl->nvl_head);
+	nvl->nvl_magic = NVLIST_MAGIC;
+
+	printf("1 nvl = %p\n", nvl);
 	return (nvl);
 }
 
@@ -387,6 +417,7 @@ nvlist_clone(const nvlist_t *nvl)
 	}
 
 	newnvl = nvlist_create(nvl->nvl_flags & NV_FLAG_PUBLIC_MASK);
+	newnvl->nvl_type = nvl->nvl_type;
 	for (nvp = nvlist_first_nvpair(nvl); nvp != NULL;
 	    nvp = nvlist_next_nvpair(nvl, nvp)) {
 		newnvp = nvpair_clone(nvp);
@@ -750,10 +781,6 @@ nvlist_xpack(const nvlist_t *nvl, void *ubuf, int64_t *fdidxp, size_t *sizep)
 		case NV_TYPE_NVLIST:
 		case NV_TYPE_NVLIST_ARRAY:
 		case NV_TYPE_NVLIST_DICTIONARY:
-			nvl = nvpair_get_nvlist(nvp);
-			nvp = nvlist_first_nvpair(nvl);
-			ptr = nvlist_pack_header(nvl, ptr, &left);
-			continue;
 			tmpnvl = nvpair_get_nvlist(nvp);
 			ptr = nvlist_pack_header(tmpnvl, ptr, &left);
 			if (ptr == NULL)
@@ -1401,16 +1428,21 @@ void
 nvlist_add_nvlist(nvlist_t *nvl, const char *name, const nvlist_t *value)
 {
 
-	nvlist_addf_nvlist_type(nvl, value, NV_TYPE_NVLIST, "%s", name);
+	nvlist_addf_nvlist(nvl, value, "%s", name);
 }
 
 void
-nvlist_add_nvlist_type(nvlist_t *nvl, const char *name, const nvlist_t *value, int type)
+nvlist_add_nvlist_array(nvlist_t *nvl, const char *name, const nvlist_t *value)
 {
 
-	PJDLOG_ASSERT(type <= NV_TYPE_NVLIST_MAX && type >= NV_TYPE_NVLIST_MIN);
+	nvlist_addf_nvlist_array(nvl, value, "%s", name);
+}
 
-	nvlist_addf_nvlist_type(nvl, value, type, "%s", name);
+void
+nvlist_add_nvlist_dictionary(nvlist_t *nvl, const char *name, const nvlist_t *value)
+{
+
+	nvlist_addf_nvlist_dictionary(nvl, value, "%s", name);
 }
 
 #ifndef _KERNEL
@@ -1540,13 +1572,24 @@ nvlist_addf_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
 }
 
 void
-nvlist_addf_nvlist_type(nvlist_t *nvl, const nvlist_t *value, int type, const char *namefmt,
+nvlist_addf_nvlist_array(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
     ...)
 {
 	va_list nameap;
 
 	va_start(nameap, namefmt);
-	nvlist_addv_nvlist_type(nvl, value, type, namefmt, nameap);
+	nvlist_addv_nvlist_array(nvl, value, namefmt, nameap);
+	va_end(nameap);
+}
+
+void
+nvlist_addf_nvlist_dictionary(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
+    ...)
+{
+	va_list nameap;
+
+	va_start(nameap, namefmt);
+	nvlist_addv_nvlist_dictionary(nvl, value, namefmt, nameap);
 	va_end(nameap);
 }
 
@@ -1756,12 +1799,23 @@ void
 nvlist_addv_nvlist(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
 	va_list nameap)
 {
+	nvpair_t *nvp;
 
-	nvlist_addv_nvlist_type(nvl, value, NV_TYPE_NVLIST, namefmt, nameap);
+	if (nvlist_error(nvl) != 0) {
+		RESTORE_ERRNO(nvlist_error(nvl));
+		return;
+	}
+
+	nvp = nvpair_createv_nvlist_type(value, NV_TYPE_NVLIST, namefmt, nameap);
+	if (nvp == NULL) {
+		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
+		RESTORE_ERRNO(nvl->nvl_error);
+	} else
+		nvlist_move_nvpair(nvl, nvp);
 }
 
 void
-nvlist_addv_nvlist_type(nvlist_t *nvl, const nvlist_t *value, int type, const char *namefmt,
+nvlist_addv_nvlist_array(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
     va_list nameap)
 {
 	nvpair_t *nvp;
@@ -1771,7 +1825,26 @@ nvlist_addv_nvlist_type(nvlist_t *nvl, const nvlist_t *value, int type, const ch
 		return;
 	}
 
-	nvp = nvpair_createv_nvlist_type(value, type, namefmt, nameap);
+	nvp = nvpair_createv_nvlist_type(value, NV_TYPE_NVLIST_ARRAY, namefmt, nameap);
+	if (nvp == NULL) {
+		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
+		RESTORE_ERRNO(nvl->nvl_error);
+	} else
+		nvlist_move_nvpair(nvl, nvp);
+}
+
+void
+nvlist_addv_nvlist_dictionary(nvlist_t *nvl, const nvlist_t *value, const char *namefmt,
+    va_list nameap)
+{
+	nvpair_t *nvp;
+
+	if (nvlist_error(nvl) != 0) {
+		RESTORE_ERRNO(nvlist_error(nvl));
+		return;
+	}
+
+	nvp = nvpair_createv_nvlist_type(value, NV_TYPE_NVLIST_DICTIONARY, namefmt, nameap);
 	if (nvp == NULL) {
 		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
 		RESTORE_ERRNO(nvl->nvl_error);
@@ -1868,6 +1941,8 @@ nvlist_move_##type(nvlist_t *nvl, const char *name, vtype value)	\
 
 NVLIST_MOVE(char *, string)
 NVLIST_MOVE(nvlist_t *, nvlist)
+NVLIST_MOVE(nvlist_t *, nvlist_array)
+NVLIST_MOVE(nvlist_t *, nvlist_dictionary)
 #ifndef _KERNEL
 NVLIST_MOVE(int, descriptor)
 #endif
@@ -1902,6 +1977,8 @@ nvlist_movef_##type(nvlist_t *nvl, vtype value, const char *namefmt,	\
 
 NVLIST_MOVEF(char *, string)
 NVLIST_MOVEF(nvlist_t *, nvlist)
+NVLIST_MOVEF(nvlist_t *, nvlist_array)
+NVLIST_MOVEF(nvlist_t *, nvlist_dictionary)
 #ifndef _KERNEL
 NVLIST_MOVEF(int, descriptor)
 #endif
@@ -1953,12 +2030,25 @@ void
 nvlist_movev_nvlist(nvlist_t *nvl, nvlist_t *value, const char *namefmt,
     va_list nameap)
 {
+	nvpair_t *nvp;
 
-	nvlist_movev_nvlist_type(nvl, value, NV_TYPE_NVLIST, namefmt, nameap);
+	if (nvlist_error(nvl) != 0) {
+		if (value != NULL && nvlist_get_nvpair_parent(value) != NULL)
+			nvlist_destroy(value);
+		RESTORE_ERRNO(nvlist_error(nvl));
+		return;
+	}
+
+	nvp = nvpair_movev_nvlist_type(value, NV_TYPE_NVLIST, namefmt, nameap);
+	if (nvp == NULL) {
+		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
+		RESTORE_ERRNO(nvl->nvl_error);
+	} else
+		nvlist_move_nvpair(nvl, nvp);
 }
 
 void
-nvlist_movev_nvlist_type(nvlist_t *nvl, nvlist_t *value, int type, const char *namefmt,
+nvlist_movev_nvlist_array(nvlist_t *nvl, nvlist_t *value, const char *namefmt,
     va_list nameap)
 {
 	nvpair_t *nvp;
@@ -1970,7 +2060,28 @@ nvlist_movev_nvlist_type(nvlist_t *nvl, nvlist_t *value, int type, const char *n
 		return;
 	}
 
-	nvp = nvpair_movev_nvlist_type(value, type, namefmt, nameap);
+	nvp = nvpair_movev_nvlist_type(value, NV_TYPE_NVLIST_ARRAY, namefmt, nameap);
+	if (nvp == NULL) {
+		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
+		RESTORE_ERRNO(nvl->nvl_error);
+	} else
+		nvlist_move_nvpair(nvl, nvp);
+}
+
+void
+nvlist_movev_nvlist_dictionary(nvlist_t *nvl, nvlist_t *value, const char *namefmt,
+    va_list nameap)
+{
+	nvpair_t *nvp;
+
+	if (nvlist_error(nvl) != 0) {
+		if (value != NULL && nvlist_get_nvpair_parent(value) != NULL)
+			nvlist_destroy(value);
+		RESTORE_ERRNO(nvlist_error(nvl));
+		return;
+	}
+
+	nvp = nvpair_movev_nvlist_type(value, NV_TYPE_NVLIST_DICTIONARY, namefmt, nameap);
 	if (nvp == NULL) {
 		nvl->nvl_error = ERRNO_OR_DEFAULT(ENOMEM);
 		RESTORE_ERRNO(nvl->nvl_error);
@@ -2066,6 +2177,8 @@ NVLIST_GET(int, endpoint, number, ENDPOINT)
 NVLIST_GET(uint64_t, date, number, DATE)
 NVLIST_GET(const char *, string, string, STRING)
 NVLIST_GET(const nvlist_t *, nvlist, nvlist, NVLIST)
+NVLIST_GET(const nvlist_t *, nvlist_array, nvlist, NVLIST_ARRAY)
+NVLIST_GET(const nvlist_t *, nvlist_dictionary, nvlist, NVLIST_DICTIONARY)
 #ifndef _KERNEL
 NVLIST_GET(int, descriptor, descriptor, DESCRIPTOR)
 #endif
@@ -2109,6 +2222,8 @@ NVLIST_GETF(int, endpoint)
 NVLIST_GETF(uint64_t, date)
 NVLIST_GETF(const char *, string)
 NVLIST_GETF(const nvlist_t *, nvlist)
+NVLIST_GETF(const nvlist_t *, nvlist_array)
+NVLIST_GETF(const nvlist_t *, nvlist_dictionary)
 NVLIST_GETF(int, descriptor)
 NVLIST_GETF(const uuid_t *, uuid)
 
@@ -2153,6 +2268,8 @@ NVLIST_GETV(int, endpoint, ENDPOINT)
 NVLIST_GETV(uint64_t, date, DATE)
 NVLIST_GETV(const char *, string, STRING)
 NVLIST_GETV(const nvlist_t *, nvlist, NVLIST)
+NVLIST_GETV(const nvlist_t *, nvlist_array, NVLIST_ARRAY)
+NVLIST_GETV(const nvlist_t *, nvlist_dictionary, NVLIST_DICTIONARY)
 NVLIST_GETV(int, descriptor, DESCRIPTOR)
 NVLIST_GETV(const uuid_t *, uuid, UUID)
 
@@ -2200,6 +2317,8 @@ NVLIST_TAKE(int, endpoint, number, ENDPOINT)
 NVLIST_TAKE(uint64_t, date, number, DATE)
 NVLIST_TAKE(char *, string, string, STRING)
 NVLIST_TAKE(nvlist_t *, nvlist, nvlist, NVLIST)
+NVLIST_TAKE(nvlist_t *, nvlist_array, nvlist, NVLIST_ARRAY)
+NVLIST_TAKE(nvlist_t *, nvlist_dictionary, nvlist, NVLIST_DICTIONARY)
 #ifndef _KERNEL
 NVLIST_TAKE(int, descriptor, descriptor, DESCRIPTOR)
 #endif
@@ -2247,6 +2366,8 @@ NVLIST_TAKEF(int, endpoint)
 NVLIST_TAKEF(uint64_t, date)
 NVLIST_TAKEF(char *, string)
 NVLIST_TAKEF(nvlist_t *, nvlist)
+NVLIST_TAKEF(nvlist_t *, nvlist_array)
+NVLIST_TAKEF(nvlist_t *, nvlist_dictionary)
 NVLIST_TAKEF(int, descriptor)
 NVLIST_TAKEF(uuid_t *, uuid)
 
@@ -2281,14 +2402,16 @@ nvlist_takev_##type(nvlist_t *nvl, const char *namefmt, va_list nameap)	\
 }
 
 NVLIST_TAKEV(bool, bool, bool, BOOL)
-NVLIST_TAKEV(uint64_t, number, number_type, NUMBER)
-NVLIST_TAKEV(uintptr_t, ptr, number_type, PTR)
-NVLIST_TAKEV(uint64_t, uint64, number_type, UINT64)
-NVLIST_TAKEV(int64_t, int64, number_type, INT64)
-NVLIST_TAKEV(int, endpoint, number_type, ENDPOINT)
-NVLIST_TAKEV(uint64_t, date, number_type, DATE)
+NVLIST_TAKEV(uint64_t, number, number, NUMBER)
+NVLIST_TAKEV(uintptr_t, ptr, number, PTR)
+NVLIST_TAKEV(uint64_t, uint64, number, UINT64)
+NVLIST_TAKEV(int64_t, int64, number, INT64)
+NVLIST_TAKEV(int, endpoint, number, ENDPOINT)
+NVLIST_TAKEV(uint64_t, date, number, DATE)
 NVLIST_TAKEV(char *, string, string, STRING)
 NVLIST_TAKEV(nvlist_t *, nvlist, nvlist, NVLIST)
+NVLIST_TAKEV(nvlist_t *, nvlist_array, nvlist, NVLIST_ARRAY)
+NVLIST_TAKEV(nvlist_t *, nvlist_dictionary, nvlist, NVLIST_DICTIONARY)
 NVLIST_TAKEV(int, descriptor, descriptor, DESCRIPTOR)
 NVLIST_TAKEV(uuid_t *, uuid, uuid, UUID)
 
@@ -2347,6 +2470,8 @@ NVLIST_FREE(endpoint, ENDPOINT)
 NVLIST_FREE(date, DATE)
 NVLIST_FREE(string, STRING)
 NVLIST_FREE(nvlist, NVLIST)
+NVLIST_FREE(nvlist_array, NVLIST_ARRAY)
+NVLIST_FREE(nvlist_dictionary, NVLIST_DICTIONARY)
 #ifndef _KERNEL
 NVLIST_FREE(descriptor, DESCRIPTOR)
 #endif
@@ -2387,6 +2512,8 @@ NVLIST_FREEF(endpoint)
 NVLIST_FREEF(date)
 NVLIST_FREEF(string)
 NVLIST_FREEF(nvlist)
+NVLIST_FREEF(nvlist_array)
+NVLIST_FREEF(nvlist_dictionary)
 NVLIST_FREEF(descriptor)
 NVLIST_FREEF(binary)
 NVLIST_FREEF(uuid)
@@ -2423,6 +2550,8 @@ NVLIST_FREEV(endpoint, ENDPOINT)
 NVLIST_FREEV(date, DATE)
 NVLIST_FREEV(string, STRING)
 NVLIST_FREEV(nvlist, NVLIST)
+NVLIST_FREEV(nvlist_array, NVLIST_ARRAY)
+NVLIST_FREEV(nvlist_dictionary, NVLIST_DICTIONARY)
 NVLIST_FREEV(descriptor, DESCRIPTOR)
 NVLIST_FREEV(binary, BINARY)
 NVLIST_FREEV(uuid, UUID)
