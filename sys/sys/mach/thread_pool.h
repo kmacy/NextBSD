@@ -50,10 +50,7 @@
 #define _KERN_THREAD_POOL_H_
 
 #include <sys/mach/kern_return.h>
-#if 0
-#include <kern/lock.h>
-#include <mach_assert.h>
-#endif
+#include <sys/mach/ipc/ipc_object.h>
 
 typedef struct thread_pool {
 
@@ -73,7 +70,7 @@ kern_return_t	thread_pool_init(thread_pool_t new_thread_pool);
 void thread_pool_remove(thread_act_t thread);
 
 /* Get an activation from a thread_pool, blocking if need be */
-extern thread_act_t thread_pool_get_act( ipc_port_t , int);
+extern thread_act_t thread_pool_get_act( ipc_object_t , int);
 extern void thread_pool_put_act( thread_act_t );
 
 /* Wake up a waiter upon return to thread_pool */

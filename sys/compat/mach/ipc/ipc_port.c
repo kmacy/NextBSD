@@ -599,7 +599,7 @@ ipc_port_changed(
 {
 	ipc_thread_t th;
 
-	while ((th = thread_pool_get_act(port, 0)) != ITH_NULL) {
+	while ((th = thread_pool_get_act((ipc_object_t)port, 0)) != ITH_NULL) {
 		th->ith_state = mr;
 		thread_go(th);
 	}

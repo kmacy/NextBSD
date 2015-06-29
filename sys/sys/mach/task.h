@@ -284,7 +284,8 @@ typedef struct mach_task {
 	/* Synchronizer ownership information */
 	queue_head_t	semaphore_list;		/* list of owned semaphores   */
 	int		semaphores_owned;	/* number of semaphores owned */
-	
+
+	int		messages_received;
 	
 #ifdef notyet	/* Active activations in this task */
 	queue_head_t	thr_acts;	/* list of thread_activations */

@@ -154,6 +154,7 @@
  *	Exported message traps.  See mach/message.h.
  */
 
+#define MACH_INTERNAL
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
 #include <sys/mach/message.h>
@@ -200,11 +201,14 @@ mach_msg_return_t msg_receive_error(
 	mach_port_seqno_t	seqno,
 	ipc_space_t		space);
 
+#if 0
 /* the size of each trailer has to be listed here for copyout purposes */
 mach_msg_trailer_size_t trailer_size[] = {
           sizeof(mach_msg_trailer_t), 
-	  sizeof(mach_msg_seqno_trailer_t),
-	  sizeof(mach_msg_security_trailer_t) };
+		  sizeof(mach_msg_seqno_trailer_t),
+		  sizeof(mach_msg_security_trailer_t)
+};
+#endif
 
 security_token_t KERNEL_SECURITY_TOKEN = KERNEL_SECURITY_TOKEN_VALUE;
 audit_token_t KERNEL_AUDIT_TOKEN = KERNEL_AUDIT_TOKEN_VALUE;
@@ -324,7 +328,6 @@ mach_msg_receive(
 	mach_msg_return_t mr;
 	mach_msg_body_t *slist;
 	mach_msg_max_trailer_t *trailer;
-	mach_port_name_t lportname;
 	ipc_entry_bits_t bits;
 
 	mr = ipc_mqueue_copyin(space, rcv_name, &bits, &object);
@@ -364,11 +367,10 @@ mach_msg_receive(
 	self->ith_option = option;
 	self->ith_scatter_list = slist;
 	self->ith_scatter_list_size = slist_size;
-	io_lock(object);
+	self->ith_object = object;
 	assert(object->io_references > 0);
 	mr = ipc_mqueue_receive(object, bits, option & MACH_RCV_TIMEOUT, rcv_size,
-							timeout, &kmsg, &seqno, &lportname);
-	io_unlock(object);
+							timeout, &kmsg, &seqno, self);
 	/* mqueue is unlocked */
 	ipc_object_release(object);
 
@@ -530,4 +532,96 @@ msg_receive_error(
 		return(MACH_RCV_INVALID_DATA);
 	else 
 		return(MACH_MSG_SUCCESS);
+}
+
+
+static mach_msg_return_t
+mach_msg_receive_results_error(thread_t thread)
+{
+	ipc_space_t space = current_space();
+
+	mach_msg_return_t mr = thread->ith_state;
+	mach_vm_address_t msg_addr = thread->ith_msg_addr;
+	mach_msg_option_t option = thread->ith_option;
+	ipc_kmsg_t        kmsg = thread->ith_kmsg;
+	mach_port_seqno_t seqno = thread->ith_seqno;
+	mach_msg_header_t *msg = (void *)msg_addr;
+
+	if (mr != MACH_RCV_TOO_LARGE)
+		return (mr);
+
+	if (option & MACH_RCV_LARGE) {
+		/*
+		 * We need to inform the user-level code that it needs more
+		 * space.  The value for how much space was returned in the
+		 * msize save area instead of the message (which was left on
+		 * the queue).
+		 */
+		if (option & MACH_RCV_LARGE_IDENTITY) {
+			if (copyout((char *) &thread->ith_receiver_name,
+						(void *) (msg_addr + offsetof(mach_msg_header_t, msgh_local_port)),
+						sizeof(mach_port_name_t)))
+				mr = MACH_RCV_INVALID_DATA;
+		}
+		if (copyout((char *) &thread->ith_msize,
+					(void *) (msg_addr + offsetof(mach_msg_header_t, msgh_size)),
+					sizeof(mach_msg_size_t)))
+			mr = MACH_RCV_INVALID_DATA;
+	} else {
+
+		if (msg_receive_error(kmsg, msg, option, seqno, space)
+			== MACH_RCV_INVALID_DATA)
+			mr = MACH_RCV_INVALID_DATA;
+	}
+	return (mr);
+}
+
+mach_msg_return_t
+mach_msg_receive_results(thread_t thread)
+{
+	ipc_space_t space = current_space();
+	vm_map_t	map = current_map();
+
+	ipc_object_t      object = thread->ith_object;
+	mach_msg_return_t mr = thread->ith_state;
+	mach_vm_address_t msg_addr = thread->ith_msg_addr;
+	mach_msg_option_t option = thread->ith_option;
+	ipc_kmsg_t        kmsg = thread->ith_kmsg;
+	mach_port_seqno_t seqno = thread->ith_seqno;
+	mach_msg_trailer_size_t trailer_size;
+	mach_msg_header_t *msg = (void *)msg_addr;
+
+	io_release(object);
+
+	thread->ith_kmsg = NULL;
+
+	if (mr != MACH_MSG_SUCCESS)
+		return mach_msg_receive_results_error(thread);
+
+
+#ifdef notyet
+	trailer_size = ipc_kmsg_add_trailer(kmsg, space, option, thread, seqno, FALSE,
+										kmsg->ikm_header->msgh_remote_port->ip_context);
+#endif
+	trailer_size = REQUESTED_TRAILER_SIZE(option);
+	mr = ipc_kmsg_copyout(kmsg, space, map, MACH_MSG_BODY_NULL, option);
+
+	if (mr != MACH_MSG_SUCCESS) {
+		if ((mr &~ MACH_MSG_MASK) == MACH_RCV_BODY_ERROR) {
+			if (ipc_kmsg_put(msg, kmsg, kmsg->ikm_header->msgh_size +
+							 trailer_size) == MACH_RCV_INVALID_DATA)
+				mr = MACH_RCV_INVALID_DATA;
+		} else {
+			if (msg_receive_error(kmsg, msg, option, seqno, space)
+				== MACH_RCV_INVALID_DATA)
+				mr = MACH_RCV_INVALID_DATA;
+		}
+	} else {
+		mr = ipc_kmsg_put(msg,
+						  kmsg,
+						  kmsg->ikm_header->msgh_size +
+						  trailer_size);
+	}
+
+	return (mr);
 }

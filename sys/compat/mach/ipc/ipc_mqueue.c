@@ -260,6 +260,7 @@ ipc_mqueue_send(
 		reply = ipc_kobject_server(kmsg);
 		if (reply != IKM_NULL) {
 			self->ith_kmsg =  reply;
+			self->ith_object = (ipc_object_t)port;
 			ip_lock(port);
 			self->ith_seqno = port->ip_seqno++;
 			ip_unlock(port);
@@ -412,6 +413,7 @@ ipc_mqueue_run(thread_act_t receiver, ipc_mqueue_t mqueue, ipc_kmsg_t kmsg, ipc_
 		  receiver->ith_state == MACH_RCV_IN_PROGRESS_TIMED);
 	receiver->ith_state = MACH_MSG_SUCCESS;
 	receiver->ith_kmsg = kmsg;
+	receiver->ith_object = (ipc_object_t)port;
 	receiver->ith_seqno = port->ip_seqno++;
 	act_unlock(receiver);
 	ip_unlock(port);
@@ -438,9 +440,9 @@ ipc_mqueue_deliver(
 	pset = port->ip_pset;
 	mqueue = &port->ip_messages;
 	/* first we check the the port and portset for waiters */
-	if ((receiver = thread_pool_get_act(port, 0)) == NULL &&  pset != IPS_NULL) {
+	if ((receiver = thread_pool_get_act((ipc_object_t)port, 0)) == NULL &&  pset != IPS_NULL) {
 		ips_lock(pset);
-		if ((receiver = thread_pool_get_act((ipc_port_t)pset, 0)) != NULL)
+		if ((receiver = thread_pool_get_act((ipc_object_t)pset, 0)) != NULL)
 			ips_unlock(pset);
 	}
 	/* we have a receiver - we're done */
@@ -456,7 +458,7 @@ ipc_mqueue_deliver(
 	if (pset) {
 		ips_unlock(pset);
 		sx_slock(&pset->ips_note_lock);
-		KNOTE(&pset->ips_note, 1, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		KNOTE(&pset->ips_note, 0, KNF_LISTLOCKED|KNF_NOKQLOCK);
 		sx_sunlock(&pset->ips_note_lock);
 	}
 
@@ -609,6 +611,101 @@ ipc_mqueue_receive_error(ipc_thread_t self, int save_wait_result, int option)
 	}
 }
 
+static void
+ipc_mqueue_post_on_thread(
+	ipc_port_t			port,
+	mach_msg_option_t	option,
+	mach_msg_size_t		max_size,
+	thread_t                thread)
+{
+	ipc_kmsg_t kmsg;
+	ipc_mqueue_t 	mqueue = &port->ip_messages;
+
+	mach_msg_return_t mr = MACH_MSG_SUCCESS;
+	mach_msg_size_t rcv_size;
+	vm_map_t map = current_map();
+
+	/*
+	 * Do some sanity checking of our ability to receive
+	 * before pulling the message off the queue.
+	 */
+	kmsg = ipc_kmsg_queue_first(&mqueue->imq_messages);
+	assert(kmsg != IKM_NULL);
+
+	/*
+	 * If we really can't receive it, but we had the
+	 * MACH_RCV_LARGE option set, then don't take it off
+	 * the queue, instead return the appropriate error
+	 * (and size needed).
+	 */
+	rcv_size = ipc_kmsg_copyout_size(kmsg, map);
+	if (rcv_size + REQUESTED_TRAILER_SIZE(option) > max_size) {
+		mr = MACH_RCV_TOO_LARGE;
+		if (option & MACH_RCV_LARGE) {
+			thread->ith_receiver_name = port->ip_receiver_name;
+			thread->ith_kmsg = IKM_NULL;
+			thread->ith_msize = rcv_size;
+			thread->ith_seqno = 0;
+			thread->ith_state = mr;
+			return;
+		}
+	}
+
+	ipc_kmsg_rmqueue_first_macro(&mqueue->imq_messages, kmsg);
+	port->ip_msgcount--;
+	thread->ith_seqno = port->ip_seqno++;
+	thread->ith_kmsg = kmsg;
+	thread->ith_state = mr;
+
+	current_task()->messages_received++;
+}
+
+mach_msg_return_t
+ipc_mqueue_pset_receive(
+	ipc_pset_t		pset,
+	natural_t	bits,
+	mach_msg_option_t	option,
+	mach_msg_size_t		max_size,
+	mach_msg_timeout_t	timeout,
+	ipc_kmsg_t		*kmsgp,
+	mach_port_seqno_t	*seqnop,
+	thread_t thread)
+{
+	ipc_port_t port;
+
+restart:
+	TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
+		mtx_assert(&port->port_comm.rcd_io_lock_data, MA_NOTOWNED);
+		if (port->ip_msgcount != 0) {
+			if (ip_lock_try(port) == 0) {
+				ips_unlock(pset);
+				ip_lock(port);
+				ips_lock(pset);
+			}
+			/* one way or another we have the lock */
+			break;
+		}
+	}
+	if (port != NULL && port->ip_msgcount == 0) {
+		mtx_assert(&port->port_comm.rcd_io_lock_data, MA_OWNED);
+		ip_unlock(port);
+		goto restart;
+	}
+	if (port != NULL) {
+		mtx_assert(&port->port_comm.rcd_io_lock_data, MA_OWNED);
+		ipc_mqueue_post_on_thread(port, option, max_size, thread);
+		ip_unlock(port);
+		thread->ith_object = (ipc_object_t)port;
+		return (THREAD_NOT_WAITING);
+	}
+	if ((option & MACH_RCV_TIMEOUT) && (timeout == 0)) {
+		thread->ith_state = MACH_RCV_TIMED_OUT;
+		return (THREAD_NOT_WAITING);
+	}
+
+	return (THREAD_WAITING);
+}
+
 /*
  *	Routine:	ipc_mqueue_receive
  *	Purpose:
@@ -644,7 +741,7 @@ ipc_mqueue_receive(
 	mach_msg_timeout_t	timeout,
 	ipc_kmsg_t		*kmsgp,
 	mach_port_seqno_t	*seqnop,
-	mach_port_name_t	*lportname)
+	thread_t thread)
 {
 	ipc_port_t port;
 	ipc_kmsg_t kmsg;
@@ -652,89 +749,35 @@ ipc_mqueue_receive(
 	mach_port_seqno_t seqno;
 	mach_msg_return_t mr;
 	ipc_kmsg_queue_t kmsgs;
-	ipc_thread_t self = current_thread();
+	thread_t self;
 	kern_return_t	save_wait_result;
+	int rc;
 
 	assert(io_otype(object) == IOT_PORT || io_otype(object) == IOT_PORT_SET);
-	if (self->ith_kmsg != NULL) {
-		self->ith_state = MACH_MSG_SUCCESS;
+	io_lock(object);
+	io_reference(object);
+	if (thread->ith_kmsg != NULL) {
+		thread->ith_state = MACH_MSG_SUCCESS;
+		self = thread;
+		MPASS(thread->ith_object == object);
 		goto rx_done;
 	}
+	self = current_thread();
 	if (bits & MACH_PORT_TYPE_PORT_SET) {
-		ipc_pset_t pset = (ipc_pset_t)object;
-		ips_reference(pset);
-		if (max_size == 0) {
-		restart:
-			TAILQ_FOREACH(port, &pset->ips_ports, ip_next) {
-				mtx_assert(&port->port_comm.rcd_io_lock_data, MA_NOTOWNED);
-				if (port->ip_msgcount != 0) {
-					if (ip_lock_try(port) == 0) {
-						ips_unlock(pset);
-						ip_lock(port);
-						ips_lock(pset);
-					}
-					/* one way or another we have the lock */
-					break;
-				}
+		rc = ipc_mqueue_pset_receive((ipc_pset_t)object, bits, option, max_size, timeout, kmsgp, seqnop, thread);
+		if (rc == THREAD_NOT_WAITING) {
+			if (thread->ith_state == MACH_RCV_TIMED_OUT) {
+				io_unlock(object);
+				io_release(object);
+				return (MACH_RCV_TIMED_OUT);
+			} else {
+				port = (ipc_port_t)thread->ith_object;
+				kmsg = *kmsgp;
+				seqno = *seqnop;
+				goto noblock;
 			}
-			if (port != NULL && port->ip_msgcount == 0) {
-				mtx_assert(&port->port_comm.rcd_io_lock_data, MA_OWNED);
-				ip_unlock(port);
-				goto restart;
-			}
-			ips_release(pset);
-			if (port != NULL) {
-				mtx_assert(&port->port_comm.rcd_io_lock_data, MA_OWNED);
-				mqueue = &port->ip_messages;
-				kmsgs = &mqueue->imq_messages;
-				kmsg = ipc_kmsg_queue_first(kmsgs);
-				assert (kmsg != IKM_NULL);
-				assert(kmsg->ikm_header != NULL);
-				assert(kmsg->ikm_header->msgh_remote_port != NULL);
-				*lportname = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
-				ip_unlock(port);
-				return (MACH_RCV_TOO_LARGE);
-			}
-		}
-		/* if max_size != 0 and we weren't passed a port
-		*   we must block waiting for a message
-		*/
-		if (option & MACH_RCV_TIMEOUT) {
-			if (timeout == 0)
-				return MACH_RCV_TIMED_OUT;
-			self->ith_state = MACH_RCV_IN_PROGRESS_TIMED;
-		} else {
-			self->ith_state = MACH_RCV_IN_PROGRESS;
-			timeout = 0;
-		}
-
-		thread_will_wait_with_timeout(self, timeout);
-
-		self->ith_pool_port  = (ipc_port_t)object;
-		self->ith_active = 1;
-		self->ith_block_lock_data = &((rpc_common_t)object)->rcd_io_lock_data;
-		thread_pool_put_act(self);
-		self->ith_msize = max_size;
-		thread_block();
-
-		/* Save proper wait_result in case we block */
-		save_wait_result = self->wait_result;
-	rx_done:
-		/* why did we wake up? */
-		if (self->ith_state == MACH_MSG_SUCCESS) {
-			/* pick up the message that was handed to us */
-			assert(self->ith_kmsg != NULL);
-			kmsg = self->ith_kmsg;
-			seqno = self->ith_seqno;
-			port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
-			self->ith_kmsg = NULL;
-			goto done;
-		} else {
-#ifdef INVARIANTS
-			printf("mqueue receive failed - line: %d with: %d\n", __LINE__, self->ith_state);
-#endif
-			return (ipc_mqueue_receive_error(self, save_wait_result, option));
-		}
+		} else
+			goto wait;
 	}
 
 	port = (ipc_port_t)object;
@@ -742,10 +785,10 @@ ipc_mqueue_receive(
 	kmsgs = &mqueue->imq_messages;
 	kmsg = ipc_kmsg_queue_first(kmsgs);
 	if (kmsg != IKM_NULL) {
-		if (max_size == 0) {
+		if (max_size < kmsg->ikm_header->msgh_size) {
 			assert(kmsg->ikm_header != NULL);
 			assert(kmsg->ikm_header->msgh_remote_port != NULL);
-			*lportname = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
+			thread->ith_receiver_name = kmsg->ikm_header->msgh_remote_port->ip_receiver_name;
 			return (MACH_RCV_TOO_LARGE);
 		}
 #ifdef INVARIANTS
@@ -764,9 +807,10 @@ ipc_mqueue_receive(
 		port->ip_msgcount--;
 		port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 		seqno = port->ip_seqno++;
-		goto done;
+		goto noblock;
 	}
 
+wait:
 		/* must block waiting for a message */
 	if (option & MACH_RCV_TIMEOUT) {
 		if (timeout == 0) {
@@ -780,9 +824,9 @@ ipc_mqueue_receive(
 	}
 	thread_will_wait_with_timeout(self, timeout);
 
-	self->ith_pool_port  = (ipc_port_t)object;
+	self->ith_object  = object;
 	self->ith_active = 1;
-	self->ith_block_lock_data = &self->ith_pool_port->port_comm.rcd_io_lock_data;
+	self->ith_block_lock_data = &((rpc_common_t)(self->ith_object))->rcd_io_lock_data;
 	thread_pool_put_act(self);
 
 	self->ith_msize = max_size;
@@ -791,7 +835,7 @@ ipc_mqueue_receive(
 	save_wait_result = self->wait_result;
 
 	/* why did we wake up? */
-
+rx_done:
 	if (self->ith_state == MACH_MSG_SUCCESS) {
 		/* pick up the message that was handed to us */
 		assert(self->ith_kmsg != NULL);
@@ -799,20 +843,24 @@ ipc_mqueue_receive(
 		seqno = self->ith_seqno;
 		port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
 		self->ith_kmsg = NULL;
-	} else {
-#ifdef INVARIANTS
-		printf("mqueue receive failed line: %d with: %d\n", __LINE__, self->ith_state);
-#endif
+		self->ith_object = NULL;
+	} else
+		goto error;
 
-		return (ipc_mqueue_receive_error(self, save_wait_result, option));
-	}
-done:
+noblock:
 	*kmsgp = kmsg;
 	*seqnop = seqno;
 
 	mr = ipc_mqueue_finish_receive(kmsgp, port, option, max_size);
+	io_unlock(object);
+	io_release(object);
 	return mr;
+error:
+	io_unlock(object);
+	io_release(object);
+	return (ipc_mqueue_receive_error(self, save_wait_result, option));
 }
+
 
 mach_msg_return_t
 ipc_mqueue_finish_receive(

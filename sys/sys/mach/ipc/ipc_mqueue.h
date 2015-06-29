@@ -88,17 +88,9 @@
 #include <sys/types.h>
 #include <sys/event.h>
 
-#if 0
-#include <mach_assert.h>
-#include <dipc.h>
-#endif
 #include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
-#if 0
-#include <kern/assert.h>
-#include <kern/lock.h>
-#include <kern/macro_help.h>
-#endif
+
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/ipc/ipc_thread.h>
 #include <sys/mach/ipc/ipc_object.h>
@@ -109,6 +101,8 @@
 typedef struct ipc_mqueue {
 	struct ipc_kmsg_queue imq_messages;
 } *ipc_mqueue_t;
+
+struct ipc_pset;
 
 #define	IMQ_NULL		((ipc_mqueue_t) 0)
 #if 0
@@ -167,7 +161,18 @@ extern mach_msg_return_t ipc_mqueue_receive(
 	mach_msg_timeout_t	timeout,
 	ipc_kmsg_t		*kmsgp,
 	mach_port_seqno_t	*seqnop,
-	mach_port_name_t	*lportname);
+	thread_t thread);
+
+/* Receive a message from a message queue */
+extern mach_msg_return_t ipc_mqueue_pset_receive(
+	struct ipc_pset		*pset,
+	natural_t	bits,
+	mach_msg_option_t	option,
+	mach_msg_size_t		max_size,
+	mach_msg_timeout_t	timeout,
+	ipc_kmsg_t		*kmsgp,
+	mach_port_seqno_t	*seqnop,
+	thread_t thread);
 
 /* Second half of ipc_mqueue_receive */
 extern mach_msg_return_t ipc_mqueue_finish_receive(

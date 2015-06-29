@@ -79,6 +79,7 @@
 #include <sys/types.h>
 #include <sys/event.h>
 
+#define MACH_INTERNAL
 #include <sys/mach/port.h>
 #include <sys/mach/kern_return.h>
 #include <sys/mach/message.h>
@@ -360,7 +361,7 @@ ipc_pset_changed(
 {
 	ipc_thread_t th;
 
-	while ((th = thread_pool_get_act((ipc_port_t)pset, 0)) != ITH_NULL) {
+	while ((th = thread_pool_get_act((ipc_object_t)pset, 0)) != ITH_NULL) {
 		th->ith_state = mr;
 		thread_go(th);
 	}
@@ -480,19 +481,17 @@ filt_machport(struct knote *kn, long hint)
 {
 	mach_port_name_t        name = (mach_port_name_t)kn->kn_kevent.ident;
 	ipc_entry_t				entry = kn->kn_fp->f_data;
-	ipc_pset_t              pset = IPS_NULL;
+	ipc_pset_t              pset = (ipc_pset_t) entry->ie_object;
+	thread_t				self = current_thread();
 	kern_return_t           kr;
 	mach_msg_option_t	option;
 	mach_msg_size_t		size;
-	mach_port_name_t	lportname;
-	int needlock;
 
 	if (hint == EV_EOF) {
 		kn->kn_data = 0;
 		kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 		return (1);
 	} else if (hint == 0) {
-		needlock = 1;
 
 		kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 								  (ipc_object_t *)&pset);
@@ -501,32 +500,63 @@ filt_machport(struct knote *kn, long hint)
 			kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 			return (1);
 		}
-	} else /* we know the pset is valid */ {
-		pset = (ipc_pset_t)entry->ie_object;
-		/* we don't have any context for this callback */
-		needlock = !ips_lock_owned(pset);
-		if (needlock)
-			ips_lock(pset);
+		ips_reference(pset);
+		if (pset != (ipc_pset_t)entry->ie_object)
+			ips_unlock(pset);
+	} else
+		panic("invalid hint %ld\n", hint);
+
+
+	option = kn->kn_sfflags & (MACH_RCV_MSG|MACH_RCV_LARGE|MACH_RCV_LARGE_IDENTITY|
+				   MACH_RCV_TRAILER_MASK|MACH_RCV_VOUCHER);
+	if (option & MACH_RCV_MSG) {
+		self->ith_msg_addr = (mach_vm_address_t) kn->kn_ext[0];
+		size = (mach_msg_size_t)kn->kn_ext[1];
+	} else {
+		option = MACH_RCV_LARGE;
+		self->ith_msg_addr = 0;
+		size = 0;
 	}
-	ips_reference(pset);
 
-	/* force a return - we have no callers directly receiving messages now */
-	option = MACH_RCV_LARGE | MACH_RCV_TIMEOUT;
-	size = 0;
-	kr = ipc_mqueue_receive((ipc_object_t)pset, MACH_PORT_TYPE_PORT_SET, option, size,
-							0, /* immediate timeout */NULL, NULL, &lportname);
+	self->ith_object = (ipc_object_t)pset;
+	self->ith_msize = size;
+	self->ith_option = option;
+	self->ith_scatter_list_size = 0;
+	self->ith_receiver_name = MACH_PORT_NAME_NULL;
+	option |= MACH_RCV_TIMEOUT;
+	self->ith_state = MACH_RCV_IN_PROGRESS;
 
-	if (needlock)
-		ips_unlock(pset);
-	ips_release(pset);
-	/* XXX FIXME we're using the message queue lock for the knlist
-	   kqueue expects this to be held on return but receive
-	   returns with it unlocked
-	*/
-	if (kr == MACH_RCV_TIMED_OUT) {
+
+	ips_lock(pset);
+	kr = ipc_mqueue_pset_receive(pset, MACH_PORT_TYPE_PORT_SET, option, size,
+							0, /* immediate timeout */NULL, NULL, self);
+
+	ips_unlock(pset);
+	assert(kr == THREAD_NOT_WAITING);
+	assert(self->ith_state != MACH_RCV_IN_PROGRESS);
+
+	if (self->ith_state == MACH_RCV_TIMED_OUT) {
+		ips_release(pset);
 		return (0);
 	}
-	kn->kn_data = lportname;
+	if ((option & MACH_RCV_MSG) != MACH_RCV_MSG) {
+		assert(self->ith_state == MACH_RCV_TOO_LARGE);
+		assert(self->ith_kmsg == IKM_NULL);
+		kn->kn_data = self->ith_receiver_name;
+		ips_release(pset);
+		return (1);
+	}
+
+
+	assert(option & MACH_RCV_MSG);
+	kn->kn_ext[1] = self->ith_msize;
+	kn->kn_data = MACH_PORT_NAME_NULL;
+	kn->kn_fflags = mach_msg_receive_results(self);
+
+    if ((kn->kn_fflags == MACH_RCV_TOO_LARGE) &&
+	    (option & MACH_RCV_LARGE_IDENTITY))
+	    kn->kn_data = self->ith_receiver_name;
+
 	return (1);
 }
 

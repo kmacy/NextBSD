@@ -71,7 +71,7 @@ thread_pool_init(thread_pool_t new_thread_pool)
 void
 thread_pool_remove(thread_act_t thread)
 {
-	thread_pool_t pool = &thread->ith_pool_port->ip_thread_pool;
+	thread_pool_t pool = &((struct rpc_common_data *)thread->ith_object)->rcd_thread_pool;
 	thread_act_t act = pool->thr_acts;
 	int found = 0;
 
@@ -99,7 +99,7 @@ thread_pool_remove(thread_act_t thread)
  * in an inconsistent state (not in a pool, not attached
  * to a thread).
  *
- * Called with ip_lock() held for pool_port.  Returns
+ * Called with io_lock() held for ith_object.  Returns
  * the same way.
  *
  * If the thread pool port is destroyed while we are blocked,
@@ -107,9 +107,9 @@ thread_pool_remove(thread_act_t thread)
  * error case.
  */
 thread_act_t
-thread_pool_get_act(ipc_port_t pool_port, int block)
+thread_pool_get_act(ipc_object_t object, int block)
 {
-	thread_pool_t thread_pool = &pool_port->ip_thread_pool;
+	thread_pool_t thread_pool = &((struct rpc_common_data *)object)->rcd_thread_pool;
 	thread_act_t thr_act;
 
 #if	MACH_ASSERT
@@ -117,7 +117,7 @@ thread_pool_get_act(ipc_port_t pool_port, int block)
 	if (watchacts & WA_ACT_LNK)
 		printf("thread_pool_block: %x, waiting=%d\n",
 		       thread_pool, thread_pool->waiting);
-#endif
+#endi
 	if (block == 0) {
 		if ((thr_act = thread_pool->thr_acts) != THR_ACT_NULL) {
 			thread_pool->thr_acts = thr_act->ith_pool_next;
@@ -128,13 +128,15 @@ thread_pool_get_act(ipc_port_t pool_port, int block)
 	}
 
 	while ((thr_act = thread_pool->thr_acts) == THR_ACT_NULL) {
+#if 0
 		if (!ip_active(pool_port))
 			return THR_ACT_NULL;
+#endif
 		thread_pool->waiting = 1;
 		assert_wait((event_t)thread_pool, FALSE);
-		ip_unlock(pool_port);
+		io_unlock(object);
 		thread_block();       /* block self */
-		ip_lock(pool_port);
+		io_lock(object);
 	}
 	thread_pool->thr_acts = thr_act->ith_pool_next;
 	act_lock(thr_act);
@@ -163,8 +165,8 @@ thread_pool_put_act( thread_act_t thr_act )
 		/*
 	 *	Find the thread pool for this activation.
 	 */	
-        if (thr_act->ith_pool_port)
-            thr_pool = &thr_act->ith_pool_port->ip_thread_pool;
+        if (thr_act->ith_object)
+            thr_pool = &((struct rpc_common_data *)thr_act->ith_object)->rcd_thread_pool;
         else
             thr_pool = THREAD_POOL_NULL;
 
@@ -178,12 +180,10 @@ thread_pool_put_act( thread_act_t thr_act )
                 thr_act->ith_pool_next = thr_pool->thr_acts;
                 thr_pool->thr_acts = thr_act;
                 if (thr_pool->waiting)
-                        thread_pool_wakeup(thr_pool);
+					thread_pool_wakeup(thr_pool);
         } else if (thr_pool) {
-                assert(thr_act->ith_pool_port);
+                assert(thr_act->ith_object);
         }
-
-	return;
 }
  
 

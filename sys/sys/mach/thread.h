@@ -34,11 +34,6 @@ struct thread_shuttle {
 
 	/* IPC data structures */
 	struct thread_shuttle *ith_next, *ith_prev, *ith_pool_next;
-	mach_msg_return_t ith_state;
-	mach_msg_size_t ith_msize;              /* max size for recvd msg */
-	struct ipc_kmsg *ith_kmsg;              /* received message */
-	mach_port_seqno_t ith_seqno;            /* seqno of recvd message */
-	mach_port_t ith_pool_port;
 
 	struct ipc_kmsg_queue ith_messages;
 
@@ -52,7 +47,15 @@ struct thread_shuttle {
 		/* Various bits of stashed state */
 	union {
 		struct {
-			mach_msg_option_t option;
+			mach_msg_return_t	state;		/* receive state */
+			mach_port_seqno_t	seqno;		/* seqno of recvd message */
+		  	ipc_object_t		object;		/* object received on */
+		  	mach_vm_address_t	msg_addr;	/* receive buffer pointer */
+			mach_msg_size_t		msize;		/* max size for recvd msg */
+		  	mach_msg_option_t	option;		/* options for receive */
+		  	mach_msg_size_t		slist_size;	/* scatter list size */
+			mach_port_name_t	receiver_name;	/* the receive port name */
+			struct ipc_kmsg		*kmsg;		/* received message */
 			mach_msg_body_t *scatter_list;
 			mach_msg_size_t scatter_list_size;
 		} receive;
@@ -70,6 +73,22 @@ struct thread_shuttle {
 	struct exception_action exc_actions[EXC_TYPES_COUNT];
 	int		ref_count;	/* number of references to me */
 	int ith_active;
+
+
+#define	ith_wait_result		wait_result
+
+#define	ith_option		saved.receive.option
+#define ith_scatter_list	saved.receive.scatter_list
+#define ith_scatter_list_size	saved.receive.scatter_list_size
+#define ith_state		saved.receive.state
+#define ith_object		saved.receive.object
+#define ith_msg_addr			saved.receive.msg_addr
+#define ith_msize		saved.receive.msize
+#define ith_receiver_name	saved.receive.receiver_name
+#define ith_kmsg		saved.receive.kmsg
+#define ith_seqno		saved.receive.seqno
+
+#define ith_other		saved.other
 
 #if 0
 
@@ -171,10 +190,6 @@ struct thread_shuttle {
 
 	/* IPC data structures */
 	struct thread_shuttle *ith_next, *ith_prev;
-	mach_msg_return_t ith_state;
-	mach_msg_size_t ith_msize;		/* max size for recvd msg */
-	struct ipc_kmsg *ith_kmsg;		/* received message */
-	mach_port_seqno_t ith_seqno;		/* seqno of recvd message */
 
 	struct ipc_kmsg_queue ith_messages;
 
@@ -272,13 +287,6 @@ typedef struct thread_shuttle	*thread_shuttle_t;
 #define THREAD_NULL		((thread_t) 0)
 #define THREAD_SHUTTLE_NULL	((thread_shuttle_t)0)
 
-#define	ith_wait_result		wait_result
-
-#define	ith_option		saved.receive.option
-#define ith_scatter_list	saved.receive.scatter_list
-#define ith_scatter_list_size	saved.receive.scatter_list_size
-
-#define ith_other		saved.other
 
 /*
  * thread_t->at_safe_point values
@@ -505,10 +513,6 @@ extern void		consider_thread_collect(void);
 
 	/* IPC data structures */
 	struct thread_shuttle *ith_next, *ith_prev;
-	mach_msg_return_t ith_state;
-	mach_msg_size_t ith_msize;		/* max size for recvd msg */
-	struct ipc_kmsg *ith_kmsg;		/* received message */
-	mach_port_seqno_t ith_seqno;		/* seqno of recvd message */
 
 	struct ipc_kmsg_queue ith_messages;
 
@@ -662,11 +666,12 @@ extern void assert_wait(event_t, boolean_t);
  *	Possible results of assert_wait - returned in
  *	current_thread()->wait_result.
  */
+#define	THREAD_WAITING		-1
 #define THREAD_AWAKENED		0		/* normal wakeup */
 #define THREAD_TIMED_OUT	1		/* timeout expired */
 #define THREAD_INTERRUPTED	2		/* interrupted by clear_wait */
 #define THREAD_RESTART		3		/* restart operation entirely */
-
+#define	THREAD_NOT_WAITING		10
 
 
 #endif

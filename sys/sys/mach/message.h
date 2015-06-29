@@ -648,6 +648,7 @@ typedef integer_t mach_msg_option_t;
 #define MACH_RCV_TIMEOUT	0x00000100
 #define MACH_RCV_NOTIFY		0x00000200
 #define MACH_RCV_INTERRUPT	0x00000400	/* libmach implements */
+#define MACH_RCV_VOUCHER	0x00000800	/* willing to receive voucher port */
 #define MACH_RCV_OVERWRITE	0x00001000
 
 /* 
@@ -850,5 +851,13 @@ extern mach_msg_return_t	mach_msg(
 					mach_port_name_t rcv_name,
 					mach_msg_timeout_t timeout,
 					mach_port_name_t notify);
+
+
+#if defined(_KERNEL) && defined(MACH_INTERNAL)
+struct thread_shuttle;
+
+extern mach_msg_return_t	mach_msg_receive_results(
+					struct thread_shuttle *thread);
+#endif
 
 #endif	/* _MACH_MESSAGE_H_ */
