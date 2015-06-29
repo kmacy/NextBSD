@@ -1093,9 +1093,9 @@ task_info(
 		    /* Skip empty threads and threads that have migrated
 		     * into this task:
 		     */
-		    if (thr_act->pool_port) {
-			act_unlock_thread(thr_act);
-			continue;
+		    if (thr_act->ith_object) {
+				act_unlock_thread(thr_act);
+				continue;
 		    }
 		    assert(thread);	/* Must have thread, if no thread_pool*/
 		    s = splsched();

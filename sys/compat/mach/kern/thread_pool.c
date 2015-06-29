@@ -117,7 +117,7 @@ thread_pool_get_act(ipc_object_t object, int block)
 	if (watchacts & WA_ACT_LNK)
 		printf("thread_pool_block: %x, waiting=%d\n",
 		       thread_pool, thread_pool->waiting);
-#endi
+#endif
 	if (block == 0) {
 		if ((thr_act = thread_pool->thr_acts) != THR_ACT_NULL) {
 			thread_pool->thr_acts = thr_act->ith_pool_next;
