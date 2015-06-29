@@ -308,7 +308,6 @@ nvpair_pack_number(const nvpair_t *nvp, unsigned char *ptr, size_t *leftp)
 	uint64_t value;
 
 	NVPAIR_ASSERT(nvp);
-	PJDLOG_ASSERT(nvp->nvp_type == NV_TYPE_NUMBER);
 
 	value = (uint64_t)nvp->nvp_data;
 
@@ -536,8 +535,6 @@ const unsigned char *
 nvpair_unpack_number(bool isbe, nvpair_t *nvp, const unsigned char *ptr,
      size_t *leftp)
 {
-
-	PJDLOG_ASSERT(nvp->nvp_type == NV_TYPE_NUMBER);
 
 	if (nvp->nvp_datasize != sizeof(uint64_t)) {
 		RESTORE_ERRNO(EINVAL);
