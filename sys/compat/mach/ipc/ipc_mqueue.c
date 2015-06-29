@@ -457,9 +457,7 @@ ipc_mqueue_deliver(
 	ip_unlock(port);
 	if (pset) {
 		ips_unlock(pset);
-		sx_slock(&pset->ips_note_lock);
-		KNOTE(&pset->ips_note, 0, KNF_LISTLOCKED|KNF_NOKQLOCK);
-		sx_sunlock(&pset->ips_note_lock);
+		KNOTE(&pset->ips_note, 0, KNF_NOKQLOCK);
 	}
 
 	TR_IPC_MQEX("exit: wakeup 0x%x", receiver);
@@ -766,10 +764,10 @@ ipc_mqueue_receive(
 	if (bits & MACH_PORT_TYPE_PORT_SET) {
 		rc = ipc_mqueue_pset_receive((ipc_pset_t)object, bits, option, max_size, timeout, kmsgp, seqnop, thread);
 		if (rc == THREAD_NOT_WAITING) {
-			if (thread->ith_state == MACH_RCV_TIMED_OUT) {
+			if (thread->ith_state == MACH_RCV_TIMED_OUT || thread->ith_state == MACH_RCV_TOO_LARGE) {
 				io_unlock(object);
 				io_release(object);
-				return (MACH_RCV_TIMED_OUT);
+				return (thread->ith_state);
 			} else {
 				port = (ipc_port_t)thread->ith_object;
 				kmsg = *kmsgp;
