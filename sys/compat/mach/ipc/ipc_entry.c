@@ -85,7 +85,12 @@
  *	Primitive functions to manipulate translation entries.
  */
 
+
 #include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
+
+#include "opt_capsicum.h"
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/eventhandler.h>
@@ -120,6 +125,7 @@ static void fdunused(struct filedesc *fdp, int fd);
 static int kern_fdalloc(struct thread *td, int minfd, int *result);
 static void kern_fddealloc(struct thread *td, int fd);
 static inline void kern_fdfree(struct filedesc *fdp, int fd);
+static inline void kern_fdfree_last(struct filedesc *fdp, int fd);
 static int kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
 			 struct filecaps *fcaps);
 
@@ -606,12 +612,25 @@ ipc_entry_dealloc(
 }
 
 static void
+kern_last_close(struct thread *td, struct file *fp, struct filedesc *fdp, int fd)
+{
+
+	FILEDESC_XLOCK(fdp);
+	knote_fdclose(td, fd);
+	kern_fdfree_last(fdp, fd);
+	FILEDESC_XUNLOCK(fdp);
+	fdrop(fp, td);
+}
+
+static void
 ipc_entry_list_close(void *arg __unused, struct proc *p)
 {
 	struct filedesc *fdp;
 	struct filedescent *fde;
 	struct file *fp;
 	struct thread *td;
+	ipc_port_t port;
+	ipc_pset_t pset;
 	ipc_entry_t entry;
 	ipc_space_t space;
 	int i;
@@ -619,18 +638,37 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	fdp = p->p_fd;
 	td = curthread;
 	space = current_space();
+
+	/* remove all ports from attached portsets */
+restart:
+	LIST_FOREACH(entry, &space->is_entry_list, ie_space_link) {
+		if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET)
+			continue;
+		if (entry->ie_object == NULL)
+			continue;
+		port = (ipc_port_t)entry->ie_object;
+		if ((pset = port->ip_pset) != NULL) {
+			ips_lock(pset);
+			TAILQ_REMOVE(&pset->ips_ports, port, ip_next);
+			ips_unlock(pset);
+			ips_release(pset);
+			port->ip_pset = NULL;
+			goto restart;
+		}
+	}
 	/* do we want to just return if the refcount is > 1 or should we
 	 * bar this from happening in the first place?
 	 **/
 	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
-	/* clear ports first as they reference the portset */
+
+	/* clear ports */
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
 		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
 			if (fp->f_data == NULL) {
 				log(LOG_WARNING, "%s:%d fd: %d has NULL f_data\n", p->p_comm, p->p_pid, i);
-				kern_close(td, i);
+				kern_last_close(td, fp, fdp, i);
 				continue;
 			}
 
@@ -639,7 +677,9 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 				continue;
 			if (fp->f_count > 1)
 				log(LOG_WARNING, "%s:%d fd: %d port refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
-			kern_close(td, i);
+			/* make sure ports all detach from portset first */
+			fp->f_count = 1;
+			kern_last_close(td, fp, fdp, i);
 		}
 	}
 	/* clear portsets */
@@ -650,11 +690,7 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 			MPASS(fp->f_data != NULL);
 			if (fp->f_count > 1)
 				log(LOG_WARNING, "%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
-#if 0
-			/* remove from kq */
-			knote_fdclose(td, i);
-#endif
-			kern_close(td, i);
+			kern_last_close(td, fp, fdp, i);
 		}
 	}
 #ifdef INVARIANTS
@@ -677,6 +713,7 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		MPASS(i++ < 10000);
 	}
 }
+
 
 static void
 ipc_entry_sysinit(void *arg __unused)
@@ -775,19 +812,34 @@ kern_fddealloc(struct thread *td, int fd)
 	FILEDESC_XUNLOCK(fdp);
 }
 
-/*
- * Free a file descriptor.
- *
- * Avoid some work if fdp is about to be destroyed.
- */
 static inline void
-kern_fdfree(struct filedesc *fdp, int fd)
+_fdfree(struct filedesc *fdp, int fd, int last)
 {
 	struct filedescent *fde;
 
 	fde = &fdp->fd_ofiles[fd];
+#ifdef CAPABILITIES
+	if (!last)
+		seq_write_begin(&fde->fde_seq);
+#endif
 	bzero(fde, fde_change_size);
 	fdunused(fdp, fd);
+#ifdef CAPABILITIES
+	seq_write_end(&fde->fde_seq);
+#endif
+}
+
+
+static inline void
+kern_fdfree(struct filedesc *fdp, int fd)
+{
+	_fdfree(fdp, fd, 0);
+}
+
+static inline void
+kern_fdfree_last(struct filedesc *fdp, int fd)
+{
+	_fdfree(fdp, fd, 1);
 }
 
 /*
