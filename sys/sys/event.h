@@ -283,6 +283,8 @@ struct knote {
 #define kn_flags	kn_kevent.flags
 #define kn_fflags	kn_kevent.fflags
 #define kn_data		kn_kevent.data
+#define	kn_udata	kn_kevent.udata
+#define	kn_ext		kn_kevent.ext
 #define kn_fp		kn_ptr.p_fp
 };
 struct kevent_copyops {
