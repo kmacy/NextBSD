@@ -81,12 +81,12 @@ nv2xpc(const nvlist_t *nv)
 			break;
 
 		case NV_TYPE_INT64:
-			val.i = (int64_t)nvlist_get_number(nv, key);
+			val.i = nvlist_get_int64(nv, key);
 			xotmp = xpc_int64_create(val.i);
 			break;
 
 		case NV_TYPE_UINT64:
-			val.ui = nvlist_get_number(nv, key);
+			val.ui = nvlist_get_uint64(nv, key);
 			xotmp = xpc_uint64_create(val.ui);
 			break;
 
@@ -152,13 +152,11 @@ xpc2nv_primitive(nvlist_t *nv, const char *key, xpc_object_t value)
 		break;
 
 	case _XPC_TYPE_INT64:
-		nvlist_add_number_type(nv, key,
-		    xpc_int64_get_value(xotmp), NV_TYPE_INT64);
+		nvlist_add_int64(nv, key, xpc_int64_get_value(xotmp));
 		break;
 
 	case _XPC_TYPE_UINT64:
-		nvlist_add_number_type(nv, key,
-		    xpc_uint64_get_value(xotmp), NV_TYPE_UINT64);
+		nvlist_add_uint64(nv, key,  xpc_uint64_get_value(xotmp));
 		break;
 
 	case _XPC_TYPE_DATE:
