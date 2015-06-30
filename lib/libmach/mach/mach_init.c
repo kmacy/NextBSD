@@ -1,6 +1,8 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
+#include <pthread.h>
+
 #include <mach/mach.h>
 #include <mach/boolean.h>
 #include <mach/mach_traps.h>
@@ -41,12 +43,15 @@ mach_init(void)
 	kern_return_t kr;
 	static int mach_inited_pid = 0;
 
-
 	/* we may need to call this again after fork */
 	if (mach_inited_pid != (pid = getpid())) {
 		mig_init();
 		root_flag = getenv("ROOT_BOOTSTRAP");
 		root_bootstrap = (root_flag != NULL) && (strcmp(root_flag, "T") == 0);
+
+		/* Only call pthread_atfork when not in the fork handler */
+		if (mach_inited_pid == 0)
+			pthread_atfork(NULL, NULL, mach_init);
 
 		mach_task_self_ = task_self_trap();
 		_task_reply_port = mach_reply_port();
