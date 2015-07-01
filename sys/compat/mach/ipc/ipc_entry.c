@@ -677,7 +677,6 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	}
 
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
-		int ispset; 
 
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
@@ -686,12 +685,13 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		MPASS(fp->f_count > 0);
 
 		entry = fp->f_data;
-
+#if 0
 		if (fp->f_count > 1) {
-			ispset = (entry->ie_bits & MACH_PORT_TYPE_PORT_SET);
+			int ispset = (entry->ie_bits & MACH_PORT_TYPE_PORT_SET);
 			log(LOG_WARNING, "%s:%d fd: %d %s refcount: %d\n", p->p_comm, p->p_pid, i,
 				ispset ? "pset" : "port", fp->f_count);
 		}
+#endif
 		kern_last_close(td, fp, fdp, i);
 	}
 
