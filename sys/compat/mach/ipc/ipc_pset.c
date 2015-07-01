@@ -123,6 +123,23 @@ sx_assert_unlocked(void *arg)
 	sx_assert((struct sx *)arg, SX_UNLOCKED);
 }
 
+void
+io_validate(ipc_object_t io)
+{
+	ipc_port_t port;
+	ipc_pset_t pset;
+
+	if (io_otype(io) == IOT_PORT) {
+		port = (ipc_port_t)io;
+		MPASS(port->ip_pset == NULL);
+		assert(!ip_active(port));
+	} else {
+		pset = (ipc_pset_t)io;
+		MPASS(TAILQ_EMPTY(&pset->ips_ports));
+	}
+
+}
+
 /*
  * Forward declarations
  */
@@ -449,7 +466,6 @@ filt_machportattach(struct knote *kn)
 	KASSERT(entry->ie_object == (ipc_object_t)pset, ("entry->ie_object == pset"));
 
 	kn->kn_fp = entry->ie_fp;
-	fhold(kn->kn_fp);
 	knlist_add(note, kn, 0);
 
 	return (0);
@@ -543,19 +559,17 @@ filt_machport(struct knote *kn, long hint)
 	ips_unlock(pset);
 	assert(kr == THREAD_NOT_WAITING);
 	assert(self->ith_state != MACH_RCV_IN_PROGRESS);
+	ips_release(pset);
 
 	if (self->ith_state == MACH_RCV_TIMED_OUT) {
-		ips_release(pset);
 		return (0);
 	}
 	if ((option & MACH_RCV_MSG) != MACH_RCV_MSG) {
 		assert(self->ith_state == MACH_RCV_TOO_LARGE);
 		assert(self->ith_kmsg == IKM_NULL);
 		kn->kn_data = self->ith_receiver_name;
-		ips_release(pset);
 		return (1);
 	}
-
 
 	assert(option & MACH_RCV_MSG);
 	kn->kn_ext[1] = self->ith_msize;

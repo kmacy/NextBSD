@@ -582,7 +582,6 @@ mach_msg_receive_results(thread_t thread)
 	ipc_space_t space = current_space();
 	vm_map_t	map = current_map();
 
-	ipc_object_t      object = thread->ith_object;
 	mach_msg_return_t mr = thread->ith_state;
 	mach_vm_address_t msg_addr = thread->ith_msg_addr;
 	mach_msg_option_t option = thread->ith_option;
@@ -591,10 +590,8 @@ mach_msg_receive_results(thread_t thread)
 	mach_msg_trailer_size_t trailer_size;
 	mach_msg_header_t *msg = (void *)msg_addr;
 
-	io_release(object);
 
 	thread->ith_kmsg = NULL;
-
 	if (mr != MACH_MSG_SUCCESS)
 		return mach_msg_receive_results_error(thread);
 

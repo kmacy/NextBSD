@@ -196,8 +196,8 @@ mach_port_close(struct file *fp, struct thread *td)
 	MACH_VERIFY(fp->f_data != NULL, ("expected fp->f_data != NULL - got NULL\n"));
 	if ((entry = fp->f_data) == NULL)
 		return (0);
-
-	ipc_entry_hash_delete(entry->ie_space, entry);
+	if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET)  == 0)
+		ipc_entry_hash_delete(entry->ie_space, entry);
 	MPASS(entry->ie_link == NULL);
 	PROC_LOCK(td->td_proc);
 	LIST_REMOVE(entry, ie_space_link);
@@ -205,7 +205,6 @@ mach_port_close(struct file *fp, struct thread *td)
 	if ((object = entry->ie_object) != NULL) {
 		if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET) {
 			pset = (ipc_pset_t)object;
-			printf("destroying pset %p for fp: %p\n", pset, fp);
 			ips_lock(pset);
 			ipc_pset_destroy(pset);
 		} else {
@@ -272,15 +271,10 @@ mach_port_fill_kinfo(struct file *fp, struct kinfo_file *kif,
  *		The space must be locked.
  */
 
-extern void kdb_backtrace(void);
 void
 ipc_entry_release(ipc_entry_t entry)
 {
-	if ((entry->ie_fp->f_count == 1) &&
-		(entry->ie_bits & MACH_PORT_TYPE_PORT_SET)) {
-		printf("dropping last ref to pset\n");
-		kdb_backtrace();
-	}
+
 	fdrop(entry->ie_fp, curthread);
 }
 
@@ -658,39 +652,12 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	td = curthread;
 	space = current_space();
 
-#if 0
-	/* remove all ports from attached portsets */
-	LIST_FOREACH_SAFE(entry, &space->is_entry_list, ie_space_link, entry_tmp) {
-		if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0)
-			continue;
-		if (entry->ie_object == NULL)
-			continue;
-		pset = (ipc_pset_t)entry->ie_object;
-		ips_lock(pset);
-		while (!TAILQ_EMPTY(&pset->ips_ports)) {
-			port = TAILQ_FIRST(&pset->ips_ports);
-			MPASS(port->ip_pset == pset);
-			if (ip_lock_try(port) == 0) {
-				ips_unlock(pset);
-				ip_lock(port);
-				ips_lock(pset);
-			}
-			TAILQ_REMOVE(&pset->ips_ports, port, ip_next);
-			port->ip_pset = NULL;
-			ip_unlock(port);
-			ips_release(pset);
-		}
-		ips_unlock(pset);
-	}
-#endif
 	/* do we want to just return if the refcount is > 1 or should we
 	 * bar this from happening in the first place?
 	 **/
 	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
 
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
-		int ispset; 
-
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
 		if (fp == NULL || (fp->f_type != DTYPE_MACH_IPC))
@@ -702,15 +669,28 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 			kern_last_close(td, fp, fdp, i);
 			continue;
 		}
-
 		entry = fp->f_data;
 		MPASS(entry->ie_bits != 0xdeadc0de);
+		if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0)
+			continue;
+		kern_last_close(td, fp, fdp, i);
+	}
+
+	for (i = 0; i <= fdp->fd_lastfile; i++) {
+		int ispset; 
+
+		fde = &fdp->fd_ofiles[i];
+		fp = fde->fde_file;
+		if (fp == NULL || (fp->f_type != DTYPE_MACH_IPC))
+			continue;
+		MPASS(fp->f_count > 0);
+
+		entry = fp->f_data;
+
 		if (fp->f_count > 1) {
 			ispset = (entry->ie_bits & MACH_PORT_TYPE_PORT_SET);
 			log(LOG_WARNING, "%s:%d fd: %d %s refcount: %d\n", p->p_comm, p->p_pid, i,
 				ispset ? "pset" : "port", fp->f_count);
-			/* make sure ports all detach from portset first */
-			fp->f_count = 1;
 		}
 		kern_last_close(td, fp, fdp, i);
 	}
@@ -729,7 +709,6 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		entry = LIST_FIRST(&space->is_entry_list);
 		/* mach_port_close removes the entry */
 		fp = entry->ie_fp;
-		fp->f_count = 1;
 		fdrop(fp, td);
 		/* ensure no infinite loop */
 		MPASS(i++ < 10000);

@@ -178,6 +178,8 @@ extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 	(unsigned)(~0 ^ (1 << (sizeof(int)*BYTE_SIZE - 1)))
 
 
+extern void io_validate(ipc_object_t io);
+
 static inline void
 _io_reference(ipc_object_t io, char *file, int line) {
 
@@ -200,8 +202,12 @@ _io_release(ipc_object_t io, char* file, int line) {
 	assert((io)->io_references > 0);
 	MACH_VERIFY((io)->io_references < IO_MAX_REFERENCES, ("io_references: %d\n", (io)->io_references));
 	assert((io)->io_references < IO_MAX_REFERENCES);
-	if (atomic_fetchadd_int(&(io)->io_references, -1) == 1)
+	if (atomic_fetchadd_int(&(io)->io_references, -1) == 1) {
+#ifdef INVARIANTS
+		io_validate(io);
+#endif
 		io_free(io_otype(io), io);
+	}
 }
 
 #define io_release(io)  _io_release(io, __FILE__, __LINE__)
