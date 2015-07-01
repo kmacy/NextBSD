@@ -540,7 +540,7 @@ ipc_right_clean(
 		assert(ips_active(pset));
 
 		sx_slock(&pset->ips_note_lock);
-		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED);
 		sx_sunlock(&pset->ips_note_lock);
 		ipc_entry_close(space, name);
 		break;
@@ -651,7 +651,7 @@ ipc_right_destroy(
 
 		assert(ips_active(pset));
 		sx_slock(&pset->ips_note_lock);
-		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED);
 		sx_sunlock(&pset->ips_note_lock);
 		ipc_entry_close(space, name);
 
@@ -980,7 +980,7 @@ ipc_right_delta(
 		is_write_unlock(space);
 
 		sx_slock(&pset->ips_note_lock);
-		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED|KNF_NOKQLOCK);
+		KNOTE(&pset->ips_note, EV_EOF, KNF_LISTLOCKED);
 		sx_sunlock(&pset->ips_note_lock);
 
 		ipc_entry_close(space, name);
