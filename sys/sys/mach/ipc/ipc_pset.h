@@ -156,6 +156,9 @@ extern kern_return_t ipc_pset_move(
 extern void ipc_pset_destroy(
 	ipc_pset_t	pset);
 
+extern void ipc_pset_signal(
+	ipc_pset_t pset);
+
 #define	ipc_pset_reference(pset)	\
 		ipc_object_reference(&(pset)->ips_object)
 

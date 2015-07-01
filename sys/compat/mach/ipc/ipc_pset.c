@@ -78,6 +78,8 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/event.h>
+#include <sys/selinfo.h>
+
 
 #define MACH_INTERNAL
 #include <sys/mach/port.h>
@@ -93,6 +95,20 @@
 #include <sys/mach/ipc/ipc_print.h>
 
 #include <sys/mach/thread.h>
+
+#include <sys/eventvar.h>
+
+
+void 	knote_enqueue(struct knote *kn);
+
+#define KQ_LOCK(kq) do {						\
+	mtx_lock(&(kq)->kq_lock);					\
+} while (0)
+#define KQ_UNLOCK(kq) do {						\
+	mtx_unlock(&(kq)->kq_lock);					\
+} while (0)
+
+
 
 static void
 kn_sx_lock(void *arg)
@@ -364,7 +380,7 @@ ipc_pset_move(
 	ip_unlock(port);
 
 	if (knotify == TRUE)
-		KNOTE(&nset->ips_note, 0, KNF_NOKQLOCK);
+		ipc_pset_signal(nset);
 	return (((nset == IPS_NULL) && (oset == IPS_NULL)) ?
 		KERN_NOT_IN_SET : KERN_SUCCESS);
 }
@@ -433,6 +449,38 @@ ipc_pset_destroy(
 
 
 #include <sys/file.h>
+void
+ipc_pset_signal(ipc_pset_t pset)
+{
+	struct kqueue *kq, *kq_prev;
+	struct knote *kn;
+	struct knlist *list;
+
+	sx_slock(&pset->ips_note_lock);
+	if (KNLIST_EMPTY(&pset->ips_note)) {
+		sx_sunlock(&pset->ips_note_lock);
+		return;
+	}
+	list = &pset->ips_note;
+	kq = kq_prev = NULL;
+	SLIST_FOREACH(kn, &list->kl_list, kn_selnext) {
+		kq = kn->kn_kq;
+		if (kq != kq_prev) {
+			if (kq_prev)
+				KQ_UNLOCK(kq_prev);
+			KQ_LOCK(kq);
+		}
+		(kn)->kn_status |= KN_ACTIVE;
+		if (((kn)->kn_status & (KN_QUEUED | KN_DISABLED)) == 0)
+			knote_enqueue(kn);
+		kq_prev = kq;
+	}
+	MPASS(kq != NULL);
+	KQ_UNLOCK(kq);
+	sx_sunlock(&pset->ips_note_lock);
+}
+
+
 static int      filt_machportattach(struct knote *kn);
 static void     filt_machportdetach(struct knote *kn);
 static int      filt_machport(struct knote *kn, long hint);
@@ -467,7 +515,6 @@ filt_machportattach(struct knote *kn)
 
 	kn->kn_fp = entry->ie_fp;
 	knlist_add(note, kn, 0);
-
 	return (0);
 }
 
@@ -493,7 +540,6 @@ filt_machportdetach(struct knote *kn)
 
 
 	knlist_remove(&pset->ips_note, kn, 0);
-	printf("kqdetach success for: %d\n", name);
 	return;
 fail:
 	kdb_backtrace();
@@ -504,6 +550,7 @@ fail:
 static int
 filt_machport(struct knote *kn, long hint)
 {
+
 	mach_port_name_t        name = (mach_port_name_t)kn->kn_kevent.ident;
 	ipc_entry_t				entry = kn->kn_fp->f_data;
 	ipc_pset_t              pset = (ipc_pset_t) entry->ie_object;
@@ -521,22 +568,29 @@ filt_machport(struct knote *kn, long hint)
 		kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 								  (ipc_object_t *)&pset);
 		if (kr != KERN_SUCCESS || !ips_active(pset)) {
+			kdb_backtrace();
+			printf("%s: filt_machport kr=%d ips_active=%d name=%d\n", curproc->p_comm, kr, !!ips_active(pset), name);
 			kn->kn_data = 0;
 			kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 			return (1);
 		}
+
 		ips_reference(pset);
+
 		if (pset != (ipc_pset_t)entry->ie_object)
 			ips_unlock(pset);
+
 	} else
 		panic("invalid hint %ld\n", hint);
 
 
 	option = kn->kn_sfflags & (MACH_RCV_MSG|MACH_RCV_LARGE|MACH_RCV_LARGE_IDENTITY|
 				   MACH_RCV_TRAILER_MASK|MACH_RCV_VOUCHER);
+
 	if (option & MACH_RCV_MSG) {
 		self->ith_msg_addr = (mach_vm_address_t) kn->kn_ext[0];
 		size = (mach_msg_size_t)kn->kn_ext[1];
+		printf("%s:%d: filt_machport option: %d \n", curproc->p_comm, curproc->p_pid, option);
 	} else {
 		option = MACH_RCV_LARGE;
 		self->ith_msg_addr = 0;
@@ -568,12 +622,14 @@ filt_machport(struct knote *kn, long hint)
 		assert(self->ith_state == MACH_RCV_TOO_LARGE);
 		assert(self->ith_kmsg == IKM_NULL);
 		kn->kn_data = self->ith_receiver_name;
+		printf("%s:%d, receiver_name %ld\n", curproc->p_comm, curproc->p_pid, kn->kn_data);
 		return (1);
 	}
 
 	assert(option & MACH_RCV_MSG);
 	kn->kn_ext[1] = self->ith_msize;
 	kn->kn_data = MACH_PORT_NAME_NULL;
+	printf("%s:%d receive result size: %d to: %lu \n", curproc->p_comm, curproc->p_pid, self->ith_msize, self->ith_msg_addr);
 	kn->kn_fflags = mach_msg_receive_results(self);
 
     if ((kn->kn_fflags == MACH_RCV_TOO_LARGE) &&

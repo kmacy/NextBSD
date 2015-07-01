@@ -464,9 +464,8 @@ ipc_mqueue_deliver(
 	port->ip_msgcount++;
 	ip_unlock(port);
 
-	if (pset) {
-		KNOTE(&pset->ips_note, 0, KNF_NOKQLOCK);
-	}
+	if (pset)
+		ipc_pset_signal(pset);
 
 	TR_IPC_MQEX("exit: wakeup 0x%x", receiver);
 	return MACH_MSG_SUCCESS;
