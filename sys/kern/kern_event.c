@@ -137,7 +137,7 @@ static struct fileops kqueueops = {
 
 static int 	knote_attach(struct knote *kn, struct kqueue *kq);
 static void 	knote_drop(struct knote *kn, struct thread *td);
-static void 	knote_enqueue(struct knote *kn);
+void 	knote_enqueue(struct knote *kn);
 static void 	knote_dequeue(struct knote *kn);
 static void 	knote_init(void);
 static struct 	knote *knote_alloc(int waitok);
@@ -158,6 +158,7 @@ static void	filt_userdetach(struct knote *kn);
 static int	filt_user(struct knote *kn, long hint);
 static void	filt_usertouch(struct knote *kn, struct kevent64_s *kev,
 		    u_long type);
+
 
 static struct filterops file_filtops = {
 	.f_isfd = 1,
@@ -2422,7 +2423,7 @@ knote_drop(struct knote *kn, struct thread *td)
 	knote_free(kn);
 }
 
-static void
+void
 knote_enqueue(struct knote *kn)
 {
 	struct kqueue *kq = kn->kn_kq;
