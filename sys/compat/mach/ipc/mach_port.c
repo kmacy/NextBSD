@@ -1271,7 +1271,6 @@ mach_port_request_notification(
 	default:
 		return KERN_INVALID_VALUE;
 	}
-	printf("success!\n");
 	return KERN_SUCCESS;
 }
 
@@ -1624,10 +1623,6 @@ thread_activation_create(task_t task, mach_port_name_t name,
 	}
 	io_unlock(object);
 
-#if	MACH_ASSERT
-	if (watchacts & WA_PORT)
-		printf("\tpool_port=%x thr_act=%x\n", (ipc_port_t)object, thr_act);
-#endif	/* MACH_ASSERT */
 
 	/* Pass our reference to the activation back to the user.  */
 	*new_act = thr_act;

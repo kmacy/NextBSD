@@ -190,6 +190,8 @@ mach_port_close(struct file *fp, struct thread *td)
 {
 	ipc_entry_t entry;
 	ipc_object_t object;
+	ipc_pset_t pset;
+	ipc_port_t port;
 
 	MACH_VERIFY(fp->f_data != NULL, ("expected fp->f_data != NULL - got NULL\n"));
 	if ((entry = fp->f_data) == NULL)
@@ -202,10 +204,19 @@ mach_port_close(struct file *fp, struct thread *td)
 	PROC_UNLOCK(td->td_proc);
 	if ((object = entry->ie_object) != NULL) {
 		if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET) {
-			ips_lock((ipc_pset_t)object);
-			ipc_pset_destroy((ipc_pset_t) object);
+			pset = (ipc_pset_t)object;
+			printf("destroying pset %p for fp: %p\n", pset, fp);
+			ips_lock(pset);
+			ipc_pset_destroy(pset);
 		} else {
-			ipc_object_release(object);
+			port = (ipc_port_t)object;
+			if (port->ip_receiver == current_space()) {
+				ip_lock(port);
+				ipc_port_clear_receiver(port);
+				ipc_port_destroy(port);
+			} else {
+				ip_release(port);
+			}
 		}
 		entry->ie_object = NULL;
 	}
@@ -261,10 +272,15 @@ mach_port_fill_kinfo(struct file *fp, struct kinfo_file *kif,
  *		The space must be locked.
  */
 
+extern void kdb_backtrace(void);
 void
 ipc_entry_release(ipc_entry_t entry)
 {
-
+	if ((entry->ie_fp->f_count == 1) &&
+		(entry->ie_bits & MACH_PORT_TYPE_PORT_SET)) {
+		printf("dropping last ref to pset\n");
+		kdb_backtrace();
+	}
 	fdrop(entry->ie_fp, curthread);
 }
 
@@ -629,8 +645,11 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	struct filedescent *fde;
 	struct file *fp;
 	struct thread *td;
+#if 0
 	ipc_port_t port;
 	ipc_pset_t pset;
+	ipc_entry_t entry_tmp;
+#endif
 	ipc_entry_t entry;
 	ipc_space_t space;
 	int i;
@@ -639,60 +658,63 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 	td = curthread;
 	space = current_space();
 
+#if 0
 	/* remove all ports from attached portsets */
-restart:
-	LIST_FOREACH(entry, &space->is_entry_list, ie_space_link) {
-		if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET)
+	LIST_FOREACH_SAFE(entry, &space->is_entry_list, ie_space_link, entry_tmp) {
+		if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0)
 			continue;
 		if (entry->ie_object == NULL)
 			continue;
-		port = (ipc_port_t)entry->ie_object;
-		if ((pset = port->ip_pset) != NULL) {
-			ips_lock(pset);
+		pset = (ipc_pset_t)entry->ie_object;
+		ips_lock(pset);
+		while (!TAILQ_EMPTY(&pset->ips_ports)) {
+			port = TAILQ_FIRST(&pset->ips_ports);
+			MPASS(port->ip_pset == pset);
+			if (ip_lock_try(port) == 0) {
+				ips_unlock(pset);
+				ip_lock(port);
+				ips_lock(pset);
+			}
 			TAILQ_REMOVE(&pset->ips_ports, port, ip_next);
-			ips_unlock(pset);
-			ips_release(pset);
 			port->ip_pset = NULL;
-			goto restart;
+			ip_unlock(port);
+			ips_release(pset);
 		}
+		ips_unlock(pset);
 	}
+#endif
 	/* do we want to just return if the refcount is > 1 or should we
 	 * bar this from happening in the first place?
 	 **/
 	KASSERT(fdp->fd_refcnt == 1, ("the fdtable should not be shared"));
 
-	/* clear ports */
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
+		int ispset; 
+
 		fde = &fdp->fd_ofiles[i];
 		fp = fde->fde_file;
-		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
-			if (fp->f_data == NULL) {
-				log(LOG_WARNING, "%s:%d fd: %d has NULL f_data\n", p->p_comm, p->p_pid, i);
-				kern_last_close(td, fp, fdp, i);
-				continue;
-			}
+		if (fp == NULL || (fp->f_type != DTYPE_MACH_IPC))
+			continue;
+		MPASS(fp->f_count > 0);
 
-			entry = fp->f_data;
-			if (entry->ie_bits & MACH_PORT_TYPE_PORT_SET)
-				continue;
-			if (fp->f_count > 1)
-				log(LOG_WARNING, "%s:%d fd: %d port refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
+		if (fp->f_data == NULL) {
+			log(LOG_WARNING, "%s:%d fd: %d has NULL f_data\n", p->p_comm, p->p_pid, i);
+			kern_last_close(td, fp, fdp, i);
+			continue;
+		}
+
+		entry = fp->f_data;
+		MPASS(entry->ie_bits != 0xdeadc0de);
+		if (fp->f_count > 1) {
+			ispset = (entry->ie_bits & MACH_PORT_TYPE_PORT_SET);
+			log(LOG_WARNING, "%s:%d fd: %d %s refcount: %d\n", p->p_comm, p->p_pid, i,
+				ispset ? "pset" : "port", fp->f_count);
 			/* make sure ports all detach from portset first */
 			fp->f_count = 1;
-			kern_last_close(td, fp, fdp, i);
 		}
+		kern_last_close(td, fp, fdp, i);
 	}
-	/* clear portsets */
-	for (i = 0; i <= fdp->fd_lastfile; i++) {
-		fde = &fdp->fd_ofiles[i];
-		fp = fde->fde_file;
-		if (fp != NULL && (fp->f_type == DTYPE_MACH_IPC)) {
-			MPASS(fp->f_data != NULL);
-			if (fp->f_count > 1)
-				log(LOG_WARNING, "%s:%d fd: %d portset refcount: %d\n", p->p_comm, p->p_pid, i, fp->f_count);
-			kern_last_close(td, fp, fdp, i);
-		}
-	}
+
 #ifdef INVARIANTS
 	for (i = 0; i <= fdp->fd_lastfile; i++) {
 		fde = &fdp->fd_ofiles[i];

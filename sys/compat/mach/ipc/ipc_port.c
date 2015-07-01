@@ -908,6 +908,7 @@ ipc_port_destroy(
 		assert(kmsg->ikm_header->msgh_remote_port ==
 						(mach_port_t) port);
 
+		port->ip_msgcount--;
 		ipc_port_release(port);
 		kmsg->ikm_header->msgh_remote_port = MACH_PORT_NULL;
 		ipc_kmsg_destroy(kmsg);

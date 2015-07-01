@@ -930,7 +930,7 @@ ipc_kmsg_put(
 
 	ikm_check_initialized(kmsg, kmsg->ikm_size);
 
-	MDPRINTF("doing kmsg_put size=%d to addr=%p", size, msg);
+	MDPRINTF(("doing kmsg_put size=%d to addr=%p", size, msg));
 #if defined(__LP64__)
 	if (current_task() != kernel_task) { /* don't if receiver expects fully-cooked in-kernel msg; ux_exception */
 		mach_msg_legacy_header_t *legacy_header =
@@ -950,13 +950,13 @@ ipc_kmsg_put(
 		legacy_header->msgh_size		= msg_size - LEGACY_HEADER_SIZE_DELTA;
 		legacy_header->msgh_bits		= bits;
 
-		MDPRINTF(" msg_size=%d", msg_size);
+		MDPRINTF((" msg_size=%d", msg_size));
 
 		size -= LEGACY_HEADER_SIZE_DELTA;
 		kmsg->ikm_header = (mach_msg_header_t *)legacy_header;
 	}
 #endif
-	MDPRINTF("\n");
+	MDPRINTF(("\n"));
 	if (copyoutmsg((const char *) kmsg->ikm_header, (char *) msg, size))
 		mr = MACH_RCV_INVALID_DATA;
 	else
@@ -2502,7 +2502,7 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
 			&name,
 			(dsc->port.pad1 == 42));
 
-	MDPRINTF("ipc_kmsg_copyout_port_descriptor name is %d\n",name);
+	MDPRINTF(("ipc_kmsg_copyout_port_descriptor name is %d\n",name));
     if(current_task() == kernel_task)
     {
         mach_msg_port_descriptor_t *user_dsc = (mach_msg_port_descriptor_t *)dest_dsc;
@@ -2732,7 +2732,7 @@ ipc_kmsg_copyout_body(
     }
 	if(user_dsc != kern_dsc) {
         vm_offset_t dsc_adjust = (vm_offset_t)user_dsc - (vm_offset_t)kern_dsc;
-		MDPRINTF("dsc_adjust=%ld\n", dsc_adjust);
+		MDPRINTF(("dsc_adjust=%ld\n", dsc_adjust));
         memmove((char *)((vm_offset_t)kmsg->ikm_header + dsc_adjust), kmsg->ikm_header, sizeof(mach_msg_base_t));
         kmsg->ikm_header = (mach_msg_header_t *)((vm_offset_t)kmsg->ikm_header + dsc_adjust);
         /* Update the message size for the smaller user representation */
@@ -2771,8 +2771,8 @@ ipc_kmsg_copyout_size(
 #if defined(__LP64__)
 	send_size -= LEGACY_HEADER_SIZE_DELTA;
 #endif
-	MDPRINTF("ipc_kmsg_copyout_size() is_task_64bit=%d -> send_size=%d msgh_bits=0x%x delta=%d\n",
-		   is_task_64bit, send_size, kmsg->ikm_header->msgh_bits, LEGACY_HEADER_SIZE_DELTA);
+	MDPRINTF(("ipc_kmsg_copyout_size() is_task_64bit=%d -> send_size=%d msgh_bits=0x%x delta=%d\n",
+			  is_task_64bit, send_size, kmsg->ikm_header->msgh_bits, LEGACY_HEADER_SIZE_DELTA));
     if (kmsg->ikm_header->msgh_bits & MACH_MSGH_BITS_COMPLEX) {
         mach_msg_body_t *body;
         mach_msg_descriptor_t *saddr, *eaddr;

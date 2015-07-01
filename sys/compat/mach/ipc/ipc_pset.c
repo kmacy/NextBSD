@@ -395,11 +395,10 @@ ipc_pset_destroy(
 {
 	ipc_port_t port;
 
-
 	pset->ips_object.io_bits &= ~IO_BITS_ACTIVE;
-
 	while (!TAILQ_EMPTY(&pset->ips_ports)) {
 		port = TAILQ_FIRST(&pset->ips_ports);
+		MPASS(port->ip_pset == pset);
 		if (ip_lock_try(port) == 0) {
 			ips_unlock(pset);
 			ip_lock(port);
@@ -408,6 +407,7 @@ ipc_pset_destroy(
 		TAILQ_REMOVE(&pset->ips_ports, port, ip_next);
 		port->ip_pset = NULL;
 		ip_unlock(port);
+		ips_release(pset);
 	}
 	ipc_pset_changed(pset, MACH_RCV_PORT_DIED);
 	ips_unlock(pset);
@@ -449,6 +449,7 @@ filt_machportattach(struct knote *kn)
 	KASSERT(entry->ie_object == (ipc_object_t)pset, ("entry->ie_object == pset"));
 
 	kn->kn_fp = entry->ie_fp;
+	fhold(kn->kn_fp);
 	knlist_add(note, kn, 0);
 
 	return (0);
@@ -536,8 +537,8 @@ filt_machport(struct knote *kn, long hint)
 
 
 	ips_lock(pset);
-	kr = ipc_mqueue_pset_receive(pset, MACH_PORT_TYPE_PORT_SET, option, size,
-							0, /* immediate timeout */NULL, NULL, self);
+	kr = ipc_mqueue_pset_receive(MACH_PORT_TYPE_PORT_SET, option, size,
+							0/* immediate timeout */, self);
 
 	ips_unlock(pset);
 	assert(kr == THREAD_NOT_WAITING);

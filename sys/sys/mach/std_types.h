@@ -107,7 +107,7 @@
 
 #ifndef MDPRINTF
 #if MACH_VERBOSE_DEBUGGING
-#define MDPRINTF printf
+#define MDPRINTF(x) printf x
 #else
 #define MDPRINTF(...)
 #endif

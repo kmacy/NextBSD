@@ -154,7 +154,6 @@ extern mach_msg_return_t ipc_mqueue_copyin(
 
 /* Receive a message from a message queue */
 extern mach_msg_return_t ipc_mqueue_receive(
-	ipc_object_t		object,
 	natural_t	bits,
 	mach_msg_option_t	option,
 	mach_msg_size_t		max_size,
@@ -165,13 +164,10 @@ extern mach_msg_return_t ipc_mqueue_receive(
 
 /* Receive a message from a message queue */
 extern mach_msg_return_t ipc_mqueue_pset_receive(
-	struct ipc_pset		*pset,
 	natural_t	bits,
 	mach_msg_option_t	option,
 	mach_msg_size_t		max_size,
 	mach_msg_timeout_t	timeout,
-	ipc_kmsg_t		*kmsgp,
-	mach_port_seqno_t	*seqnop,
 	thread_t thread);
 
 /* Second half of ipc_mqueue_receive */

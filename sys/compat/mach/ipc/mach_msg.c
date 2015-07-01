@@ -263,8 +263,8 @@ mach_msg_send(
 	if (mr != MACH_MSG_SUCCESS)
 		return mr;
 
-	MDPRINTF("send to remote port %d notify %d id %d name %s\n", (int)kmsg->ikm_header->msgh_remote_port,
-			notify, kmsg->ikm_header->msgh_id, curproc->p_comm);
+	MDPRINTF(("send to remote port %d notify %d id %d name %s\n", (int)kmsg->ikm_header->msgh_remote_port,
+			  notify, kmsg->ikm_header->msgh_id, curproc->p_comm));
 
 	mr = ipc_kmsg_copyin(kmsg, space, map, MACH_PORT_NAME_NULL);
 	if (mr != MACH_MSG_SUCCESS) {
@@ -369,7 +369,7 @@ mach_msg_receive(
 	self->ith_scatter_list_size = slist_size;
 	self->ith_object = object;
 	assert(object->io_references > 0);
-	mr = ipc_mqueue_receive(object, bits, option & MACH_RCV_TIMEOUT, rcv_size,
+	mr = ipc_mqueue_receive(bits, option & MACH_RCV_TIMEOUT, rcv_size,
 							timeout, &kmsg, &seqno, self);
 	/* mqueue is unlocked */
 	ipc_object_release(object);
@@ -467,10 +467,10 @@ mach_msg_overwrite_trap(
 		else
 		    rcv = msg;
 
-		MDPRINTF("%s:%d receiving on %d ... ", curproc->p_comm, curthread->td_tid, rcv_name);
+		MDPRINTF(("%s:%d receiving on %d ... ", curproc->p_comm, curthread->td_tid, rcv_name));
 		mr = mach_msg_receive(rcv, option, rcv_size, rcv_name, 
 							  timeout, scatter_list_size);
-		MDPRINTF("%s:%d done on %d\n",curproc->p_comm, curthread->td_tid, rcv_name);
+		MDPRINTF(("%s:%d done on %d\n",curproc->p_comm, curthread->td_tid, rcv_name));
 
 	}
 

@@ -523,10 +523,11 @@ mach_port_name_t
 mach_task_self(void)
 {
 	task_t task = current_task();
+	ipc_space_t space = current_space();
 	ipc_port_t sright;
 
 	sright = retrieve_task_self_fast(task);
-	return ipc_port_copyout_send(sright, task->itk_space);
+	return ipc_port_copyout_send(sright, space);
 }
 
 /*
@@ -544,11 +545,11 @@ mach_port_name_t
 mach_thread_self(void)
 {
 	thread_t thr_act = current_thread();
-	task_t task = current_task();
+	ipc_space_t space = current_space();
 	ipc_port_t sright;
 
 	sright = retrieve_thread_self_fast(thr_act);
-	return ipc_port_copyout_send(sright, task->itk_space);
+	return ipc_port_copyout_send(sright, space);
 }
 
 /*
