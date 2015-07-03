@@ -62,6 +62,10 @@ mach_init(void)
 			  return;
 			}
 		}
+		if (root_bootstrap == true) {
+			syslog(LOG_ERR, "skip bootstrap port fetch");
+			unsetenv("ROOT_BOOTSTRAP");
+		}
 		mach_inited_pid = pid;
 	}
 }
