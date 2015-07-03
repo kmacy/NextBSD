@@ -313,10 +313,9 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 
 
 kern_return_t
-ipc_entry_copyin(ipc_space_t space, mach_port_name_t name, void **fpp, mach_msg_type_name_t disp, ipc_object_t *objectp)
+ipc_entry_copyin_file(ipc_space_t space, mach_port_name_t name, void **fpp)
 {
 	struct file *fp;
-	kern_return_t kr;
 
 	if (fget(curthread, name, NULL, &fp) != 0) {
 		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
@@ -324,44 +323,31 @@ ipc_entry_copyin(ipc_space_t space, mach_port_name_t name, void **fpp, mach_msg_
 	}
 	*fpp = fp;
 	if (fp->f_type == DTYPE_MACH_IPC) {
-		if ((kr = ipc_object_copyin(space, name, disp, objectp)) != KERN_SUCCESS) {
-			fdrop(fp, curthread);
-			return (kr);
-		}
+		fdrop(fp, curthread);
+		return (KERN_INVALID_ARGUMENT);
 	}
 	return (KERN_SUCCESS);
 }
 
 kern_return_t
-ipc_entry_copyout(ipc_space_t space, void *handle, mach_msg_type_name_t msgt_name, mach_port_name_t *namep)
+ipc_entry_copyout_file(ipc_space_t space, void *handle, mach_port_name_t *namep)
 {
 	struct file *fp = handle;
-	ipc_entry_t entry;
-	ipc_object_t object;
-	kern_return_t kr;
 
 	MPASS(handle != NULL);
 
-	if (fp->f_type == DTYPE_MACH_IPC) {
-		entry = fp->f_data;
-		MPASS(entry != NULL);
-		object = entry->ie_object;
-		MPASS(object != NULL);
-		kr = ipc_object_copyout(space, object, msgt_name, namep);
-		/* XXX this shouldn't be curthread it should be the originating thread - which we need
-		 * to be able get to through ipc_space
-		 * KMM
-		 */
+	if (fp->f_type == DTYPE_MACH_IPC)
+		return KERN_INVALID_ARGUMENT;
+	/* maintain the reference added at ipc_entry_copyin */
+
+	/* Are sent file O_CLOEXEC? */
+	if (kern_finstall(curthread, fp, namep, 0, NULL) != 0) {
 		fdrop(fp, curthread);
-	} else {
-		/* maintain the reference added at ipc_entry_copyin */
-		/* Are sent file O_CLOEXEC? */
-		if ((kr = kern_finstall(curthread, fp, namep, 0, NULL)) != 0) {
-			fdrop(fp, curthread);
-			kr = KERN_RESOURCE_SHORTAGE;
-		}
+		printf("finstall failed\n");
+		return (KERN_RESOURCE_SHORTAGE);
 	}
-	return (kr);
+	printf(" installing received file *fp=%p at %d\n", fp, *namep);
+	return (KERN_SUCCESS);
 }
 
 ipc_object_t

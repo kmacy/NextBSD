@@ -282,9 +282,6 @@
 #include <sys/mach/ipc_kobject.h>
 #include <sys/mach/thread.h>
 
-/* enable at your own risk */
-#define USE_FILEPORT 1
-
 #pragma pack(4)
 
 typedef	struct
@@ -1441,25 +1438,18 @@ ipc_kmsg_copyin_header(
 
     invalid_dest:
 	is_write_unlock(space);
-	printf("%s:%d\n", __FUNCTION__, __LINE__);
+	printf("%s:%d - MACH_SEND_INVALID_DEST dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);
 	return MACH_SEND_INVALID_DEST;
 
     invalid_reply:
 	is_write_unlock(space);
-	return MACH_SEND_INVALID_REPLY;
+	printf("%s:%d - MACH_SEND_INVALID_REPLY dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);	return MACH_SEND_INVALID_REPLY;
 }
 
 #ifdef INVARIANTS
 #define ERIGHTLOG printf("MACH_SEND_INVALID_RIGHT: %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__)
 #else
 #define ERIGHTLOG
-#endif
-
-
-#if USE_FILEPORT
-#define FILEPORT_NAME_VALID(x) (x >= 0)
-#else
-#define FILEPORT_NAME_VALID(x) MACH_PORT_NAME_VALID(x)
 #endif
 
 
@@ -1485,28 +1475,13 @@ ipc_kmsg_copyin_port_descriptor(
     mach_msg_type_name_t	result_disp;
     mach_port_name_t		name;
     ipc_object_t 			object;
-#if USE_FILEPORT
-	ipc_port_t port;
-	void *handle;
-	int iskernel;
 
-	port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
-	assert(IP_VALID(port));
-
-
-	iskernel = (port->ip_receiver == ipc_space_kernel);
-#endif
     user_disp = user_dsc->disposition;
     result_disp = ipc_object_copyin_type(user_disp);
 
     name = (mach_port_name_t)user_dsc->name;
-    if (FILEPORT_NAME_VALID(name)) {
-
-#if USE_FILEPORT
-		kern_return_t kr = ipc_entry_copyin(space, name, &handle, user_disp, &object);
-#else
+    if (MACH_PORT_NAME_VALID(name)) {
         kern_return_t kr = ipc_object_copyin(space, name, user_disp, &object);
-#endif
         if (kr != KERN_SUCCESS) {
             *mr = MACH_SEND_INVALID_RIGHT;
 			ERIGHTLOG;
@@ -1518,22 +1493,49 @@ ipc_kmsg_copyin_port_descriptor(
                     (ipc_port_t) dest)) {
             kmsg->ikm_header->msgh_bits |= MACH_MSGH_BITS_CIRCULAR;
         }
-#if USE_FILEPORT
-		if (iskernel) {
-			dsc->pad1 = 0;
-			dsc->name = (ipc_port_t) object;
-		} else {
-			dsc->pad1 = 42;
-			dsc->name = (ipc_port_t) handle;
-		}
-#else
 		dsc->name = (ipc_port_t) object;
-#endif
     } else {
         dsc->name = CAST_MACH_NAME_TO_PORT(name);
     }
     dsc->disposition = result_disp;
     dsc->type = MACH_MSG_PORT_DESCRIPTOR;
+
+    return (mach_msg_descriptor_t *)(user_dsc_in+1);
+}
+
+static mach_msg_descriptor_t *
+ipc_kmsg_copyin_file_descriptor(
+        volatile mach_msg_port_descriptor_t *dsc,
+        mach_msg_legacy_port_descriptor_t *user_dsc_in,
+        ipc_space_t space,
+        ipc_object_t dest,
+        ipc_kmsg_t kmsg,
+        mach_msg_return_t *mr)
+{
+    volatile mach_msg_legacy_port_descriptor_t *user_dsc = user_dsc_in;
+    int32_t		name;
+	ipc_port_t port;
+	void *handle;
+
+	port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
+	assert(IP_VALID(port));
+
+	MPASS(port->ip_receiver != ipc_space_kernel);
+
+    name = (mach_port_name_t)user_dsc->name;
+    if (name >= 0) {
+		kern_return_t kr = ipc_entry_copyin_file(space, name, &handle);
+
+        if (kr != KERN_SUCCESS) {
+            *mr = MACH_SEND_INVALID_RIGHT;
+            return NULL;
+        }
+		dsc->pad1 = 42;
+		dsc->name = (ipc_port_t) handle;
+    } else {
+        dsc->name = CAST_MACH_NAME_TO_PORT(name);
+    }
+    dsc->type = MACH_MSG_FILE_DESCRIPTOR;
 
     return (mach_msg_descriptor_t *)(user_dsc_in+1);
 }
@@ -1720,30 +1722,19 @@ ipc_kmsg_copyin_ool_ports_descriptor(
 	for (j = 0; j < count; j++) {
 		mach_port_name_t name;
 		ipc_object_t object;
-#if USE_FILEPORT
-		void *handle;
-#endif
 
 		name = names[j];
 		if (!MACH_PORT_NAME_VALID(name)) {
 			objects[j] = (ipc_object_t)CAST_MACH_NAME_TO_PORT(name);
 			continue;
 		}
-#if USE_FILEPORT
-		kr = ipc_entry_copyin(space, name, &handle, user_disp, &object);
-#else
 		kr = ipc_object_copyin(space, name, user_disp, &object);
-#endif
 		if (kr != KERN_SUCCESS) {
 			int k;
 
 			printf("right: %d failed %x user_disp: %d\n", name, kr, user_disp);
 			for(k = 0; k < j; k++) {
-#if USE_FILEPORT
-				object = ipc_entry_handle_to_object(objects[k]);
-#else
 				object = objects[k];
-#endif
 				if (IPC_OBJECT_VALID(object))
 					ipc_object_destroy(object, result_disp);
 			}
@@ -1752,21 +1743,13 @@ ipc_kmsg_copyin_ool_ports_descriptor(
 			*mr = MACH_SEND_INVALID_RIGHT;
 			return NULL;
 		}
-#ifdef INVARIANTS
-		else
-			printf("right: %d success\n", name);
-#endif
 		if ((dsc->disposition == MACH_MSG_TYPE_PORT_RECEIVE) &&
 			ipc_port_check_circularity(
 				(ipc_port_t) object,
 				(ipc_port_t) dest))
 			kmsg->ikm_header->msgh_bits |= MACH_MSGH_BITS_CIRCULAR;
 
-#if USE_FILEPORT
-		objects[j] = iskernel ? object : handle;
-#else
 		objects[j] = object;
-#endif
 	}
 	return user_dsc;
 }
@@ -1916,6 +1899,13 @@ ipc_kmsg_copyin_body(
         switch (user_addr->type.type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
 			user_addr = ipc_kmsg_copyin_port_descriptor((mach_msg_port_descriptor_t *)kern_addr,
+							(mach_msg_legacy_port_descriptor_t *)user_addr, space, dest, kmsg, &mr);
+
+			kern_addr++;
+			complex = TRUE;
+			break;
+		case MACH_MSG_FILE_DESCRIPTOR:
+			user_addr = ipc_kmsg_copyin_file_descriptor((mach_msg_port_descriptor_t *)kern_addr,
 							(mach_msg_legacy_port_descriptor_t *)user_addr, space, dest, kmsg, &mr);
 
 			kern_addr++;
@@ -2450,8 +2440,7 @@ ipc_kmsg_copyout_object(
 	ipc_space_t		space,
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name,
-	mach_port_name_t		*namep,
-	int isfile)
+	mach_port_name_t		*namep)
 {
 	kern_return_t kr;
 
@@ -2460,14 +2449,7 @@ ipc_kmsg_copyout_object(
 		return MACH_MSG_SUCCESS;
 	}
 
-#if USE_FILEPORT
-	if (isfile)
-		kr = ipc_entry_copyout(space, object, msgt_name, namep);
-	else
-		kr = ipc_object_copyout(space, object, msgt_name, namep);
-#else
 	kr = ipc_object_copyout(space, object, msgt_name, namep);
-#endif
 	if (kr != KERN_SUCCESS) {
 		if (msgt_name != 0) {
 			ipc_object_destroy(object, msgt_name);
@@ -2489,7 +2471,6 @@ ipc_kmsg_copyout_object(
 	return MACH_MSG_SUCCESS;
 }
 
-
 static mach_msg_descriptor_t *
 ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
         mach_msg_descriptor_t *dest_dsc,
@@ -2507,8 +2488,7 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
     *mr |= ipc_kmsg_copyout_object(space, 
             (ipc_object_t)port, 
             disp, 
-			&name,
-			(dsc->port.pad1 == 42));
+			&name);
 
 	MDPRINTF(("ipc_kmsg_copyout_port_descriptor name is %d\n",name));
     if(current_task() == kernel_task)
@@ -2525,6 +2505,42 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
         user_dsc->name = name;
         user_dsc->disposition = disp;
         user_dsc->type = MACH_MSG_PORT_DESCRIPTOR;
+        dest_dsc = (mach_msg_descriptor_t *)user_dsc;
+    }
+
+    return (mach_msg_descriptor_t *)dest_dsc;
+}
+
+static mach_msg_descriptor_t *
+ipc_kmsg_copyout_file_descriptor(mach_msg_descriptor_t *dsc,
+        mach_msg_descriptor_t *dest_dsc,
+        ipc_space_t space,
+	    kern_return_t *mr)
+{
+    mach_port_t			port;
+    mach_port_name_t		name;
+
+
+    /* Copyout port right carried in the message */
+    port = dsc->port.name;
+    *mr |= ipc_entry_copyout_file(space, port, &name);
+
+
+	MDPRINTF(("ipc_kmsg_copyout_port_descriptor name is %d\n",name));
+    if(current_task() == kernel_task)
+    {
+        mach_msg_port_descriptor_t *user_dsc = (mach_msg_port_descriptor_t *)dest_dsc;
+        user_dsc--; // point to the start of this port descriptor
+        user_dsc->name = CAST_MACH_NAME_TO_PORT(name);
+        user_dsc->disposition = 0;
+        user_dsc->type = MACH_MSG_FILE_DESCRIPTOR;
+        dest_dsc = (mach_msg_descriptor_t *)user_dsc;
+    } else {
+        mach_msg_legacy_port_descriptor_t *user_dsc = (mach_msg_legacy_port_descriptor_t *)dest_dsc;
+        user_dsc--; // point to the start of this port descriptor
+        user_dsc->name = name;
+        user_dsc->disposition = 0;
+        user_dsc->type = MACH_MSG_FILE_DESCRIPTOR;
         dest_dsc = (mach_msg_descriptor_t *)user_dsc;
     }
 
@@ -2640,7 +2656,7 @@ ipc_kmsg_copyout_ool_ports_descriptor(mach_msg_ool_ports_descriptor_t *dsc,
                 ipc_object_t object = (ipc_object_t)objects[j];
 
                 *mr |= ipc_kmsg_copyout_object(space, object,
-											   disp, &names[j], TRUE);
+											   disp, &names[j]);
             }
 
             /* copyout to memory allocated above */
@@ -2721,6 +2737,9 @@ ipc_kmsg_copyout_body(
 		switch (kern_dsc[i].type.type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
 			user_dsc = ipc_kmsg_copyout_port_descriptor(kern_dsc + i, user_dsc, space, &mr);
+			break;
+		case MACH_MSG_FILE_DESCRIPTOR:
+			user_dsc = ipc_kmsg_copyout_file_descriptor(kern_dsc + i, user_dsc, space, &mr);
 			break;
 		case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
 		case MACH_MSG_OOL_DESCRIPTOR:
@@ -2888,8 +2907,8 @@ ipc_kmsg_copyout_pseudo(
 
 	assert(IO_VALID(dest));
 
-	mr = (ipc_kmsg_copyout_object(space, dest, dest_type, &dest_name, FALSE) |
-	      ipc_kmsg_copyout_object(space, reply, reply_type, &reply_name, FALSE));
+	mr = (ipc_kmsg_copyout_object(space, dest, dest_type, &dest_name) |
+	      ipc_kmsg_copyout_object(space, reply, reply_type, &reply_name));
 
 	kmsg->ikm_header->msgh_bits = mbits &~ MACH_MSGH_BITS_CIRCULAR;
 	kmsg->ikm_header->msgh_remote_port = CAST_MACH_NAME_TO_PORT(dest_name);
