@@ -1455,6 +1455,14 @@ ipc_kmsg_copyin_header(
 #define ERIGHTLOG
 #endif
 
+
+#if USE_FILEPORT
+#define FILEPORT_NAME_VALID(x) (x >= 0)
+#else
+#define FILEPORT_NAME_VALID(x) MACH_PORT_NAME_VALID(x)
+#endif
+
+
 mach_msg_descriptor_t *ipc_kmsg_copyin_port_descriptor(
         volatile mach_msg_port_descriptor_t *dsc,
         mach_msg_legacy_port_descriptor_t *user_dsc,
@@ -1492,7 +1500,7 @@ ipc_kmsg_copyin_port_descriptor(
     result_disp = ipc_object_copyin_type(user_disp);
 
     name = (mach_port_name_t)user_dsc->name;
-    if (MACH_PORT_NAME_VALID(name)) {
+    if (FILEPORT_NAME_VALID(name)) {
 
 #if USE_FILEPORT
 		kern_return_t kr = ipc_entry_copyin(space, name, &handle, user_disp, &object);
