@@ -78,7 +78,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/event.h>
-#include <sys/selinfo.h>
+
 
 
 #define MACH_INTERNAL
@@ -96,20 +96,6 @@
 
 #include <sys/mach/thread.h>
 
-#include <sys/eventvar.h>
-
-
-void 	knote_enqueue(struct knote *kn);
-
-#define KQ_LOCK(kq) do {						\
-	mtx_lock(&(kq)->kq_lock);					\
-} while (0)
-#define KQ_UNLOCK(kq) do {						\
-	mtx_unlock(&(kq)->kq_lock);					\
-} while (0)
-
-
-
 static void
 kn_sx_lock(void *arg)
 {
@@ -117,7 +103,6 @@ kn_sx_lock(void *arg)
 
 	sx_xlock(lock);
 }
-
 
 static void
 kn_sx_unlock(void *arg)
@@ -447,8 +432,24 @@ ipc_pset_destroy(
 	ips_release(pset);	/* consume the ref our caller gave us */
 }
 
-
+/**
+ *
+ * KQ handling
+ */
+  
 #include <sys/file.h>
+#include <sys/selinfo.h>
+#include <sys/eventvar.h>
+
+void 	knote_enqueue(struct knote *kn);
+
+#define KQ_LOCK(kq) do {						\
+	mtx_lock(&(kq)->kq_lock);					\
+} while (0)
+#define KQ_UNLOCK(kq) do {						\
+	mtx_unlock(&(kq)->kq_lock);					\
+} while (0)
+
 void
 ipc_pset_signal(ipc_pset_t pset)
 {
@@ -629,7 +630,7 @@ filt_machport(struct knote *kn, long hint)
 	assert(option & MACH_RCV_MSG);
 	kn->kn_ext[1] = self->ith_msize;
 	kn->kn_data = MACH_PORT_NAME_NULL;
-	printf("%s:%d receive result size: %d to: %lu \n", curproc->p_comm, curproc->p_pid, self->ith_msize, self->ith_msg_addr);
+	printf("%s:%d receive result size: %d to: %lx \n", curproc->p_comm, curproc->p_pid, self->ith_msize, self->ith_msg_addr);
 	kn->kn_fflags = mach_msg_receive_results(self);
 
     if ((kn->kn_fflags == MACH_RCV_TOO_LARGE) &&
