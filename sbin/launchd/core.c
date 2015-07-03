@@ -1134,6 +1134,15 @@ job_export(job_t j)
 		launch_data_dict_insert(r, tmp, LAUNCH_JOBKEY_PROGRAMARGUMENTS);
 	}
 
+	if (!SLIST_EMPTY(&j->env) && (tmp = launch_data_alloc(LAUNCH_DATA_DICTIONARY))) {
+		struct envitem *ei = NULL;
+		SLIST_FOREACH(ei, &j->env, sle) {
+			launch_data_dict_insert(tmp, launch_data_new_string(ei->value), ei->key);
+		}
+
+		launch_data_dict_insert(r, tmp, LAUNCH_JOBKEY_ENVIRONMENTVARIABLES);
+	}
+
 	if (j->enable_transactions && (tmp = launch_data_new_bool(true))) {
 		launch_data_dict_insert(r, tmp, LAUNCH_JOBKEY_ENABLETRANSACTIONS);
 	}
