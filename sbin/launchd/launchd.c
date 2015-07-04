@@ -554,7 +554,7 @@ int
 _fd(int fd)
 {
 	if (fd >= 0) {
-		(void)posix_assumes_zero(fcntl(fd, F_SETFD, 1));
+		(void)posix_assumes_zero(fcntl(fd, F_SETFD, FD_CLOEXEC));
 	}
 	return fd;
 }
