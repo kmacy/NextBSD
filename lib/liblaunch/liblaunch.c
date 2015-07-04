@@ -1349,7 +1349,7 @@ int
 _fd(int fd)
 {
 	if (fd >= 0)
-		fcntl(fd, F_SETFD, 1);
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
 	return fd;
 }
 
