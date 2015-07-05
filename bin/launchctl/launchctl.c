@@ -660,22 +660,26 @@ cmd_load(int argc, char * const argv[])
 	FILE *input;
 	json_error_t error;
 	json_t *msg, *plist;
+	int i;
 
 	if (argc < 2)
-		errx(EX_USAGE, "Usage: launchctl load <plist>");
+		errx(EX_USAGE, "Usage: launchctl load <plist> [<plist> ...]");
 
-	input = strcmp(argv[1], "-") ? fopen(argv[1], "r") : stdin;
-	if (input == NULL)
-		err(EX_OSERR, "Cannot open file %s", argv[1]);
+	for (i = 1; i < argc; i++) {
+		input = strcmp(argv[i], "-") ? fopen(argv[i], "r") : stdin;
+		if (input == NULL)
+			err(EX_OSERR, "Cannot open file %s", argv[1]);
 
-	plist = json_loadf(input, JSON_DECODE_ANY, &error);
-	msg = json_object();
-	json_object_set_new(msg, "SubmitJob", plist);
+		plist = json_loadf(input, JSON_DECODE_ANY, &error);
+		msg = json_object();
+		json_object_set_new(msg, "SubmitJob", plist);
 
-	if (launch_msg_json(msg) == NULL) 
-		err(EX_OSERR, "Cannot load job");
+		if (launch_msg_json(msg) == NULL) 
+			err(EX_OSERR, "Cannot load job from %s", argv[i]);
 
-	printf("%s\n", json_string_value(json_object_get(plist, "Label")));
+		printf("%s\n", json_string_value(json_object_get(plist, "Label")));
+	}
+
 	return (0);
 }
 
