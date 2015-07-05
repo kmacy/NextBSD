@@ -25,11 +25,13 @@
  *
  */
 
+#include <sys/fileport.h>
+
 int fileport_makeport(int fd, fileport_t *fileport)
 {
 	if (fd < 0)
 		return (-1);
-	
+
 	*fileport = (fileport_t)fd;
 	return (0);
 }
