@@ -12,7 +12,7 @@ MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS}  -DHAVE_INTTYPES_H -fblocks
 
 #support
-SRCS+= assumes.c libproc.c getiopolicy_np.c
+SRCS+= assumes.c libproc.c getiopolicy_np.c fileport.c
 SRCS+= si_module.c search_module.c si_data.c cache_module.c file_module.c
 
 #uuid
