@@ -42,7 +42,7 @@ __BEGIN_DECLS
 #ifndef _FILEPORT_T
 #define _FILEPORT_T
 typedef mach_port_t fileport_t;
-#define FILEPORT_NULL	((fileport_t)0)
+#define FILEPORT_NULL	((fileport_t)-1)
 #endif /* _FILEPORT_T */
 
 int	fileport_makeport(int, fileport_t *);
