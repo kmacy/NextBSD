@@ -32,8 +32,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
-#include <libutil.h>
-#include <user.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #ifdef __FreeBSD__
@@ -55,6 +53,7 @@ __private_extern__ ASL_STATUS asl_file_open_write_fd(int descriptor, asl_file_t 
 
 /* private asl SPI */
 __private_extern__ ASL_STATUS asl_client_internal_send(asl_object_t client, asl_object_t msg);
+__private_extern__ char *get_argv0();
 
 #pragma mark -
 #pragma mark asl_client_t

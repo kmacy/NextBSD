@@ -24,12 +24,14 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/user.h>
 #include <sys/un.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <libutil.h>
 #include <Block.h>
 #include <dispatch/dispatch.h>
 #include <os/base.h>
