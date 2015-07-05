@@ -32,6 +32,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <time.h>
+#include <libutil.h>
+#include <user.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #ifdef __FreeBSD__
@@ -56,6 +58,20 @@ __private_extern__ ASL_STATUS asl_client_internal_send(asl_object_t client, asl_
 
 #pragma mark -
 #pragma mark asl_client_t
+
+static char *
+get_argv0()
+{
+	struct kinfo_proc *proc = kinfo_getproc(getpid());
+	char *argv0;
+	
+	if (proc == NULL)
+		return (NULL);
+
+	argv0 = strdup(proc->ki_comm);
+	free(proc);
+	return (argv0);
+}
 
 static void
 _asl_client_free_internal(asl_client_t *client)
@@ -115,7 +131,7 @@ asl_client_open(const char *ident, const char *facility, uint32_t opts)
 	}
 	else
 	{
-		char *name = "unknown"; // XXX *(*_NSGetArgv());
+		char *name = get_argv0();
 		if (name != NULL)
 		{
 			char *x = strrchr(name, '/');
