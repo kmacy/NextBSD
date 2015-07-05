@@ -312,6 +312,20 @@ asl_syslog_faciliy_num_to_name(int n)
 	return NULL;
 }
 
+__private_extern__ char *
+get_argv0()
+{
+	struct kinfo_proc *proc = kinfo_getproc(getpid());
+	char *argv0;
+	
+	if (proc == NULL)
+		return (NULL);
+
+	argv0 = strdup(proc->ki_comm);
+	free(proc);
+	return (argv0);
+}
+
 #if 0
 static xpc_connection_t
 _create_aslmanager_connection(void)

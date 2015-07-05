@@ -89,6 +89,7 @@
 /* forward */
 static ASL_STATUS _asl_send_message(asl_object_t obj, uint32_t eval, asl_msg_t *msg, const char *mstring);
 __private_extern__ asl_client_t *_asl_open_default();
+__private_extern__ char *get_argv0();
 
 /* notify SPI */
 uint32_t notify_register_plain(const char *name, int *out_token);
@@ -865,7 +866,7 @@ asl_base_msg(asl_client_t *asl, uint32_t level, const struct timeval *tv, const 
 			if (_asl_global.sender == NULL)
 			{
 				/* Get the process name with _NSGetArgv */
-				char *name = "unknown"; // XXX *(*_NSGetArgv());
+				char *name = get_argv0();
 				if (name != NULL)
 				{
 					char *x = strrchr(name, '/');

@@ -59,20 +59,6 @@ __private_extern__ ASL_STATUS asl_client_internal_send(asl_object_t client, asl_
 #pragma mark -
 #pragma mark asl_client_t
 
-static char *
-get_argv0()
-{
-	struct kinfo_proc *proc = kinfo_getproc(getpid());
-	char *argv0;
-	
-	if (proc == NULL)
-		return (NULL);
-
-	argv0 = strdup(proc->ki_comm);
-	free(proc);
-	return (argv0);
-}
-
 static void
 _asl_client_free_internal(asl_client_t *client)
 {
