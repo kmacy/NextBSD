@@ -393,7 +393,7 @@ to_json(launch_data_t ld)
 	case LAUNCH_DATA_ERRNO:
 		/* Could only happen in top-level node */
 		errno = launch_data_get_errno(ld);
-		return (NULL);
+		return (errno ? NULL : json_null());
 
 	default:
 		return json_null();
@@ -672,8 +672,8 @@ cmd_load(int argc, char * const argv[])
 	msg = json_object();
 	json_object_set_new(msg, "SubmitJob", plist);
 
-	if (launch_msg_json(msg) == NULL)
-		return (1);
+	if (launch_msg_json(msg) == NULL) 
+		err(EX_OSERR, "Cannot load job");
 
 	printf("%s\n", json_string_value(json_object_get(plist, "Label")));
 	return (0);
