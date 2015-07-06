@@ -697,6 +697,8 @@ ipc_entry_list_close(void *arg __unused, struct proc *p)
 		entry = LIST_FIRST(&space->is_entry_list);
 		/* mach_port_close removes the entry */
 		fp = entry->ie_fp;
+		MPASS(fp->f_count > 0);
+		fp->f_count = 1;
 		fdrop(fp, td);
 		/* ensure no infinite loop */
 		MPASS(i++ < 10000);
