@@ -964,6 +964,7 @@ ipc_kmsg_put(
 	return mr;
 }
 
+extern void kdb_backtrace(void);
 /*
  *	Routine:	ipc_kmsg_put_to_kernel
  *	Purpose:
@@ -1189,9 +1190,11 @@ ipc_kmsg_copyin_header(
 			}
 			/* the entry might need to be deallocated */
 
-			if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
+			if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE) {
+				is_write_unlock(space);
 				ipc_entry_close(space, name);
-
+				is_write_lock(space);
+			}
 			reply_port = dest_port;
 			reply_soright = IP_NULL;
 		} else {
@@ -1216,9 +1219,11 @@ ipc_kmsg_copyin_header(
 			}
 			/* the entry might need to be deallocated */
 
-			if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
+			if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE) {
+				is_write_unlock(space);
 				ipc_entry_close(space, name);
-
+				is_write_lock(space);
+			}
 			/*
 			 *	It's OK if the port we got is dead now,
 			 *	so reply_port is IP_DEAD, because the msg
@@ -1258,8 +1263,11 @@ ipc_kmsg_copyin_header(
 		}
 		/* the entry might need to be deallocated */
 
-		if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE)
-			ipc_entry_dealloc(space, dest_name, entry);
+		if (IE_BITS_TYPE(entry->ie_bits) == MACH_PORT_TYPE_NONE) {
+			is_write_unlock(space);
+			ipc_entry_close(space, dest_name);
+			is_write_lock(space);
+		}
 
 		reply_port = (ipc_object_t)CAST_MACH_NAME_TO_PORT(reply_name);
 		reply_soright = IP_NULL;
@@ -1393,12 +1401,16 @@ ipc_kmsg_copyin_header(
 
 		/* the entries might need to be deallocated */
 
-		if (IE_BITS_TYPE(reply_entry->ie_bits) == MACH_PORT_TYPE_NONE)
+		if (IE_BITS_TYPE(reply_entry->ie_bits) == MACH_PORT_TYPE_NONE) {
+			is_write_unlock(space);
 			ipc_entry_close(space, reply_name);
-
-		if (IE_BITS_TYPE(dest_entry->ie_bits) == MACH_PORT_TYPE_NONE)
+			is_write_lock(space);
+		}
+		if (IE_BITS_TYPE(dest_entry->ie_bits) == MACH_PORT_TYPE_NONE) {
+			is_write_unlock(space);
 			ipc_entry_close(space, dest_name);
-
+			is_write_lock(space);
+		}
 		if (saved_reply != IP_NULL)
 			ipc_port_release(saved_reply);
 	}
@@ -1437,7 +1449,8 @@ ipc_kmsg_copyin_header(
 	return MACH_MSG_SUCCESS;
 
     invalid_dest:
-	is_write_unlock(space);
+is_write_unlock(space);
+kdb_backtrace();
 	printf("%s:%d - MACH_SEND_INVALID_DEST dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);
 	return MACH_SEND_INVALID_DEST;
 
