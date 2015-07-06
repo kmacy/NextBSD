@@ -12121,9 +12121,6 @@ _log_launchd_bug(const char *rcs_rev, const char *path, unsigned int line, const
 pid_t
 launchd_fork(void)
 {
-	pid_t pid;
-	syslog(LOG_ERR, "call runtime_fork()");
-	pid = runtime_fork(root_jobmgr->jm_port);
-	syslog(LOG_ERR, "runtime_fork() returned %d", pid);
-	return (pid);
+
+	return (runtime_fork(root_jobmgr->jm_port));
 }
