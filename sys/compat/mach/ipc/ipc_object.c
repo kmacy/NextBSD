@@ -644,8 +644,9 @@ ipc_object_copyout(
 	if (!io_active(object)) {
 		io_unlock(object);
 		is_write_lock(space);
+		/* unlocks */
 		ipc_entry_dealloc(space, name, entry);
-			return KERN_INVALID_CAPABILITY;
+		return KERN_INVALID_CAPABILITY;
 	}
 
 	entry->ie_object = object;
