@@ -610,6 +610,17 @@ static struct witness_order_list_entry order_lists[] = {
 	{ "struct mount mtx", &lock_class_mtx_sleep },
 	{ "vnode interlock", &lock_class_mtx_sleep },
 	{ NULL, NULL },
+
+	/*
+	 * Mach lock ordering
+	 */
+	{ "pset knote lock", &lock_class_sx },
+	{ "filedesc structure", &lock_class_sx },
+	{ "ETAP_IPC_IS", &lock_class_rw },
+	{ "mach_thread lock", &lock_class_mtx_sleep },
+	{ "ETAP_IPC_RPC", &lock_class_mtx_sleep },
+	{ NULL, NULL },
+
 	/*
 	 * ZFS locking
 	 */
