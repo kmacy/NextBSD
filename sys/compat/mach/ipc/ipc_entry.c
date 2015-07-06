@@ -602,10 +602,18 @@ ipc_entry_dealloc(
 	assert(entry->ie_object == IO_NULL);
 	assert(entry->ie_request == 0);
 
+	if (space != entry->ie_space) {
+		is_write_unlock(space);
+		is_write_lock(entry->ie_space);
+	}
 	ipc_entry_hash_delete(space, entry);
+	if (space != entry->ie_space) {
+		is_write_unlock(entry->ie_space);
+	} else {
+		is_write_unlock(space);
+	}
 	MPASS(entry->ie_link == NULL);
 
-	is_write_unlock(space);
 	ipc_entry_close(space, name);
 }
 
