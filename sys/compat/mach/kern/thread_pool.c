@@ -121,7 +121,6 @@ thread_pool_get_act(ipc_object_t object, int block)
 	if (block == 0) {
 		if ((thr_act = thread_pool->thr_acts) != THR_ACT_NULL) {
 			thread_pool->thr_acts = thr_act->ith_pool_next;
-			act_lock(thr_act);
 			return (thr_act);
 		} else
 			return (NULL);
@@ -139,7 +138,6 @@ thread_pool_get_act(ipc_object_t object, int block)
 		io_lock(object);
 	}
 	thread_pool->thr_acts = thr_act->ith_pool_next;
-	act_lock(thr_act);
 	thr_act->ith_pool_next = NULL;
 
 #if	MACH_ASSERT

@@ -419,7 +419,6 @@ ipc_mqueue_run(thread_act_t receiver, ipc_mqueue_t mqueue, ipc_kmsg_t kmsg, ipc_
 	receiver->ith_kmsg = kmsg;
 	receiver->ith_object = (ipc_object_t)port;
 	receiver->ith_seqno = port->ip_seqno++;
-	act_unlock(receiver);
 	ip_unlock(port);
 	thread_go(receiver);
 }
