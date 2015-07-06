@@ -63,6 +63,7 @@ static launch_data_t create_socket(json_t *json);
 static void to_json_dict(const launch_data_t lval, const char *key, void *ctx);
 static json_t *to_json(launch_data_t ld);
 static json_t *launch_msg_json(json_t *msg);
+static int load_job(const char *filename);
 
 static int cmd_start_stop(int argc, char * const argv[]);
 static int cmd_bootstrap(int argc, char * const argv[]);
@@ -584,6 +585,24 @@ system_specific_bootstrap(bool sflag)
 	runcom();
 }
 
+static int
+load_job(const char *filename)
+{
+	FILE *input;
+	json_error_t error;
+	json_t *msg, *plist;
+
+	input = strcmp(filename, "-") ? fopen(filename, "r") : stdin;
+	if (input == NULL)
+		return (-1);
+
+	plist = json_loadf(input, JSON_DECODE_ANY, &error);
+	msg = json_object();
+	json_object_set_new(msg, "SubmitJob", plist);
+
+	return (launch_msg_json(msg) == NULL ? -1 : 0); 
+}
+
 /*
  * This is used to bootstrap.  The primary case we care
  * about is during system boot, in which case launchd will
@@ -604,7 +623,6 @@ cmd_bootstrap(int argc, char * const argv[])
 	int ch;
 	
 	struct dirent **files;
-	char *args[2] = {__DECONST(char *, "load"), NULL};
 	char *name, *path;
 	unsigned long i;
 	int n;
@@ -631,7 +649,7 @@ cmd_bootstrap(int argc, char * const argv[])
 		return 1;
 	}
 
-	if (strcasecmp(session, "System") == 0) {
+	if (strcasecmp(session, "System") == 0 || strcasecmp(session, "Background") == 0) {
 		system_specific_bootstrap(sflag);
 		// Perhaps this should go in system_specific_bootstrap
 		for (i = 0; i < N(bootstrap_paths); i++) {
@@ -644,12 +662,15 @@ cmd_bootstrap(int argc, char * const argv[])
 				if (name[0] == '.')
 					continue;
 				
-				printf("\t");
+				printf("Loading job: %s: ", name);
 				asprintf(&path, "%s/%s", bootstrap_paths[i], name);
-				args[1] = path;
-				cmd_load(2, args);
+				if (load_job(path) == 0)
+					printf("ok\n");
+				else
+					printf("failed: %s\n", strerror(errno));
 			}
 		}
+
 	}
 	return (0);
 }
@@ -657,27 +678,14 @@ cmd_bootstrap(int argc, char * const argv[])
 static int
 cmd_load(int argc, char * const argv[])
 {
-	FILE *input;
-	json_error_t error;
-	json_t *msg, *plist;
 	int i;
 
 	if (argc < 2)
 		errx(EX_USAGE, "Usage: launchctl load <plist> [<plist> ...]");
 
 	for (i = 1; i < argc; i++) {
-		input = strcmp(argv[i], "-") ? fopen(argv[i], "r") : stdin;
-		if (input == NULL)
-			err(EX_OSERR, "Cannot open file %s", argv[1]);
-
-		plist = json_loadf(input, JSON_DECODE_ANY, &error);
-		msg = json_object();
-		json_object_set_new(msg, "SubmitJob", plist);
-
-		if (launch_msg_json(msg) == NULL) 
+		if (load_job(argv[i]) != 0)
 			err(EX_OSERR, "Cannot load job from %s", argv[i]);
-
-		printf("%s\n", json_string_value(json_object_get(plist, "Label")));
 	}
 
 	return (0);
