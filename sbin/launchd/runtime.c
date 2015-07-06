@@ -238,19 +238,22 @@ launchd_runtime_init(void)
 	pid_t p = getpid();
 #endif
 	(void)posix_assert_zero((mainkq = kqueue()));
+
 	os_assert_zero(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &demand_port_set));
 	os_assert_zero(mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_PORT_SET, &ipc_port_set));
 	posix_assert_zero(kevent_mod(demand_port_set, EVFILT_MACHPORT, EV_ADD, 0, 0, &kqmportset_callback));
+
 	os_assert_zero(launchd_mport_create_recv(&launchd_internal_port));
 	os_assert_zero(launchd_mport_make_send(launchd_internal_port));
+
 	max_msg_size = sizeof(union vproc_mig_max_sz);
 #ifdef notyet
 	if (sizeof(union xpc_domain_max_sz) > max_msg_size) {
 		max_msg_size = sizeof(union xpc_domain_max_sz);
 	}
 #endif
-	os_assert_zero(runtime_add_mport(launchd_internal_port, launchd_internal_demux));
 
+	os_assert_zero(runtime_add_mport(launchd_internal_port, launchd_internal_demux));
 	os_assert_zero(pthread_create(&kqueue_demand_thread, NULL, kqueue_demand_loop, NULL));
 	os_assert_zero(pthread_detach(kqueue_demand_thread));
 
@@ -698,8 +701,6 @@ x_handle_kqueue(mach_port_t junk __attribute__((unused)), integer_t fd)
 
 	bulk_kev = NULL;
 
-
-	
 	return 0;
 }
 
@@ -707,7 +708,6 @@ void
 launchd_runtime(void)
 {
 	launchd_runtime2(max_msg_size);
-	syslog(LOG_ERR, "calling dispatch_main\n");
 	dispatch_main();
 }
 
@@ -749,8 +749,6 @@ launchd_mport_notify_req(mach_port_t name, mach_msg_id_t which)
 	return (err);
 }
 
-extern void mach_init(void);
-
 pid_t
 runtime_fork(mach_port_t bsport)
 {
@@ -764,7 +762,7 @@ runtime_fork(mach_port_t bsport)
 	syslog(LOG_ERR, "runtime_fork(bsport=%d)", bsport);
 	(void)os_assumes_zero(launchd_mport_make_send(bsport));
 	(void)os_assumes_zero(launchd_set_bport(bsport));
-	bootstrap_port = bsport;
+	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
 
 	__OS_COMPILETIME_ASSERT__(SIG_ERR == (typeof(SIG_ERR))-1);
 	if (uflag == false) {
@@ -773,6 +771,7 @@ runtime_fork(mach_port_t bsport)
 			(void)posix_assumes_zero(signal(sigigns[i], SIG_DFL));
 		}
 	}
+
 	r = fork();
 	saved_errno = errno;
 
@@ -783,7 +782,6 @@ runtime_fork(mach_port_t bsport)
 		if (uflag == false)
 			(void)posix_assumes_zero(sigprocmask(SIG_SETMASK, &oset, NULL));
 		(void)os_assumes_zero(launchd_set_bport(MACH_PORT_NULL));
-		bootstrap_port = MACH_PORT_NULL;
 	} else {
 		pid_t p = -getpid();
 		(void)posix_assumes_zero(sysctlbyname("vfs.generic.noremotehang", NULL, NULL, &p, sizeof(p)));
@@ -878,7 +876,6 @@ launchd_mport_create_recv(mach_port_t *name)
 kern_return_t
 launchd_mport_deallocate(mach_port_t name)
 {
-
 	return errno = mach_port_deallocate(mach_task_self(), name);
 }
 
