@@ -286,6 +286,7 @@ ipc_entry_release(ipc_entry_t entry)
  *		The space must be active.
  */
 
+extern void kdb_backtrace(void);
 ipc_entry_t
 ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 {
@@ -302,6 +303,7 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 		return (NULL);
 	}
 	if (fp->f_type != DTYPE_MACH_IPC) {
+		kdb_backtrace();
 		log(LOG_DEBUG, "%s:%d port name: %d is not MACH\n", curproc->p_comm, curproc->p_pid, name);
 		fdrop(fp, curthread);
 		return (NULL);

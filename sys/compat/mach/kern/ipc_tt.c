@@ -459,17 +459,18 @@ retrieve_task_self_fast(
 
 	if ((port = task->itk_sself) == task->itk_self) {
 		/* no interposing */
-
+		itk_unlock(task);
 		ip_lock(port);
 		assert(ip_active(port));
 		ip_reference(port);
 		port->ip_srights++;
 		ip_unlock(port);
-	} else
+	} else {
+		itk_unlock(task);
 		port = ipc_port_copy_send(port);
-	itk_unlock(task);
+	}
 
-	return port;
+	return (port);
 }
 
 /*
