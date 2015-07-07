@@ -121,7 +121,7 @@ typedef	char	dev_name_t[128];	/* must match device_types.defs */
 /*
  * Mode for open/read/write
  */
-typedef	uint32		dev_mode_t;
+typedef	uint32_t		dev_mode_t;
 #define	D_READ		0x1		/* read */
 #define	D_WRITE		0x2		/* write */
 #define	D_NODELAY	0x4		/* no delay on open */
@@ -147,12 +147,12 @@ typedef integer_t	io_buf_len_t;
 /*
  * Record number for random-access devices
  */
-typedef	uint32		recnum_t;
+typedef	uint32_t		recnum_t;
 
 /*
  * Flavors of set/get statuses
  */
-typedef uint32		dev_flavor_t;
+typedef uint32_t		dev_flavor_t;
 
 /*
  * Generic array for get/set status

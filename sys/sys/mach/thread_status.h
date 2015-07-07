@@ -103,10 +103,29 @@
  *	in the machine dependent module.
  */
 #include <sys/mach/mach_types.h>
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 /*
  *	Generic definition for machine-dependent thread status.
  */
+
+#define x86_THREAD_STATE32              1
+#define x86_FLOAT_STATE32               2
+#define x86_EXCEPTION_STATE32           3
+#define x86_THREAD_STATE64              4
+#define x86_FLOAT_STATE64               5
+#define x86_EXCEPTION_STATE64           6
+#define x86_THREAD_STATE                7
+#define x86_FLOAT_STATE                 8
+#define x86_EXCEPTION_STATE             9
+#define x86_DEBUG_STATE32               10
+#define x86_DEBUG_STATE64               11
+#define x86_DEBUG_STATE                 12
+#define THREAD_STATE_NONE               13
+/* 14 and 15 are used for the internal x86_SAVED_STATE flavours */
+#define x86_AVX_STATE32                 16
+#define x86_AVX_STATE64                 17
+#define x86_AVX_STATE                   18
+
 
 typedef	natural_t	*thread_state_t;	/* Variable-length array */
 

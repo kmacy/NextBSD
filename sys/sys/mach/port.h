@@ -89,7 +89,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <vm/vm.h>
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 
 /*

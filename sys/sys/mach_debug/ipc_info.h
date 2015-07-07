@@ -67,7 +67,7 @@
 #define _MACH_DEBUG_IPC_INFO_H_
 
 #include <sys/mach/port.h>
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 /*
  *	Remember to update the mig type definitions

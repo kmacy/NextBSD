@@ -121,20 +121,10 @@
 #ifndef	_IPC_IPC_KMSG_H_
 #define _IPC_IPC_KMSG_H_
 
-#if 0
-#include <cpus.h>
-#include <dipc.h>
-#include <mach_rt.h>
-#endif
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
-#if 0
-#include <kern/assert.h>
-#include <kern/cpu_number.h>
-#include <kern/macro_help.h>
-#include <kern/kalloc.h>
-#endif
+
 #include <sys/mach/ipc/ipc_object.h>
 
 /*

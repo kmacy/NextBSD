@@ -18,11 +18,7 @@
 #include <syslog.h>
 #include <stdarg.h>
 
-
-
-
-
-#include <machine/mach/ndr_def.h>
+#include <sys/mach/ndr_def.h>
 void mach_init(void) __attribute__((constructor));
 mach_port_t mach_reply_port(void);
 mach_port_t task_self_trap(void);

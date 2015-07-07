@@ -83,8 +83,6 @@
 #ifndef	TIME_VALUE_H_
 #define	TIME_VALUE_H_
 
-#include <machine/mach/vm_types.h>
-
 /*
  *	Time value returned by kernel.
  */

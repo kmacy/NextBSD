@@ -66,7 +66,7 @@
 #define	_MACH_TASK_INFO_H_
 
 #include <sys/mach/message.h>
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 #include <sys/mach/time_value.h>
 #include <sys/mach/policy.h>
 #include <sys/mach/vm_statistics.h> /* for vm_extmod_statistics_data_t */

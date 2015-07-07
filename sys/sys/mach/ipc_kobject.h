@@ -119,7 +119,7 @@
 #ifndef	_KERN_IPC_KOBJECT_H_
 #define _KERN_IPC_KOBJECT_H_
 
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 #define	IKO_NULL	((ipc_kobject_t) 0)
 

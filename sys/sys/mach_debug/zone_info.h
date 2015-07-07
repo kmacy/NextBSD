@@ -59,7 +59,7 @@
 #ifndef	_MACH_DEBUG_ZONE_INFO_H_
 #define _MACH_DEBUG_ZONE_INFO_H_
 
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 /*
  *	Legacy definitions for host_zone_info().  This interface, and

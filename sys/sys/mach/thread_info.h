@@ -95,7 +95,7 @@
 
 #include <sys/mach/policy.h>
 #include <sys/mach/time_value.h>
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 /*
  *	Generic information structure to allow for expansion.

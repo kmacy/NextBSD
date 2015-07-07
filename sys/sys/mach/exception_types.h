@@ -1,7 +1,14 @@
 #ifndef _MACH_EXCEPTION_TYPES_H_
 #define _MACH_EXCEPTION_TYPES_H_
 
-#include <machine/mach/exception.h>
+#if defined(__i386__) || defined(__amd64__)
+#define EXC_TYPES_COUNT 13
+#else
+#define EXC_TYPES_COUNT 2
+#endif
+
+#define	EXC_MASK_MACHINE	0
+
 /*
  *      Machine-independent exception definitions.
  */
@@ -85,7 +92,7 @@
 
 #include <sys/mach/port.h>
 #include <sys/mach/thread_status.h>
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 /*
  * Exported types
  */

@@ -58,7 +58,7 @@
 #ifndef MACH_DEBUG_PAGE_INFO_H 
 #define MACH_DEBUG_PAGE_INFO_H 
 
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 
 typedef	vm_offset_t	*page_address_array_t;
 #endif	/* MACH_DEBUG_PAGE_INFO_H */

@@ -6503,7 +6503,7 @@ machservice_status(struct machservice *ms)
 	}
 }
 
-#include <machine/mach/thread_status.h>
+#include <sys/mach/thread_status.h>
 void
 job_setup_exception_port(job_t j, task_t target_task)
 {

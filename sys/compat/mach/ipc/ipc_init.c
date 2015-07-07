@@ -133,7 +133,7 @@
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/ipc/ipc_hash.h>
 #include <sys/mach/ipc/ipc_init.h>
-#include <machine/mach/ndr_def.h>   /* NDR_record */
+#include <sys/mach/ndr_def.h>   /* NDR_record */
 
 vm_map_t ipc_kernel_map;
 vm_size_t ipc_kernel_map_size = 1024 * 1024;

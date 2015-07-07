@@ -92,12 +92,7 @@
 
 #include <sys/mach/kern_return.h>
 #include <sys/mach/port.h>
-#include <machine/mach/vm_types.h>
-#if 0
-#include <sys/mach/vm_param.h>
-#endif
-#if 0
-#endif
+#include <sys/mach/vm_types.h>
 #include <sys/mach_debug/ipc_info.h>
 #include <sys/mach_debug/hash_info.h>
 #if 0

@@ -338,26 +338,20 @@
 #include <sys/param.h>
 #include <sys/eventhandler.h>
 #include <sys/kernel.h>
-#include <machine/mach/vm_types.h>
-#if 0
-#include <sys/mach/vm_param.h>
-#endif
+#include <sys/mach/vm_types.h>
+
 #include <sys/mach/task_info.h>
 #include <sys/mach/task_special_ports.h>
 #include <sys/mach/mach_types.h>
-#include <machine/mach/rpc.h>
+#include <sys/mach/rpc.h>
 #include <sys/mach/ipc/ipc_space.h>
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/mach_param.h>
-#if 0
-#include <sys/mach/misc_protos.h>
-#endif
+
 #include <sys/mach/task.h>
 #include <sys/mach/ipc/ipc_kmsg.h>
 #include <sys/mach/thread.h>
-#if 0
-#include <sys/mach/processor.h>
-#endif
+
 #include <sys/mach/sched_prim.h>	/* for thread_wakeup */
 #include <sys/mach/ipc_tt.h>
 #if 0

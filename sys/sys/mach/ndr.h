@@ -53,6 +53,8 @@ typedef struct {
 #define  NDR_CHAR_ASCII        0
 #define  NDR_CHAR_EBCDIC       1
 
+
 extern NDR_record_t NDR_record;
+
 
 #endif /* _NDR_H_ */

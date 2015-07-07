@@ -280,17 +280,6 @@ copies:
 		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/sys/mach/device
 .endif
-.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach)
-	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
-		${DESTDIR}${INCLUDEDIR}/machine/mach
-.endif
-.if exists(${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach)
-	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
-		${DESTDIR}${INCLUDEDIR}/machine/mach
-	cd ${.CURDIR}/../sys/${MACHINE_CPUARCH}/include/mach ; \
-	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
-		${DESTDIR}${INCLUDEDIR}/machine/mach
-.endif
 
 symlinks:
 	@${ECHO} "Setting up symlinks to kernel source tree..."

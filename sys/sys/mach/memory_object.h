@@ -103,7 +103,6 @@
  *	management interface:
  */
 #include <sys/mach/port.h>
-#include <machine/mach/vm_types.h>
 
 typedef mach_port_t  memory_object_default_t;
 typedef unsigned long long	memory_object_offset_t;

@@ -117,7 +117,7 @@
 #ifndef	_KERN_SCHED_PRIM_H_
 #define _KERN_SCHED_PRIM_H_
 
-#include <machine/mach/vm_types.h>
+#include <sys/mach/vm_types.h>
 #include <sys/mach/kern_return.h>
 #include <compat/mach/kern_types.h>
 #include <sys/lock.h>
