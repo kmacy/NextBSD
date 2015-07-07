@@ -125,7 +125,6 @@ static void fdunused(struct filedesc *fdp, int fd);
 static int kern_fdalloc(struct thread *td, int minfd, int *result);
 static void kern_fddealloc(struct thread *td, int fd);
 static inline void kern_fdfree(struct filedesc *fdp, int fd);
-static inline void kern_fdfree_last(struct filedesc *fdp, int fd);
 static int kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
 			 struct filecaps *fcaps);
 
@@ -623,7 +622,7 @@ kern_last_close(struct thread *td, struct file *fp, struct filedesc *fdp, int fd
 
 	FILEDESC_XLOCK(fdp);
 	knote_fdclose(td, fd);
-	kern_fdfree_last(fdp, fd);
+	kern_fdfree(fdp, fd);
 	FILEDESC_XUNLOCK(fdp);
 	fdrop(fp, td);
 }
@@ -812,35 +811,19 @@ kern_fddealloc(struct thread *td, int fd)
 }
 
 static inline void
-_fdfree(struct filedesc *fdp, int fd, int last)
+kern_fdfree(struct filedesc *fdp, int fd)
 {
 	struct filedescent *fde;
 
 	fde = &fdp->fd_ofiles[fd];
 #ifdef CAPABILITIES
-	if (!last)
-		seq_write_begin(&fde->fde_seq);
+	seq_write_begin(&fde->fde_seq);
 #endif
-	if (last)
-		return;
 	bzero(fde, fde_change_size);
 	fdunused(fdp, fd);
 #ifdef CAPABILITIES
 	seq_write_end(&fde->fde_seq);
 #endif
-}
-
-
-static inline void
-kern_fdfree(struct filedesc *fdp, int fd)
-{
-	_fdfree(fdp, fd, 0);
-}
-
-static inline void
-kern_fdfree_last(struct filedesc *fdp, int fd)
-{
-	_fdfree(fdp, fd, 1);
 }
 
 /*
