@@ -382,8 +382,6 @@ ipc_kmsg_alloc(
 #endif
 	/* compare against implementation upper limit for the body */
 	if (min_msg_size > ipc_kmsg_max_body_space) {
-		printf("size=%d > ipc_kmsg_max_body_space=%ld - return IKM_NULL\n",
-			   min_msg_size, ipc_kmsg_max_body_space);
 		return IKM_NULL;
 	}
 	if (min_msg_size > sizeof(mach_msg_base_t)) {

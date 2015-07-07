@@ -81,8 +81,6 @@
  *	Functions to manipulate IPC capabilities.
  */
 
-#include "opt_global.h"
-#include "opt_witness.h"
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
