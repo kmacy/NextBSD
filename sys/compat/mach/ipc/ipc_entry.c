@@ -94,6 +94,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/eventhandler.h>
+#include <sys/capsicum.h>
 #include <sys/file.h>
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
@@ -826,6 +827,16 @@ kern_fdfree(struct filedesc *fdp, int fd)
 #endif
 }
 
+static void
+filecaps_fill(struct filecaps *fcaps)
+{
+
+	CAP_ALL(&fcaps->fc_rights);
+	fcaps->fc_ioctls = NULL;
+	fcaps->fc_nioctls = -1;
+	fcaps->fc_fcntls = CAP_FCNTL_ALL;
+}
+
 /*
  * Install a file in a file descriptor table.
  */
@@ -857,6 +868,7 @@ kern_finstall(struct thread *td, struct file *fp, int *fd, int flags,
 	fde->fde_file = fp;
 	if ((flags & O_CLOEXEC) != 0)
 		fde->fde_flags |= UF_EXCLOSE;
+	filecaps_fill(&fde->fde_caps);
 #ifdef CAPABILITIES
 	seq_write_end(&fde->fde_seq);
 #endif
