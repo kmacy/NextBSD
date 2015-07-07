@@ -271,7 +271,6 @@ typedef unsigned int mach_msg_descriptor_type_t;
 #define MACH_MSG_OOL_DESCRIPTOR  		1
 #define MACH_MSG_OOL_PORTS_DESCRIPTOR 		2
 #define MACH_MSG_OOL_VOLATILE_DESCRIPTOR  	3
-#define MACH_MSG_FILE_DESCRIPTOR 		4
 
 
 #pragma pack(4)

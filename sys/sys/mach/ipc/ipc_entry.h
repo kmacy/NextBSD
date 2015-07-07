@@ -232,18 +232,15 @@ extern void ipc_entry_hold(
 extern void ipc_entry_release(
 	ipc_entry_t entry);
 
-kern_return_t ipc_entry_copyin_file(
+kern_return_t ipc_entry_file_to_port(
 	ipc_space_t space,
 	mach_port_name_t name,
-	void **fpp);
+	ipc_object_t *objectp);
 
-kern_return_t ipc_entry_copyout_file(
+kern_return_t ipc_entry_port_to_file(
 	ipc_space_t space,
-	void *handle,
-	mach_port_name_t *namep);
-
-ipc_object_t ipc_entry_handle_to_object(
-	void *handle);
+	mach_port_name_t *namep,
+	ipc_object_t object);
 
 void ipc_entry_close(
 	ipc_space_t space __unused,

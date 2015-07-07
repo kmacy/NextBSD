@@ -146,30 +146,6 @@ ipc_right_lookup(
 	if ((entry = ipc_entry_lookup(space, name)) == IE_NULL)
 		return KERN_INVALID_NAME;
 
-#if 0
-	{
-	ipc_port_t port;
-	ipc_space_t dspace;
-
-	/* we can only write lock a port belonging to the caller's space */
-	if ((entry->ie_bits & MACH_PORT_TYPE_PORT_SET) == 0 &&
-		(port = (ipc_port_t)entry->ie_object) != NULL &&
-		(dspace = port->ip_receiver) != space &&
-		space != ipc_space_kernel &&
-		dspace != ipc_space_kernel && xlock) {
-
-		MPASS(dspace->is_task != NULL);
-		MPASS(dspace->is_task->itk_p != NULL);
-		printf("ipc_space_kernel: %p\n", ipc_space_kernel);
-		printf("KERN_INVALID_RIGHT %s:%s:%d %s space: %p pid: %d %s receiver: %p pid: %d\n",
-			   __FUNCTION__, __FILE__, __LINE__,
-			   space->is_task->itk_p->p_comm, space, space->is_task->itk_p->p_pid,
-			   dspace->is_task->itk_p->p_comm, dspace, dspace->is_task->itk_p->p_pid);
-		return KERN_INVALID_RIGHT;
-	}
-	}
-#endif
-
 	if (xlock)
 		is_write_lock(space);
 	else
@@ -1379,9 +1355,6 @@ ipc_right_copyin_check(
  */
 
 #define ELOG printf("%s:%d bits: %08x\n", __FILE__, __LINE__, bits)
-#if defined(KDB) && defined(WITNESS)
-extern int witness_trace;
-#endif
 
 kern_return_t
 ipc_right_copyin(

@@ -210,6 +210,8 @@ typedef unsigned int ipc_port_timestamp_t;
 
 typedef unsigned int ipc_port_flags_t;
 
+#define	IP_CONTEXT_FILE	0x1
+
 struct ipc_port {
 
 	/*

@@ -313,34 +313,48 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 	return (entry);
 }
 
-
 kern_return_t
-ipc_entry_copyin_file(ipc_space_t space, mach_port_name_t name, void **fpp)
+ipc_entry_file_to_port(ipc_space_t space, mach_port_name_t name, ipc_object_t *objectp)
 {
 	struct file *fp;
+	ipc_port_t port;
+
+	assert(space->is_active);
+
+	if (curthread->td_proc->p_fd == NULL)
+		return (KERN_INVALID_ARGUMENT);
 
 	if (fget(curthread, name, NULL, &fp) != 0) {
-		log(LOG_DEBUG, "entry for port name: %d not found\n", name);
+		log(LOG_DEBUG, "%s:%d entry for port name: %d not found\n", curproc->p_comm, curproc->p_pid, name);
 		return (KERN_INVALID_ARGUMENT);
 	}
-	*fpp = fp;
 	if (fp->f_type == DTYPE_MACH_IPC) {
 		fdrop(fp, curthread);
 		return (KERN_INVALID_ARGUMENT);
 	}
+	if ((port = ipc_port_alloc_special(space)) == NULL)
+		return (KERN_RESOURCE_SHORTAGE);
+
+	port->ip_context = (mach_vm_address_t) fp;
+	port->ip_flags = IP_CONTEXT_FILE;
+	port->ip_receiver = space;
+	port->ip_receiver_name = name;
+
+	*objectp = (ipc_object_t)port;
 	return (KERN_SUCCESS);
 }
 
 kern_return_t
-ipc_entry_copyout_file(ipc_space_t space, void *handle, mach_port_name_t *namep)
+ipc_entry_port_to_file(ipc_space_t space, mach_port_name_t *namep, ipc_object_t object)
 {
-	struct file *fp = handle;
+	ipc_port_t port;
+	struct file *fp;
 
-	MPASS(handle != NULL);
-
-	if (fp->f_type == DTYPE_MACH_IPC)
-		return KERN_INVALID_ARGUMENT;
-	/* maintain the reference added at ipc_entry_copyin */
+	port = (ipc_port_t)object;
+	MPASS(object != NULL);
+	MPASS(port->ip_flags & IP_CONTEXT_FILE);
+	fp = (void *)port->ip_context;
+	ipc_port_dealloc_special(port, space);
 
 	/* Are sent file O_CLOEXEC? */
 	if (kern_finstall(curthread, fp, namep, 0, NULL) != 0) {
@@ -351,23 +365,6 @@ ipc_entry_copyout_file(ipc_space_t space, void *handle, mach_port_name_t *namep)
 	printf(" installing received file *fp=%p at %d\n", fp, *namep);
 	return (KERN_SUCCESS);
 }
-
-ipc_object_t
-ipc_entry_handle_to_object(void *handle)
-{
-	struct file *fp = handle;
-	ipc_entry_t entry;
-
-	if (fp == NULL)
-		return (NULL);
-	if (fp->f_type != DTYPE_MACH_IPC)
-		return (NULL);
-	if ((entry = fp->f_data) == NULL)
-		return (NULL);
-
-	return (entry->ie_object);
-}
-
 
 /*
  *	Routine:	ipc_entry_get

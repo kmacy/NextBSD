@@ -407,6 +407,8 @@ ipc_object_copyin(
 	kern_return_t kr;
 	int xlock;
 
+	if (ipc_entry_file_to_port(space, name, objectp) == KERN_SUCCESS)
+		return (KERN_SUCCESS);
 	/*
 	 *	Could first try a read lock when doing
 	 *	MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MAKE_SEND,
@@ -610,10 +612,15 @@ ipc_object_copyout(
 	mach_port_name_t name;
 	ipc_entry_t entry;
 	kern_return_t kr;
+	ipc_port_t port;
 
 	assert(IO_VALID(object));
 	MACH_VERIFY(io_otype(object) == IOT_PORT, ("bad type value on %p\n", object));
 	assert(io_otype(object) == IOT_PORT);
+
+	port = (ipc_port_t)object;
+	if (port->ip_flags & IP_CONTEXT_FILE)
+		return (ipc_entry_port_to_file(space, namep, (ipc_object_t) port));
 
 	is_write_lock(space);
 	if (!space->is_active) {

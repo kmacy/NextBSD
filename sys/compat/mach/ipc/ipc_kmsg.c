@@ -1514,43 +1514,6 @@ ipc_kmsg_copyin_port_descriptor(
     return (mach_msg_descriptor_t *)(user_dsc_in+1);
 }
 
-static mach_msg_descriptor_t *
-ipc_kmsg_copyin_file_descriptor(
-        volatile mach_msg_port_descriptor_t *dsc,
-        mach_msg_legacy_port_descriptor_t *user_dsc_in,
-        ipc_space_t space,
-        ipc_object_t dest,
-        ipc_kmsg_t kmsg,
-        mach_msg_return_t *mr)
-{
-    volatile mach_msg_legacy_port_descriptor_t *user_dsc = user_dsc_in;
-    int32_t		name;
-	ipc_port_t port;
-	void *handle;
-
-	port = (ipc_port_t) kmsg->ikm_header->msgh_remote_port;
-	assert(IP_VALID(port));
-
-	MPASS(port->ip_receiver != ipc_space_kernel);
-
-    name = (mach_port_name_t)user_dsc->name;
-    if (name >= 0) {
-		kern_return_t kr = ipc_entry_copyin_file(space, name, &handle);
-
-        if (kr != KERN_SUCCESS) {
-            *mr = MACH_SEND_INVALID_RIGHT;
-            return NULL;
-        }
-		dsc->pad1 = 42;
-		dsc->name = (ipc_port_t) handle;
-    } else {
-        dsc->name = CAST_MACH_NAME_TO_PORT(name);
-    }
-    dsc->type = MACH_MSG_FILE_DESCRIPTOR;
-
-    return (mach_msg_descriptor_t *)(user_dsc_in+1);
-}
-
 mach_msg_descriptor_t * ipc_kmsg_copyin_ool_descriptor(
 	mach_msg_ool_descriptor_t *dsc,
 	mach_msg_descriptor_t *user_dsc,
@@ -1910,13 +1873,6 @@ ipc_kmsg_copyin_body(
         switch (user_addr->type.type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
 			user_addr = ipc_kmsg_copyin_port_descriptor((mach_msg_port_descriptor_t *)kern_addr,
-							(mach_msg_legacy_port_descriptor_t *)user_addr, space, dest, kmsg, &mr);
-
-			kern_addr++;
-			complex = TRUE;
-			break;
-		case MACH_MSG_FILE_DESCRIPTOR:
-			user_addr = ipc_kmsg_copyin_file_descriptor((mach_msg_port_descriptor_t *)kern_addr,
 							(mach_msg_legacy_port_descriptor_t *)user_addr, space, dest, kmsg, &mr);
 
 			kern_addr++;
@@ -2523,42 +2479,6 @@ ipc_kmsg_copyout_port_descriptor(mach_msg_descriptor_t *dsc,
 }
 
 static mach_msg_descriptor_t *
-ipc_kmsg_copyout_file_descriptor(mach_msg_descriptor_t *dsc,
-        mach_msg_descriptor_t *dest_dsc,
-        ipc_space_t space,
-	    kern_return_t *mr)
-{
-    mach_port_t			port;
-    mach_port_name_t		name;
-
-
-    /* Copyout port right carried in the message */
-    port = dsc->port.name;
-    *mr |= ipc_entry_copyout_file(space, port, &name);
-
-
-	MDPRINTF(("ipc_kmsg_copyout_port_descriptor name is %d\n",name));
-    if(current_task() == kernel_task)
-    {
-        mach_msg_port_descriptor_t *user_dsc = (mach_msg_port_descriptor_t *)dest_dsc;
-        user_dsc--; // point to the start of this port descriptor
-        user_dsc->name = CAST_MACH_NAME_TO_PORT(name);
-        user_dsc->disposition = 0;
-        user_dsc->type = MACH_MSG_FILE_DESCRIPTOR;
-        dest_dsc = (mach_msg_descriptor_t *)user_dsc;
-    } else {
-        mach_msg_legacy_port_descriptor_t *user_dsc = (mach_msg_legacy_port_descriptor_t *)dest_dsc;
-        user_dsc--; // point to the start of this port descriptor
-        user_dsc->name = name;
-        user_dsc->disposition = 0;
-        user_dsc->type = MACH_MSG_FILE_DESCRIPTOR;
-        dest_dsc = (mach_msg_descriptor_t *)user_dsc;
-    }
-
-    return (mach_msg_descriptor_t *)dest_dsc;
-}
-
-static mach_msg_descriptor_t *
 ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descriptor_t *user_dsc, int is_lp64, vm_map_t map, mach_msg_return_t *mr)
 {
 	vm_offset_t			rcv_addr;
@@ -2748,9 +2668,6 @@ ipc_kmsg_copyout_body(
 		switch (kern_dsc[i].type.type) {
 		case MACH_MSG_PORT_DESCRIPTOR:
 			user_dsc = ipc_kmsg_copyout_port_descriptor(kern_dsc + i, user_dsc, space, &mr);
-			break;
-		case MACH_MSG_FILE_DESCRIPTOR:
-			user_dsc = ipc_kmsg_copyout_file_descriptor(kern_dsc + i, user_dsc, space, &mr);
 			break;
 		case MACH_MSG_OOL_VOLATILE_DESCRIPTOR:
 		case MACH_MSG_OOL_DESCRIPTOR:
