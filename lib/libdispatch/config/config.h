@@ -177,6 +177,8 @@
 /* Define to use POSIX semaphores */
 #define USE_POSIX_SEM 1
 
+#define DISPATCH_USE_MALLOCZONE 0
+
 /* Enable extensions on AIX 3, Interix.  */
 #ifndef _ALL_SOURCE
 # define _ALL_SOURCE 1
