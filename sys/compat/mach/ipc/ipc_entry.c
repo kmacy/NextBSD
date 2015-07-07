@@ -821,6 +821,8 @@ _fdfree(struct filedesc *fdp, int fd, int last)
 	if (!last)
 		seq_write_begin(&fde->fde_seq);
 #endif
+	if (last)
+		return;
 	bzero(fde, fde_change_size);
 	fdunused(fdp, fd);
 #ifdef CAPABILITIES
