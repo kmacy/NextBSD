@@ -24,7 +24,7 @@ SUBDIR_ORDERED=	${_csu} \
 SUBDIR=	${SUBDIR_ORDERED} \
 	.WAIT \
 	libalias \
-	${_libasl} \
+	libasl \
 	libarchive \
 	${_libatm} \
 	libauditd \
@@ -45,7 +45,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libdevctl \
 	libdevinfo \
 	libdevstat \
-	${_libdispatch} \
+	libdispatch \
 	libdpv \
 	libdwarf \
 	libedit \
@@ -65,11 +65,11 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libjansson \
 	libkiconv \
 	libkvm \
-	${_liblaunch} \
+	liblaunch \
 	${_libldns} \
 	liblzma \
-	${_libmach} \
-	libmagic \
+	${_libmagic} \
+	libmach \
 	libmandoc \
 	libmemstat \
 	libmd \
@@ -122,7 +122,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libvmmapi} \
 	libwrap \
 	libxo \
-	${_libxpc} \
+	libxpc \
 	liby \
 	${_libypclnt} \
 	libz \
@@ -274,12 +274,6 @@ _librtld_db=	librtld_db
 .endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
-_libcfxlite=	libcfxlite
-_libdispatch=	libdispatch
-_liblaunch=	liblaunch
-_libmach=	libmach
-_libasl=	libasl
-_libxpc=	libxpc
 .if ${MK_BHYVE} != "no"
 _libvmmapi=	libvmmapi
 .endif
