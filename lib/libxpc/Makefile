@@ -15,7 +15,9 @@ SRCS=	xpc_dictionary.c \
 	xpc_misc.c \
 	xpc_type.c \
 	xpc_array.c \
-	xpc_connection.c
+	xpc_connection.c \
+	subr_nvlist.c \
+	subr_nvpair.c
 
 INCSDIR= ${INCLUDEDIR}/xpc
 INCS=	activity.h \
