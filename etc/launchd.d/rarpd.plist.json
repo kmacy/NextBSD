@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/rarpd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/rarpd",
+    "-f"
+  ],
+  "RunAtLoad": true,
+  "Label": "rarpd"
+}

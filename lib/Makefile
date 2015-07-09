@@ -24,6 +24,7 @@ SUBDIR_ORDERED=	csu \
 SUBDIR=	${SUBDIR_ORDERED} \
 	.WAIT \
 	libalias \
+	libasl \
 	libarchive \
 	${_libatm} \
 	libauditd \
@@ -44,6 +45,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libdevctl \
 	libdevinfo \
 	libdevstat \
+	libdispatch \
 	libdpv \
 	libdwarf \
 	libedit \
@@ -60,11 +62,14 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libiconv_modules} \
 	libipsec \
 	libjail \
+	libjansson \
 	libkiconv \
 	libkvm \
+	liblaunch \
 	${_libldns} \
 	liblzma \
 	${_libmagic} \
+	libmach \
 	libmemstat \
 	libmd \
 	${_libmilter} \
@@ -74,9 +79,11 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libnetbsd \
 	${_libnetgraph} \
 	${_libngatm} \
+	libnotify \
 	libnv \
 	libohash \
 	libopie \
+	libosxsupport \
 	libpam \
 	libpcap \
 	libpjdlog \
@@ -97,6 +104,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	libstand \
 	libstdbuf \
 	libstdthreads \
+	libSystem \
 	libtacplus \
 	${_libtelnet} \
 	${_libthr} \
@@ -113,6 +121,7 @@ SUBDIR=	${SUBDIR_ORDERED} \
 	${_libvmmapi} \
 	libwrap \
 	libxo \
+	libxpc \
 	liby \
 	${_libypclnt} \
 	libz \
@@ -263,6 +272,7 @@ _libvmmapi=	libvmmapi
 _libproc=	libproc
 _librtld_db=	librtld_db
 .endif
+
 
 .if ${MACHINE_CPUARCH} == "powerpc"
 _libproc=	libproc

@@ -144,6 +144,9 @@ static int vm_map_stack_locked(vm_map_t map, vm_offset_t addrbos,
     int cow);
 static void vm_map_wire_entry_failure(vm_map_t map, vm_map_entry_t entry,
     vm_offset_t failed_addr);
+void _vm_map_clip_end(vm_map_t map, vm_map_entry_t entry, vm_offset_t end);
+void _vm_map_clip_start(vm_map_t map, vm_map_entry_t entry, vm_offset_t start);
+
 
 #define	ENTRY_CHARGED(e) ((e)->cred != NULL || \
     ((e)->object.vm_object != NULL && (e)->object.vm_object->cred != NULL && \
@@ -1608,7 +1611,7 @@ vm_map_simplify_entry(vm_map_t map, vm_map_entry_t entry)
  *	This routine is called only when it is known that
  *	the entry must be split.
  */
-static void
+void
 _vm_map_clip_start(vm_map_t map, vm_map_entry_t entry, vm_offset_t start)
 {
 	vm_map_entry_t new_entry;
@@ -1692,7 +1695,7 @@ _vm_map_clip_start(vm_map_t map, vm_map_entry_t entry, vm_offset_t start)
  *	This routine is called only when it is known that
  *	the entry must be split.
  */
-static void
+void
 _vm_map_clip_end(vm_map_t map, vm_map_entry_t entry, vm_offset_t end)
 {
 	vm_map_entry_t new_entry;

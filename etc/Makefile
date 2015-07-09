@@ -10,7 +10,8 @@ SUBDIR=	\
 SUBDIR+=sendmail
 .endif
 
-BIN1=	crontab \
+BIN1=	asl.conf \
+	crontab \
 	devd.conf \
 	devfs.conf \
 	ddb.conf \
@@ -148,7 +149,7 @@ BIN1+= regdomain.xml
 .endif
 
 # -rwxr-xr-x root:wheel, for the new cron root:wheel
-BIN2=	netstart pccard_ether rc.suspend rc.resume
+BIN2=	bootstrap netstart pccard_ether rc.suspend rc.resume
 
 MTREE=	BSD.debug.dist BSD.include.dist BSD.root.dist BSD.usr.dist BSD.var.dist
 .if ${MK_TESTS} != "no"
@@ -243,6 +244,7 @@ distribution:
 	${_+_}cd ${.CURDIR}/dma; ${MAKE} install
 .endif
 	${_+_}cd ${.CURDIR}/gss; ${MAKE} install
+	${_+_}cd ${.CURDIR}/launchd.d; ${MAKE} install
 	${_+_}cd ${.CURDIR}/periodic; ${MAKE} install
 .if ${MK_PKGBOOTSTRAP} != "no"
 	${_+_}cd ${.CURDIR}/pkg; ${MAKE} install

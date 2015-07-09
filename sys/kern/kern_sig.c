@@ -105,7 +105,6 @@ static int	coredump(struct thread *);
 static int	killpg1(struct thread *td, int sig, int pgid, int all,
 		    ksiginfo_t *ksi);
 static int	issignal(struct thread *td);
-static int	sigprop(int sig);
 static void	tdsigwakeup(struct thread *, int, sig_t, int);
 static void	sig_suspend_threads(struct thread *, struct proc *, int);
 static int	filt_sigattach(struct knote *kn);
@@ -608,12 +607,19 @@ sigonstack(size_t sp)
 }
 
 static __inline int
-sigprop(int sig)
+__sigprop(int sig)
 {
 
 	if (sig > 0 && sig < NSIG)
 		return (sigproptbl[_SIG_IDX(sig)]);
 	return (0);
+}
+
+int
+sigprop(int sig)
+{
+
+	return (__sigprop(sig));
 }
 
 int
@@ -758,7 +764,7 @@ kern_sigaction(td, sig, act, oact, flags)
 		 * have to restart the process.
 		 */
 		if (ps->ps_sigact[_SIG_IDX(sig)] == SIG_IGN ||
-		    (sigprop(sig) & SA_IGNORE &&
+		    (__sigprop(sig) & SA_IGNORE &&
 		     ps->ps_sigact[_SIG_IDX(sig)] == SIG_DFL)) {
 			/* never to be seen again */
 			sigqueue_delete_proc(p, sig);
@@ -926,7 +932,7 @@ siginit(p)
 	ps = p->p_sigacts;
 	mtx_lock(&ps->ps_mtx);
 	for (i = 1; i <= NSIG; i++) {
-		if (sigprop(i) & SA_IGNORE && i != SIGCONT) {
+		if (__sigprop(i) & SA_IGNORE && i != SIGCONT) {
 			SIGADDSET(ps->ps_sigignore, i);
 		}
 	}
@@ -943,7 +949,7 @@ sigdflt(struct sigacts *ps, int sig)
 
 	mtx_assert(&ps->ps_mtx, MA_OWNED);
 	SIGDELSET(ps->ps_sigcatch, sig);
-	if ((sigprop(sig) & SA_IGNORE) != 0 && sig != SIGCONT)
+	if ((__sigprop(sig) & SA_IGNORE) != 0 && sig != SIGCONT)
 		SIGADDSET(ps->ps_sigignore, sig);
 	ps->ps_sigact[_SIG_IDX(sig)] = SIG_DFL;
 	SIGDELSET(ps->ps_siginfo, sig);
@@ -971,7 +977,7 @@ execsigs(struct proc *p)
 	while (SIGNOTEMPTY(ps->ps_sigcatch)) {
 		sig = sig_ffs(&ps->ps_sigcatch);
 		sigdflt(ps, sig);
-		if ((sigprop(sig) & SA_IGNORE) != 0)
+		if ((__sigprop(sig) & SA_IGNORE) != 0)
 			sigqueue_delete_proc(p, sig);
 	}
 	/*
@@ -2097,7 +2103,7 @@ tdsendsignal(struct proc *p, struct thread *td, int sig, ksiginfo_t *ksi)
 
 	ps = p->p_sigacts;
 	KNOTE_LOCKED(&p->p_klist, NOTE_SIGNAL | sig);
-	prop = sigprop(sig);
+	prop = __sigprop(sig);
 
 	if (td == NULL) {
 		td = sigtd(p, sig, prop);
@@ -2362,7 +2368,7 @@ tdsigwakeup(struct thread *td, int sig, sig_t action, int intrval)
 
 	wakeup_swapper = 0;
 	PROC_LOCK_ASSERT(p, MA_OWNED);
-	prop = sigprop(sig);
+	prop = __sigprop(sig);
 
 	PROC_SLOCK(p);
 	thread_lock(td);
@@ -2724,7 +2730,7 @@ issignal(struct thread *td)
 				continue;
 		}
 
-		prop = sigprop(sig);
+		prop = __sigprop(sig);
 
 		/*
 		 * Decide whether the signal should be returned.
@@ -2948,7 +2954,7 @@ sigexit(td, sig)
 	 * XXX If another thread attempts to single-thread before us
 	 *     (e.g. via fork()), we won't get a dump at all.
 	 */
-	if ((sigprop(sig) & SA_CORE) && thread_single(p, SINGLE_NO_EXIT) == 0) {
+	if ((__sigprop(sig) & SA_CORE) && (thread_single(p, SINGLE_NO_EXIT) == 0)) {
 		p->p_sig = sig;
 		/*
 		 * Log signals which would cause core dumps

@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/ugidfw.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/ugidfw.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "ugidfw"
+}

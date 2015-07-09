@@ -212,6 +212,7 @@ SUBDIR=	\
 	mac_seeotheruids \
 	mac_stub \
 	mac_test \
+	mach \
 	malo \
 	mcd \
 	md \

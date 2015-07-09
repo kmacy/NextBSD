@@ -104,6 +104,7 @@ void dblfault_handler(struct trapframe *frame);
 
 static int trap_pfault(struct trapframe *, int);
 static void trap_fatal(struct trapframe *, vm_offset_t);
+struct sysent *mach_sysent_p;
 
 #define MAX_TRAP_MSG		32
 static char *trap_msg[] = {
@@ -904,8 +905,7 @@ cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 	}
  	if (p->p_sysent->sv_mask)
  		sa->code &= p->p_sysent->sv_mask;
-
- 	if (sa->code >= p->p_sysent->sv_size)
+	else if (sa->code >= p->p_sysent->sv_size)
  		sa->callp = &p->p_sysent->sv_table[0];
   	else
  		sa->callp = &p->p_sysent->sv_table[sa->code];

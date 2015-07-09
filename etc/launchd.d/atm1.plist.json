@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/atm1.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/atm1.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "atm1"
+}

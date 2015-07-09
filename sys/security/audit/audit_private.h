@@ -88,6 +88,8 @@ extern int			audit_arge;
 #define	AR_PRESELECT_USER_TRAIL	0x00004000U
 #define	AR_PRESELECT_USER_PIPE	0x00008000U
 
+#define AR_PRESELECT_FILTER     0x00010000U
+
 /*
  * Audit data is generated as a stream of struct audit_record structures,
  * linked by struct kaudit_record, and contain storage for possible audit so
@@ -427,5 +429,32 @@ int	 audit_pipe_preselect(au_id_t auid, au_event_t event,
 void	 audit_pipe_submit(au_id_t auid, au_event_t event, au_class_t class,
 	    int sorf, int trail_select, void *record, u_int record_len);
 void	 audit_pipe_submit_user(void *record, u_int record_len);
+
+/*
+ * Audit MAC prototypes.
+ * Unimplemented - for the record only ---
+ */
+void	audit_mac_init(void);
+int	audit_mac_new(struct thread *td, struct kaudit_record *ar);
+void	audit_mac_free(struct kaudit_record *ar);
+int	audit_mac_syscall_enter(unsigned short code, 
+	    struct thread *td, struct ucred *my_cred, au_event_t event);
+int	audit_mac_syscall_exit(unsigned short code, struct thread *td,
+	    int error, int retval);
+
+/*
+ * Audit Session.
+ */
+void	audit_session_init(void);
+int 	audit_session_setaia(struct proc *p, auditinfo_addr_t *aia_p);
+auditinfo_addr_t *audit_session_update(auditinfo_addr_t *new_aia);
+int     audit_session_lookup(au_asid_t asid, auditinfo_addr_t *ret_aia);
+
+/*
+ * Kernel assigned audit session IDs start at PID_MAX + 1 and ends at
+ * ASSIGNED_ASID_MAX.
+ */
+#define ASSIGNED_ASID_MIN       (PID_MAX + 1)
+#define ASSIGNED_ASID_MAX       (0xFFFFFFFF - 1)
 
 #endif /* ! _SECURITY_AUDIT_PRIVATE_H_ */

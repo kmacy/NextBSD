@@ -55,6 +55,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/systm.h>
 #include <sys/unistd.h>
+#include <sys/bus.h>
 
 SYSCTL_ROOT_NODE(0,	  sysctl, CTLFLAG_RW, 0,
 	"Sysctl internal magic");
@@ -270,6 +271,7 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	struct prison *pr, *cpr;
 	size_t pr_offset;
 	char tmpname[MAXHOSTNAMELEN];
+	char buf[MAXHOSTNAMELEN + 16];
 	int descend, error, len;
 
 	/*
@@ -311,6 +313,26 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 				bcopy(tmpname, (char *)cpr + pr_offset, len);
 		mtx_unlock(&pr->pr_mtx);
 		sx_sunlock(&allprison_lock);
+
+		/* Notify userland about hostname change */
+		switch (pr_offset) {
+			case offsetof(struct prison, pr_hostname):
+				snprintf(buf, sizeof(buf), "hostname=%s", tmpname);
+				break;
+
+			case offsetof(struct prison, pr_domainname):
+				snprintf(buf, sizeof(buf), "domainname=%s", tmpname);
+				break;
+
+			case offsetof(struct prison, pr_hostuuid):
+				snprintf(buf, sizeof(buf), "hostuuid=%s", tmpname);
+				break;
+				
+			default:
+				return (EINVAL);		
+		}
+
+		devctl_notify("SYSTEM", "HOSTNAME", "CHANGE", buf);
 	}
 	return (error);
 }

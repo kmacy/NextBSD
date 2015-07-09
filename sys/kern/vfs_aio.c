@@ -1589,7 +1589,7 @@ aio_aqueue(struct thread *td, struct aiocb *job, struct aioliojob *lj,
 	struct socket *so;
 	struct aiocblist *aiocbe, *cb;
 	struct kaioinfo *ki;
-	struct kevent kev;
+	struct kevent64_s kev;
 	struct sockbuf *sb;
 	int opcode;
 	int error;
@@ -1731,7 +1731,7 @@ aio_aqueue(struct thread *td, struct aiocb *job, struct aioliojob *lj,
 	kev.filter = EVFILT_AIO;
 	kev.flags = EV_ADD | EV_ENABLE | EV_FLAG1 | evflags;
 	kev.data = (intptr_t)aiocbe;
-	kev.udata = aiocbe->uaiocb.aio_sigevent.sigev_value.sival_ptr;
+	kev.udata = (uint64_t)aiocbe->uaiocb.aio_sigevent.sigev_value.sival_ptr;
 	error = kqfd_register(kqfd, &kev, td, 1);
 aqueue_fail:
 	if (error) {
@@ -2246,7 +2246,7 @@ kern_lio_listio(struct thread *td, int mode, struct aiocb * const *uacb_list,
 	struct aiocb *iocb;
 	struct kaioinfo *ki;
 	struct aioliojob *lj;
-	struct kevent kev;
+	struct kevent64_s kev;
 	int error;
 	int nerror;
 	int i;
@@ -2281,7 +2281,7 @@ kern_lio_listio(struct thread *td, int mode, struct aiocb * const *uacb_list,
 			kev.ident = (uintptr_t)uacb_list; /* something unique */
 			kev.data = (intptr_t)lj;
 			/* pass user defined sigval data */
-			kev.udata = lj->lioj_signal.sigev_value.sival_ptr;
+			kev.udata = (uint64_t)lj->lioj_signal.sigev_value.sival_ptr;
 			error = kqfd_register(
 			    lj->lioj_signal.sigev_notify_kqueue, &kev, td, 1);
 			if (error) {

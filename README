@@ -1,3 +1,111 @@
+This is the mach_support branch. It adds support for a subset of the mach
+API as a precursor to supporting launchd. The mach interface generator should
+be able to work with modern .defs (MIG) files.
+
+Basic Mach IPC is supported through the mach kernel module or COMPAT_MACH_STATIC.
+It is now a module by default to workaround the limited typeid space (15 bits) of
+dtrace.
+
+
+The Mach services kernel module (mach.ko) can only be loaded at boot time. Add the following line
+to /boot/loader.conf:
+mach_load="YES"
+
+As it stands, launchd will dispatch jobs but as it is is currently set to only link
+dynamically - preventing from running as pid1. It is considered early alpha.
+
+launchd can be run as pid1 by adding the following to loader.conf:
+init_path="/sbin/launchd"
+or at the loader prompt:
+set init_path="/sbin/launchd"
+
+
+Note that launchctl has just been added to the build. It uses json plists. XML
+plists can be converted with the help of OSX's plutil. Basic plists will be added
+to the tree shortly.
+
+
+Unsupported OSX / Mach functionality:
+ - updating the audit token when setuid/setgid/ etc are called
+ - (OOL) out of line descriptors of any kind
+ - memory object creation (used in parts of libdispatch)
+ - kevent64 support for receipt of messages in kevent (new in Yosemite, but not currently used by anything that I know of)
+ - voucher ports (used only by most recent parts of libdispatch)
+
+
+Work to be done for v0:
+
+- launch gettys so that console input works
+
+- make launchd useful
+   - write plists for basic services
+
+   - track down the shims for xinetd / crond
+
+- verify that in-tree libdispatch works
+   - get the tests associated with libdispatch compiling to figure out if anything
+     is broken  - the latest versions can be found at:
+         http://libdispatch.macosforge.org/trac/browser/trunk/testing
+
+    - figure out why that function for block private data isn't being generated
+	
+
+Missing mach features ordered by version of launchd by which they'll be supported:
+
+v0: mach support is now feature complete for v0
+v1:
+Support:
+- MACH_SEND_NOTIFY
+
+kevent flags needed by (at least) libdispatch:
+- EVFILT_VM
+	- NOTE_VM_PRESSURE
+	- NOTE_VM_ERROR
+
+per-user & per-session launchds (xpc domain system in domain.defs)
+ - The audit session system calls: audit_session_self, audit_session_join,
+   and audit_session_port
+
+libUCL (YAML & JSON) configuration
+
+extended posix_spawnattr calls in support/posix_spawn.c are not expected
+to actually work yet, among others:
+- posix_spawnattr_setbinpref_np
+- posix_spawnattr_getbinpref_np
+
+proc_setpcontrol
+proc_get_dirty
+proc_set_dirty
+proc_track_dirty
+
+
+v2 or later:
+
+- AF_SYSTEM domain sockets and the event protocols
+
+- XPC_JETSAM_BANDs (handle memory pressure)
+
+I/O priority setting functionality - system call:
+__iopolicysys supports:
+	- getiopolicy_np
+	- setiopolicy_np
+
+
+- except NOTE_EXIT_MEMORY of questionable relevance
+#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
+#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
+/*
+ * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
+ */
+#define NOTE_EXIT_DETAIL_MASK		0x00070000
+#define	NOTE_EXIT_DECRYPTFAIL		0x00010000 
+#define	NOTE_EXIT_MEMORY		0x00020000
+#define NOTE_EXIT_CSERROR		0x00040000
+
+
+
+
+
 This is the top level of the FreeBSD source directory.  This file
 was last revised on:
 $FreeBSD$

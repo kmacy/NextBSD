@@ -613,6 +613,12 @@
 #define	AUE_CONNECTAT		43208	/* TrustedBSD. */
 #define	AUE_CHFLAGSAT		43209	/* FreeBSD-specific. */
 
+#define AUE_SESSION_START       44901   /* Darwin. */
+#define AUE_SESSION_UPDATE      44902   /* Darwin. */
+#define AUE_SESSION_END         44903   /* Darwin. */
+#define AUE_SESSION_CLOSE       44904   /* Darwin. */
+
+
 /*
  * Darwin BSM uses a number of AUE_O_* definitions, which are aliased to the
  * normal Solaris BSM identifiers.  _O_ refers to it being an old, or compat

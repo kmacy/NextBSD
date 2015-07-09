@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/dumpon.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/dumpon.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "dumpon"
+}

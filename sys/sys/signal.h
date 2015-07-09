@@ -420,6 +420,21 @@ struct sigstack {
 #define	sigmask(m)	(1 << ((m)-1))
 #endif
 
+/*
+ * Signal properties and actions.
+ * The array below categorizes the signals and their default actions
+ * according to the following properties:
+ */
+#define	SA_KILL		0x01		/* terminates process by default */
+#define	SA_CORE		0x02		/* ditto and coredumps */
+#define	SA_STOP		0x04		/* suspend process */
+#define	SA_TTYSTOP	0x08		/* ditto, from tty */
+#define	SA_IGNORE	0x10		/* ignore by default */
+#define	SA_CONT		0x20		/* continue if suspended */
+#define	SA_CANTMASK	0x40		/* non-maskable, catchable */
+
+int sigprop(int);
+
 #if __BSD_VISIBLE
 #define	BADSIG		SIG_ERR
 #endif

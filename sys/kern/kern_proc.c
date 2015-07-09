@@ -479,7 +479,6 @@ enterpgrp(p, pgid, pgrp, sess)
 	PGRP_UNLOCK(pgrp);
 
 	doenterpgrp(p, pgrp);
-
 	return (0);
 }
 

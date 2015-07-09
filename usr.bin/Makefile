@@ -13,6 +13,7 @@ SUBDIR=	${_addr2line} \
 	alias \
 	apply \
 	asa \
+	aslutil \
 	awk \
 	banner \
 	basename \
@@ -96,8 +97,10 @@ SUBDIR=	${_addr2line} \
 	m4 \
 	${_makewhatis} \
 	${_man} \
+	${_mach_tests} \
 	mandoc \
 	mesg \
+	migcom \
 	minigzip \
 	ministat \
 	${_mkcsmapper} \
@@ -118,6 +121,7 @@ SUBDIR=	${_addr2line} \
 	nl \
 	${_nm} \
 	nohup \
+	notifyutil \
 	opieinfo \
 	opiekey \
 	opiepasswd \
@@ -198,6 +202,8 @@ SUBDIR=	${_addr2line} \
 	xargs \
 	xinstall \
 	xo \
+	${_xlint} \
+	${_xstr} \
 	xz \
 	xzdec \
 	yes \
@@ -361,6 +367,11 @@ SUBDIR+=	talk
 
 .if ${MK_TELNET} != "no"
 SUBDIR+=	telnet
+.endif
+
+.if ${MACHINE_CPUARCH} == "amd64"
+#_xpc_tests=     xpc-tests
+_mach_tests=	mach-tests
 .endif
 
 .if ${MK_TESTS} != "no"

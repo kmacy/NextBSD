@@ -195,11 +195,14 @@ do_posix_spawn(pid_t *pid, const char *path,
 	pid_t p;
 	volatile int error = 0;
 
+	if (sa != NULL && *sa != NULL  && (*sa)->sa_flags & POSIX_SPAWN_SETEXEC)
+		goto setexec;
 	p = vfork();
 	switch (p) {
 	case -1:
 		return (errno);
 	case 0:
+	setexec:
 		if (sa != NULL) {
 			error = process_spawnattr(*sa);
 			if (error)

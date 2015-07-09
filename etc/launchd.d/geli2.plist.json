@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/geli2.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/geli2.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "geli2"
+}

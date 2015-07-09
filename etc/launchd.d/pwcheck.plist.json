@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/bin/logger",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/bin/logger",
+    "-s -p auth.err"
+  ],
+  "RunAtLoad": true,
+  "Label": "pwcheck"
+}

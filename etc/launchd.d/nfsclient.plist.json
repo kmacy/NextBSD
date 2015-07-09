@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/nfsclient.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/nfsclient.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "nfsclient"
+}

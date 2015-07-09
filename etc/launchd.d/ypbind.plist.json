@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/ypbind",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/ypbind"
+  ],
+  "RunAtLoad": true,
+  "Label": "ypbind"
+}

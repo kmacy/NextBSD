@@ -319,6 +319,7 @@ int	setaudit_addr(const struct auditinfo_addr *, int);
 #include <mach/port.h>
 mach_port_name_t audit_session_self(void);
 au_asid_t	 audit_session_join(mach_port_name_t port);
+int          audit_session_port(au_asid_t asid, mach_port_name_t *portname);
 #endif /* __APPLE_API_PRIVATE */
 
 #endif /* defined(_KERNEL) || defined(KERNEL) */

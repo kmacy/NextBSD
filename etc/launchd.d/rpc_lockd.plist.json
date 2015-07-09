@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/rpc_lockd.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/rpc_lockd.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "rpc_lockd"
+}

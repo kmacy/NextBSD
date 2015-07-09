@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/pccard.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/pccard.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "pccard"
+}

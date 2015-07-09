@@ -73,6 +73,7 @@ acl_init(int count)
 	bzero(acl, sizeof(struct acl_t_struct));
 	acl->ats_brand = ACL_BRAND_UNKNOWN;
 	acl->ats_acl.acl_maxcnt = ACL_MAX_ENTRIES;
+	acl->ats_acl.acl_cnt = count;
 
 	return (acl);
 }

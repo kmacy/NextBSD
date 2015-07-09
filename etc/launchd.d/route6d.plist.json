@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/route6d",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/route6d",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "route6d"
+}

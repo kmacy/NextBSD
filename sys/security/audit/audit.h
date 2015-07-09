@@ -45,6 +45,7 @@
 
 #include <sys/file.h>
 #include <sys/sysctl.h>
+#include <sys/mach/port.h>
 
 /*
  * Audit subsystem condition flags.  The audit_enabled flag is set and
@@ -123,6 +124,13 @@ void	 audit_cred_init(struct ucred *cred);
 void	 audit_cred_kproc0(struct ucred *cred);
 void	 audit_cred_proc1(struct ucred *cred);
 void	 audit_proc_coredump(struct thread *td, char *path, int errcode);
+void     audit_session_ref(struct ucred *cred);
+void     audit_session_unref(struct ucred *cred);
+void     audit_session_procnew(struct proc *p);
+void     audit_session_procexit(struct proc *p);
+int      audit_session_spawnjoin(struct thread *td, ipc_port_t port);
+void     audit_sdev_submit(au_id_t auid, au_asid_t asid, void *record,
+            u_int record_len);
 void	 audit_thread_alloc(struct thread *td);
 void	 audit_thread_free(struct thread *td);
 
@@ -318,6 +326,18 @@ void	 audit_thread_free(struct thread *td);
 	}								\
 } while (0)
 
+
+/*
+ * Audit session macros. 
+ */
+#define IS_VALID_SESSION(a)     ((a) != NULL && (a) != audit_default_aia_p)
+
+#define AUDIT_SESSION_REF(cred)         audit_session_ref(cred)
+#define AUDIT_SESSION_UNREF(cred)       audit_session_unref(cred)
+
+#define AUDIT_SESSION_PROCNEW(p)        audit_session_procnew(p)
+#define AUDIT_SESSION_PROCEXIT(p)       audit_session_procexit(p)
+
 /*
  * Wrap the audit_syscall_exit() function so that it is called only when
  * we have a audit record on the thread.  Audit records can persist after
@@ -374,6 +394,10 @@ void	 audit_thread_free(struct thread *td);
 #define	AUDIT_ARG_VALUE(value)
 #define	AUDIT_ARG_VNODE1(vp)
 #define	AUDIT_ARG_VNODE2(vp)
+#define AUDIT_SESSION_REF(cred)
+#define AUDIT_SESSION_UNREF(cred)
+#define AUDIT_SESSION_PROCNEW(cred)
+#define AUDIT_SESSION_PROCEXIT(cred)
 
 #define	AUDIT_SYSCALL_ENTER(code, td)
 #define	AUDIT_SYSCALL_EXIT(error, td)

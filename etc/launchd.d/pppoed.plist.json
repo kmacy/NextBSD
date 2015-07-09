@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/libexec/pppoed",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/libexec/pppoed"
+  ],
+  "RunAtLoad": true,
+  "Label": "pppoed"
+}

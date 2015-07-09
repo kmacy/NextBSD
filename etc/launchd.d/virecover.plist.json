@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/virecover.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/virecover.sh"
+  ],
+  "RunAtLoad": false,
+  "Label": "virecover"
+}

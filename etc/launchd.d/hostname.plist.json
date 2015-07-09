@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/hostname.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/hostname.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "hostname"
+}

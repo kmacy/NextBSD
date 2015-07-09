@@ -83,7 +83,7 @@ extern int max_ldt_segment;
 struct syscall_args {
 	u_int code;
 	struct sysent *callp;
-	register_t args[8];
+	register_t args[9];
 	int narg;
 };
 #endif  /* _KERNEL */

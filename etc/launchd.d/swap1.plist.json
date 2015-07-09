@@ -1,0 +1,10 @@
+{
+  "Program": "/sbin/swapon",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/sbin/swapon",
+    "-a"
+  ],
+  "RunAtLoad": true,
+  "Label": "swap1"
+}

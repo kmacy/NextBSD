@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/hostapd.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/hostapd.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "hostapd"
+}

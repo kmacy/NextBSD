@@ -32,18 +32,20 @@
 #include <sys/queue.h> 
 
 #define EVFILT_READ		(-1)
-#define EVFILT_WRITE		(-2)
+#define EVFILT_WRITE	(-2)
 #define EVFILT_AIO		(-3)	/* attached to aio requests */
-#define EVFILT_VNODE		(-4)	/* attached to vnodes */
+#define EVFILT_VNODE	(-4)	/* attached to vnodes */
 #define EVFILT_PROC		(-5)	/* attached to struct proc */
-#define EVFILT_SIGNAL		(-6)	/* attached to struct proc */
-#define EVFILT_TIMER		(-7)	/* timers */
-#define EVFILT_PROCDESC		(-8)	/* attached to process descriptors */
+#define EVFILT_SIGNAL	(-6)	/* attached to struct proc */
+#define EVFILT_TIMER	(-7)	/* timers */
+#define EVFILT_PROCDESC	(-8)	/* attached to process descriptors */
 #define EVFILT_FS		(-9)	/* filesystem events */
 #define EVFILT_LIO		(-10)	/* attached to lio requests */
 #define EVFILT_USER		(-11)	/* User events */
-#define EVFILT_SENDFILE		(-12)	/* attached to sendfile requests */
-#define EVFILT_SYSCOUNT		12
+#define EVFILT_SENDFILE	(-12)	/* attached to sendfile requests */
+#define	EVFILT_MACHPORT	(-13)	/* Mach portsets */
+#define EVFILT_VM		(-14)	/* Virtual Memory events */
+#define EVFILT_SYSCOUNT	14
 
 #define EV_SET(kevp_, a, b, c, d, e, f) do {	\
 	struct kevent *kevp = (kevp_);		\
@@ -55,6 +57,18 @@
 	(kevp)->udata = (f);			\
 } while(0)
 
+#define EV_SET64(kevp, a, b, c, d, e, f, g, h) do {	\
+	struct kevent64_s *__kevp__ = (kevp);		\
+	__kevp__->ident = (a);				\
+	__kevp__->filter = (b);				\
+	__kevp__->flags = (c);				\
+	__kevp__->fflags = (d);				\
+	__kevp__->data = (e);				\
+	__kevp__->udata = (f);				\
+	__kevp__->ext[0] = (g);				\
+	__kevp__->ext[1] = (h);				\
+} while(0)
+
 struct kevent {
 	uintptr_t	ident;		/* identifier for this event */
 	short		filter;		/* filter for event */
@@ -62,6 +76,16 @@ struct kevent {
 	u_int		fflags;
 	intptr_t	data;
 	void		*udata;		/* opaque user data identifier */
+};
+
+struct kevent64_s {
+	uint64_t	ident;		/* identifier for this event */
+	int16_t		filter;		/* filter for event */
+	uint16_t	flags;		/* general flags */
+	uint32_t	fflags;		/* filter-specific flags */
+	int64_t		data;		/* filter-specific data */
+	uint64_t	udata;		/* opaque user data identifier */
+	uint64_t	ext[2];		/* filter-specific extensions */
 };
 
 /* actions */
@@ -134,11 +158,42 @@ struct kevent {
 #define	NOTE_TRACKERR	0x00000002		/* could not track child */
 #define	NOTE_CHILD	0x00000004		/* am a child process */
 
+
+/*
+ * data/hint fflags for EVFILT_VM, shared with userspace.
+ */
+#define NOTE_VM_PRESSURE			0x80000000              /* will react on memory pressure */
+#define NOTE_VM_PRESSURE_TERMINATE		0x40000000              /* will quit on memory pressure, possibly after cleaning up dirty state */
+#define NOTE_VM_PRESSURE_SUDDEN_TERMINATE	0x20000000		/* will quit immediately on memory pressure */
+#define NOTE_VM_ERROR				0x10000000              /* there was an error */
+
+
 /* additional flags for EVFILT_TIMER */
-#define NOTE_SECONDS		0x00000001	/* data is seconds */
+#define NOTE_SECONDS		0x00000001	/* data is seconds	*/
 #define NOTE_MSECONDS		0x00000002	/* data is milliseconds */
 #define NOTE_USECONDS		0x00000004	/* data is microseconds */
-#define NOTE_NSECONDS		0x00000008	/* data is nanoseconds */
+#define NOTE_NSECONDS		0x00000008	/* data is nanoseconds  */
+#define NOTE_ABSOLUTE		0x00000010	/* absolute timeout     */
+
+
+
+#define	NOTE_EXITSTATUS		0x04000000	/* exit status to be returned, valid for child process only */
+#define	NOTE_EXIT_DETAIL	0x02000000	/* provide details on reasons for exit */
+
+/*
+ * If NOTE_EXIT_DETAIL is present, these bits indicate specific reasons for exiting.
+ */
+#define NOTE_EXIT_DETAIL_MASK		0x00070000
+#define	NOTE_EXIT_DECRYPTFAIL		0x00010000
+#define	NOTE_EXIT_MEMORY		0x00020000
+#define NOTE_EXIT_CSERROR		0x00040000
+
+/*
+ * Flag indicating hint is a signal.  Used by EVFILT_SIGNAL, and also
+ * shared by EVFILT_PROC  (all knotes attached to p->p_klist)
+ */
+#define NOTE_SIGNAL	0x08000000
+
 
 struct knote;
 SLIST_HEAD(klist, knote);
@@ -155,24 +210,18 @@ struct knlist {
 
 
 #ifdef _KERNEL
-
 /*
  * Flags for knote call
  */
 #define	KNF_LISTLOCKED	0x0001			/* knlist is locked */
 #define	KNF_NOKQLOCK	0x0002			/* do not keep KQ_LOCK */
 
-#define KNOTE(list, hist, flags)	knote(list, hist, flags)
+#define KNOTE(list, hint, flags)	knote(list, hint, flags)
 #define KNOTE_LOCKED(list, hint)	knote(list, hint, KNF_LISTLOCKED)
 #define KNOTE_UNLOCKED(list, hint)	knote(list, hint, 0)
 
 #define	KNLIST_EMPTY(list)		SLIST_EMPTY(&(list)->kl_list)
 
-/*
- * Flag indicating hint is a signal.  Used by EVFILT_SIGNAL, and also
- * shared by EVFILT_PROC  (all knotes attached to p->p_klist)
- */
-#define NOTE_SIGNAL	0x08000000
 
 /*
  * Hint values for the optional f_touch event filter.  If f_touch is not set 
@@ -189,7 +238,7 @@ struct filterops {
 	int	(*f_attach)(struct knote *kn);
 	void	(*f_detach)(struct knote *kn);
 	int	(*f_event)(struct knote *kn, long hint);
-	void	(*f_touch)(struct knote *kn, struct kevent *kev, u_long type);
+	void	(*f_touch)(struct knote *kn, struct kevent64_s *kev, u_long type);
 };
 
 /*
@@ -204,7 +253,7 @@ struct knote {
 	struct			knlist *kn_knlist;	/* f_attach populated */
 	TAILQ_ENTRY(knote)	kn_tqe;
 	struct			kqueue *kn_kq;	/* which queue we are on */
-	struct 			kevent kn_kevent;
+	struct 			kevent64_s kn_kevent;
 	int			kn_status;	/* protected by kq lock */
 #define KN_ACTIVE	0x01			/* event has been triggered */
 #define KN_QUEUED	0x02			/* event is on queue */
@@ -234,12 +283,14 @@ struct knote {
 #define kn_flags	kn_kevent.flags
 #define kn_fflags	kn_kevent.fflags
 #define kn_data		kn_kevent.data
+#define	kn_udata	kn_kevent.udata
+#define	kn_ext		kn_kevent.ext
 #define kn_fp		kn_ptr.p_fp
 };
 struct kevent_copyops {
 	void	*arg;
-	int	(*k_copyout)(void *arg, struct kevent *kevp, int count);
-	int	(*k_copyin)(void *arg, struct kevent *kevp, int count);
+	int	(*k_copyout)(void *arg, void *kevp, int count);
+	int	(*k_copyin)(void *arg, void *kevp, int count);
 };
 
 struct thread;
@@ -250,6 +301,7 @@ struct rwlock;
 
 extern void	knote(struct knlist *list, long hint, int lockflags);
 extern void	knote_fork(struct knlist *list, int pid);
+extern void knote_enqueue(struct knote *kn);
 extern void	knlist_add(struct knlist *knl, struct knote *kn, int islocked);
 extern void	knlist_remove(struct knlist *knl, struct knote *kn, int islocked);
 extern void	knlist_remove_inevent(struct knlist *knl, struct knote *kn);
@@ -267,7 +319,7 @@ extern void	knlist_cleardel(struct knlist *knl, struct thread *td,
 #define knlist_delete(knl, td, islocked)			\
 		knlist_cleardel((knl), (td), (islocked), 1)
 extern void	knote_fdclose(struct thread *p, int fd);
-extern int 	kqfd_register(int fd, struct kevent *kev, struct thread *p,
+extern int 	kqfd_register(int fd, struct kevent64_s *kev, struct thread *p,
 		    int waitok);
 extern int	kqueue_add_filteropts(int filt, struct filterops *filtops);
 extern int	kqueue_del_filteropts(int filt);
@@ -282,6 +334,10 @@ int     kqueue(void);
 int     kevent(int kq, const struct kevent *changelist, int nchanges,
 	    struct kevent *eventlist, int nevents,
 	    const struct timespec *timeout);
+int     kevent64(int kq, const struct kevent64_s *changelist,
+		    int nchanges, struct kevent64_s *eventlist,
+		    int nevents, unsigned int flags,
+		    const struct timespec *timeout);
 __END_DECLS
 
 #endif /* !_KERNEL */

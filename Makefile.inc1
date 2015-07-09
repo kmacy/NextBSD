@@ -299,6 +299,7 @@ KTMAKE=		TOOLS_PREFIX=${WORLDTMP} MAKEOBJDIRPREFIX=${WORLDTMP} \
 WMAKEENV=	${CROSSENV} \
 		_LDSCRIPTROOT= \
 		VERSION="${VERSION}" \
+		MACHINE_INCLUDES="${WORLDTMP}/include" \
 		INSTALL="sh ${.CURDIR}/tools/install.sh" \
 		PATH=${TMPPATH}
 
@@ -445,6 +446,8 @@ LIB32WMAKEENV+=	MAKEOBJDIRPREFIX=${LIB32_OBJTREE} \
 		LIBDIR=/usr/lib32 \
 		SHLIBDIR=/usr/lib32 \
 		LIBPRIVATEDIR=/usr/lib32/private \
+		MACHINE_INCLUDES="${LIB32TMP}/include" \
+		COMPILER_TYPE=${WMAKE_COMPILER_TYPE} \
 		DTRACE="${DTRACE} -32"
 LIB32WMAKEFLAGS+= CC="${XCC} ${LIB32FLAGS}" \
 		CXX="${XCXX} ${LIB32FLAGS}" \
@@ -540,6 +543,8 @@ _worldtmp:
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.include.dist \
 	    -p ${WORLDTMP}/usr/include >/dev/null
 	ln -sf ${.CURDIR}/sys ${WORLDTMP}
+	mkdir -p ${WORLDTMP}/include
+	ln -sf ${.CURDIR}/sys/${MACHINE_CPUARCH}/include ${WORLDTMP}/include/machine
 .if ${MK_DEBUG_FILES} != "no"
 	# We could instead disable debug files for these build stages
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.debug.dist \
@@ -630,6 +635,7 @@ build32:
 	@echo ">>> stage 5.1: building 32 bit shim libraries"
 	@echo "--------------------------------------------------------------"
 	mkdir -p ${LIB32TMP}/usr/include
+	ln -sf ${.CURDIR}/sys/${MACHINE_ARCH}/include ${LIB32TMP}/usr/include/machine
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.usr.dist \
 	    -p ${LIB32TMP}/usr >/dev/null
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.include.dist \
@@ -1370,6 +1376,7 @@ ${_bt}-usr.bin/mandoc: ${_bt}-lib/libohash ${_bt}-lib/libsqlite3
 _makewhatis=usr.bin/makewhatis
 .endif
 
+_mig=	usr.bin/migcom
 # Rebuild up-to-date libmd for xinstall
 ${_bt}-usr.bin/xinstall: ${_bt}-lib/libmd
 
@@ -1523,6 +1530,7 @@ cross-tools: .MAKE
     ${_cc} \
     ${_btxld} \
     ${_crunchide} \
+    ${_mig} \
     ${_usb_tools}
 	${_+_}@${ECHODIR} "===> ${_tool} (obj,depend,all,install)"; \
 		cd ${.CURDIR}/${_tool} && \

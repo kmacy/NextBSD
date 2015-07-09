@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/mountcritremote.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/mountcritremote.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "mountcritremote"
+}

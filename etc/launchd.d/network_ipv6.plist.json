@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/network_ipv6.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/network_ipv6.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "network_ipv6"
+}

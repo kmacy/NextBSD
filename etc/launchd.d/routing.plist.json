@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/routing.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/routing.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "routing"
+}

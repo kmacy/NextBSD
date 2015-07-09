@@ -210,7 +210,7 @@ if (debug) fprintf(stderr, "bind to %d.\ndump to '%s'.\n", portnum, dumpf);
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = INADDR_ANY;
 
-	if (bind(sd, (struct sockaddr *)&sin, sizeof(sin)) == -1) {
+	if (bind(sd, (struct sockaddr *)(uintptr_t)&sin, sizeof(sin)) == -1) {
 		perror("bind(divert)");
 		exit(3);
 	}
@@ -250,7 +250,7 @@ if (debug) fprintf(stderr, "bind to %d.\ndump to '%s'.\n", portnum, dumpf);
 		 * read packet.
 		 */
 		l = sizeof(sin);
-		nr = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr *)&sin, &l);
+		nr = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr *)(uintptr_t)&sin, &l);
 if (debug) fprintf(stderr, "recvfrom(%d) = %zd (%d)\n", sd, nr, l);
 		if (nr < 0 && errno != EINTR) {
 			perror("recvfrom(sd)");
@@ -264,7 +264,7 @@ if (debug) fprintf(stderr, "recvfrom(%d) = %zd (%d)\n", sd, nr, l);
 			 * being processed by any further IPFW rules.
 			 */
 			l = sizeof(sin);
-			r = sendto(sd, buf, nr, 0, (struct sockaddr *)&sin, l);
+			r = sendto(sd, buf, nr, 0, (struct sockaddr *)(uintptr_t)&sin, l);
 if (debug) fprintf(stderr, "  sendto(%d) = %d\n", sd, r);
 			if (r < 0) { perror("sendto(sd)"); quit(13); }
 		}

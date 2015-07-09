@@ -49,10 +49,10 @@
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/mach/message.h>
 
-/* These are not advertised in libbsm.h */
+/* This is not advertised in libbsm.h */
 int audit_set_terminal_port(dev_t *p);
-int audit_set_terminal_host(uint32_t *m);
 
 /*
  * General purpose audit submission mechanism for userspace.
@@ -461,7 +461,6 @@ audit_write_failure_na(short event_code, char *errmsg, int errret, uid_t euid,
 
 /* END OF au_write() WRAPPERS */
 
-#ifdef __APPLE__
 void
 audit_token_to_au32(audit_token_t atoken, uid_t *auidp, uid_t *euidp,
     gid_t *egidp, uid_t *ruidp, gid_t *rgidp, pid_t *pidp, au_asid_t *asidp,
@@ -487,7 +486,6 @@ audit_token_to_au32(audit_token_t atoken, uid_t *auidp, uid_t *euidp,
 		tidp->port = (dev_t)atoken.val[7];
 	}
 }
-#endif /* !__APPLE__ */
 
 int
 audit_get_cond(int *cond)

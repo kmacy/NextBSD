@@ -6,6 +6,8 @@
 PROG=	date
 SRCS=	date.c netdate.c vary.c
 
+NO_WCAST_ALIGN=
+
 .if ${MK_TESTS} != "no"
 SUBDIR+=    tests
 .endif

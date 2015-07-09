@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/rpcbind",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/rpcbind",
+    "-d"
+  ],
+  "RunAtLoad": true,
+  "Label": "rpcbind"
+}

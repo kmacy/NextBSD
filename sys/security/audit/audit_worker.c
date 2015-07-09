@@ -369,6 +369,17 @@ audit_worker_process_record(struct kaudit_record *ar)
 		    ar->k_ar_commit & AR_PRESELECT_TRAIL, bsm->data,
 		    bsm->len);
 
+#if 0	
+	if (ar->k_ar_commit & AR_PRESELECT_FILTER) {
+
+		/*
+		 *  XXXss - This needs to be generalized so new filters can
+		 *  be easily plugged in.
+		 */
+		audit_sdev_submit(auid, ar->k_ar.ar_subj_asid, bsm->data,
+		    bsm->len);
+	}
+#endif
 	kau_free(bsm);
 out:
 	if (locked)

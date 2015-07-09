@@ -8,6 +8,8 @@ LIBADD=	casper nv pjdlog util
 
 MAN=	casperd.8
 
+NO_WCAST_ALIGN=
+
 CFLAGS+=-I${.CURDIR}
 CFLAGS+=-I${.CURDIR}/../../lib/libcapsicum
 CFLAGS+=-I${.CURDIR}/../../lib/libcasper

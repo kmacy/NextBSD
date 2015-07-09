@@ -258,6 +258,8 @@ struct user {
 #define	KF_TYPE_SEM	9
 #define	KF_TYPE_PTS	10
 #define	KF_TYPE_PROCDESC	11
+#define	KF_TYPE_PORT 12
+#define	KF_TYPE_PORTSET 13
 #define	KF_TYPE_UNKNOWN	255
 
 #define	KF_VTYPE_VNON	0

@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/bluetooth.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/bluetooth.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "bluetooth"
+}

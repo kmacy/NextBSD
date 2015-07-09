@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/sendmail.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/sendmail.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "sendmail"
+}

@@ -67,6 +67,8 @@
 #define	PS_FST_TYPE_SEM		10
 #define	PS_FST_TYPE_UNKNOWN	11
 #define	PS_FST_TYPE_NONE	12
+#define	PS_FST_TYPE_PORT	13
+#define	PS_FST_TYPE_PORTSET	14
 
 /*
  * Special descriptor numbers.

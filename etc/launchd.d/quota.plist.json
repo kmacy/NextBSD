@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/quotaon",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/quotaon",
+    "-a"
+  ],
+  "RunAtLoad": true,
+  "Label": "quota"
+}

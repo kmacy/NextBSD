@@ -22,6 +22,7 @@ INCS+=	libcapsicum_service.h
 INCS+=	libcapsicum_sysctl.h
 
 LIBADD=	nv
+NO_WCAST_ALIGN=yes
 
 CFLAGS+=-I${.CURDIR}
 CFLAGS+=-I${.CURDIR}/../libnv

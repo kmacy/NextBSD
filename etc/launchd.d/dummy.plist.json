@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/dummy.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/dummy.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "dummy"
+}

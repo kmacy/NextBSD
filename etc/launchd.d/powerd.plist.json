@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/powerd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/powerd",
+    "-v"
+  ],
+  "RunAtLoad": true,
+  "Label": "powerd"
+}

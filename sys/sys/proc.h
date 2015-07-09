@@ -329,6 +329,7 @@ struct thread {
 	struct vm_page	**td_ma;	/* (k) uio pages held */
 	int		td_ma_cnt;	/* (k) size of *td_ma */
 	void		*td_emuldata;	/* Emulator state data */
+	void	*td_machdata;	/* (k) mach state. */
 };
 
 struct mtx *thread_lock_block(struct thread *);
@@ -436,6 +437,7 @@ do {									\
 #define	TDP_UIOHELD	0x10000000 /* Current uio has pages held in td_ma */
 #define	TDP_UNUSED29	0x20000000 /* --available-- */
 #define	TDP_EXECVMSPC	0x40000000 /* Execve destroyed old vmspace */
+#define	TDP_UNUSUED32	0x80000000 /* Mach initialization done */
 
 /*
  * Reasons that the current thread can not be run yet.
@@ -614,6 +616,7 @@ struct proc {
 	 */
 	LIST_ENTRY(proc) p_orphan;	/* (e) List of orphan processes. */
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
+	void		*p_machdata;	/* (c) Mach state data. */
 };
 
 #define	p_session	p_pgrp->pg_session

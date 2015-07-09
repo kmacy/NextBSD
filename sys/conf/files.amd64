@@ -533,6 +533,7 @@ compat/linux/linux_event.c	optional	compat_linux32
 compat/linux/linux.c		optional	compat_linux32
 dev/amr/amr_linux.c		optional	compat_linux32 amr
 dev/mfi/mfi_linux.c		optional	compat_linux32 mfi
+
 #
 # Windows NDIS driver support
 #

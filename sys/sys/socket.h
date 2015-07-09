@@ -242,7 +242,8 @@ struct accept_filter_arg {
 #define	AF_IEEE80211	37		/* IEEE 802.11 protocol */
 #define	AF_INET_SDP	40		/* OFED Socket Direct Protocol ipv4 */
 #define	AF_INET6_SDP	42		/* OFED Socket Direct Protocol ipv6 */
-#define	AF_MAX		42
+#define	AF_SYSTEM	43
+#define	AF_MAX		43
 /*
  * When allocating a new AF_ constant, please only allocate
  * even numbered constants for FreeBSD until 134 as odd numbered AF_
@@ -306,7 +307,7 @@ struct sockaddr {
 	unsigned char	sa_len;		/* total length */
 	sa_family_t	sa_family;	/* address family */
 	char		sa_data[14];	/* actually longer; address value */
-};
+} __aligned(8);
 #if __BSD_VISIBLE
 #define	SOCK_MAXADDRLEN	255		/* longest possible addresses */
 
@@ -367,6 +368,7 @@ struct sockproto {
 #define	PF_IEEE80211	AF_IEEE80211
 #define	PF_INET_SDP	AF_INET_SDP
 #define	PF_INET6_SDP	AF_INET6_SDP
+#define	PF_SYSTEM	AF_SYSTEM
 
 #define	PF_MAX		AF_MAX
 

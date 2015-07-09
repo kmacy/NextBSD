@@ -325,7 +325,12 @@ int		pthread_attr_setscope(pthread_attr_t *, int) __nonnull(1);
 int		pthread_getschedparam(pthread_t pthread, int *,
 			struct sched_param *) __nonnull(2) __nonnull(3);
 int		pthread_setschedparam(pthread_t, int,
-			const struct sched_param *) __nonnull(3);
+							  const struct sched_param *) __nonnull(3);
+#ifdef HAVE_MACH
+#include <mach/port.h>
+mach_port_t pthread_mach_thread_np(uintptr_t);
+#endif
+
 #if __XSI_VISIBLE
 int		pthread_getconcurrency(void);
 int		pthread_setconcurrency(int);

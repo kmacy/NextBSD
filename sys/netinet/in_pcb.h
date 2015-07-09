@@ -393,7 +393,7 @@ struct inpcbgroup {
 	 * wildcard list in inpcbinfo.
 	 */
 	struct mtx		 ipg_lock;
-} __aligned(CACHE_LINE_SIZE);
+};
 
 #define INP_LOCK_INIT(inp, d, t) \
 	rw_init_flags(&(inp)->inp_lock, (t), RW_RECURSE |  RW_DUPOK)

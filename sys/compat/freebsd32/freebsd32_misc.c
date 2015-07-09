@@ -127,8 +127,8 @@ CTASSERT(sizeof(struct stat32) == 96);
 #endif
 CTASSERT(sizeof(struct sigaction32) == 24);
 
-static int freebsd32_kevent_copyout(void *arg, struct kevent *kevp, int count);
-static int freebsd32_kevent_copyin(void *arg, struct kevent *kevp, int count);
+static int freebsd32_kevent_copyout(void *arg, void *kevp, int count);
+static int freebsd32_kevent_copyin(void *arg, void *kevp, int count);
 
 void
 freebsd32_rusage_out(const struct rusage *s, struct rusage32 *s32)
@@ -595,10 +595,11 @@ freebsd32_pselect(struct thread *td, struct freebsd32_pselect_args *uap)
  * Copy 'count' items into the destination list pointed to by uap->eventlist.
  */
 static int
-freebsd32_kevent_copyout(void *arg, struct kevent *kevp, int count)
+freebsd32_kevent_copyout(void *arg, void *_kevp, int count)
 {
 	struct freebsd32_kevent_args *uap;
 	struct kevent32	ks32[KQ_NEVENTS];
+	struct kevent *kevp = _kevp;
 	int i, error = 0;
 
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
@@ -622,10 +623,11 @@ freebsd32_kevent_copyout(void *arg, struct kevent *kevp, int count)
  * Copy 'count' items from the list pointed to by uap->changelist.
  */
 static int
-freebsd32_kevent_copyin(void *arg, struct kevent *kevp, int count)
+freebsd32_kevent_copyin(void *arg, void *_kevp, int count)
 {
 	struct freebsd32_kevent_args *uap;
 	struct kevent32	ks32[KQ_NEVENTS];
+	struct kevent *kevp = _kevp;
 	int i, error = 0;
 
 	KASSERT(count <= KQ_NEVENTS, ("count (%d) > KQ_NEVENTS", count));
@@ -669,7 +671,7 @@ freebsd32_kevent(struct thread *td, struct freebsd32_kevent_args *uap)
 	} else
 		tsp = NULL;
 	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
-	    &k_ops, tsp);
+		&k_ops, tsp);
 	return (error);
 }
 

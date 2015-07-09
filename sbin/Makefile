@@ -36,6 +36,7 @@ SUBDIR=adjkerntz \
 	kldload \
 	kldstat \
 	kldunload \
+	launchd \
 	ldconfig \
 	md5 \
 	mdconfig \
@@ -95,7 +96,7 @@ SUBDIR+=	hastd
 SUBDIR+=	ping6
 SUBDIR+=	rtsol
 .endif
-	
+
 .if ${MK_IPFILTER} != "no"
 SUBDIR+=	ipf
 .endif

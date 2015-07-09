@@ -45,6 +45,8 @@ extern int _DYNAMIC;
 char **environ;
 const char *__progname = "";
 
+
+
 static void
 finalizer(void)
 {

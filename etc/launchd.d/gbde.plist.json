@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/gbde.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/gbde.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "gbde"
+}

@@ -92,6 +92,10 @@ static void	print_socket_info(struct procstat *procstat,
     struct filestat *fst);
 static void	print_vnode_info(struct procstat *procstat,
     struct filestat *fst);
+static void	print_port_info(struct procstat *procstat,
+    struct filestat *fst);
+static void	print_portset_info(struct procstat *procstat,
+    struct filestat *fst);
 static void	usage(void) __dead2;
 
 int
@@ -298,6 +302,12 @@ print_file_info(struct procstat *procstat, struct filestat *fst,
 		break;
 	case PS_FST_TYPE_SEM:
 		print_sem_info(procstat, fst);
+		break;
+	case PS_FST_TYPE_PORT:
+		print_port_info(procstat, fst);
+		break;
+	case PS_FST_TYPE_PORTSET:
+		print_portset_info(procstat, fst);
 		break;
 	default:	
 		if (vflg)
@@ -522,6 +532,21 @@ print_vnode_info(struct procstat *procstat, struct filestat *fst)
 	} else
 		printf(" %6ju", (uintmax_t)vn.vn_size);
 	print_access_flags(fst->fs_fflags);
+}
+
+
+static void
+print_port_info(struct procstat *procstat __unused, struct filestat *fst __unused)
+{
+
+	printf(" port");
+}
+
+static void
+print_portset_info(struct procstat *procstat __unused, struct filestat *fst __unused)
+{
+
+	printf(" pset");
 }
 
 static void

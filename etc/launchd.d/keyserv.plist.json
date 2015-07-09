@@ -1,0 +1,9 @@
+{
+  "Program": "/usr/sbin/keyserv",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/keyserv"
+  ],
+  "RunAtLoad": true,
+  "Label": "keyserv"
+}

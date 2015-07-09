@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/mountd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/mountd",
+    "reload"
+  ],
+  "RunAtLoad": true,
+  "Label": "mountd"
+}

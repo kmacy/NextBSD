@@ -20,6 +20,8 @@ INCS=	libutil.h login_cap.h
 
 CFLAGS+= -DLIBC_SCCS
 
+NO_WCAST_ALIGN= yes
+
 .if ${MK_INET6_SUPPORT} != "no"
 CFLAGS+= -DINET6
 .endif

@@ -33,6 +33,7 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_compat.h"
+#include "opt_compat_mach.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1307,3 +1308,5 @@ stopevent(struct proc *p, unsigned int event, unsigned int val)
 		msleep(&p->p_step, &p->p_mtx, PWAIT, "stopevent", 0);
 	} while (p->p_step);
 }
+
+

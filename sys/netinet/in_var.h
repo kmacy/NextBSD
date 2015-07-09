@@ -49,6 +49,7 @@ struct	in_aliasreq {
 #include <sys/queue.h>
 #include <sys/fnv_hash.h>
 #include <sys/tree.h>
+#include <sys/kern_event.h>
 
 struct igmp_ifsoftc;
 struct in_multi;

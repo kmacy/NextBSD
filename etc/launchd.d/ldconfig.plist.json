@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/ldconfig.sh",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/ldconfig.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "ldconfig"
+}

@@ -1,0 +1,9 @@
+{
+  "Program": "/etc/launchd/scripts/dyndns.sh",
+  "Disabled": false,
+  "ProgramArguments": [
+    "/etc/launchd/scripts/dyndns.sh"
+  ],
+  "RunAtLoad": true,
+  "Label": "dyndns"
+}

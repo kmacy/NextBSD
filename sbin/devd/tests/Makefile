@@ -9,4 +9,5 @@ TEST_METADATA.client_test+=	timeout=15
 
 WARNS?=	5
 
+NO_WCAST_ALIGN=
 .include <bsd.test.mk>

@@ -1,0 +1,10 @@
+{
+  "Program": "/usr/sbin/pflogd",
+  "Disabled": true,
+  "ProgramArguments": [
+    "/usr/sbin/pflogd",
+    "-D"
+  ],
+  "RunAtLoad": true,
+  "Label": "pflogd"
+}

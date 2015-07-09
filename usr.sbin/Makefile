@@ -4,6 +4,7 @@
 .include <src.opts.mk>
 
 SUBDIR=	adduser \
+	asl \
 	arp \
 	binmiscctl \
 	bsdconfig \
@@ -56,6 +57,7 @@ SUBDIR=	adduser \
 	nfsuserd \
 	nmtree \
 	nologin \
+	notifyd \
 	${_pc_sysinstall} \
 	pciconf \
 	periodic \

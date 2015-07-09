@@ -10,4 +10,5 @@ LIBADD=	pthread
 
 CFLAGS+= -I${.CURDIR}/../shared
 
+NO_WCAST_ALIGN=
 .include <bsd.prog.mk>
