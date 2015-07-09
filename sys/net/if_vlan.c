@@ -1163,8 +1163,7 @@ vlan_input(struct ifnet *ifp, struct mbuf *m)
 	TRUNK_RUNLOCK(trunk);
 
 	m->m_pkthdr.rcvif = ifv->ifv_ifp;
-	if_inc_counter(ifp, IFCOUNTER_IPACKETS, 1);
-	if_inc_counter(ifp, IFCOUNTER_IBYTES, m->m_pkthdr.len);
+	if_inc_counter(ifv->ifv_ifp, IFCOUNTER_IPACKETS, 1);
 
 	/* Pass it back through the parent's input routine. */
 	(*ifp->if_input)(ifv->ifv_ifp, m);
@@ -1703,27 +1702,6 @@ vlan_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			TRUNK_LOCK(trunk);
 			error = vlan_setmulti(ifp);
 			TRUNK_UNLOCK(trunk);
-		}
-		break;
-
-	case SIOCSIFCAP:
-		VLAN_LOCK();
-		if (TRUNK(ifv) != NULL) {
-			p = PARENT(ifv);
-			VLAN_UNLOCK();
-			if ((p->if_type != IFT_ETHER) &&
-			    (ifr->ifr_reqcap & IFCAP_VLAN_HWTAGGING) == 0) {
-				error = EINVAL;
-				break;
-			}
-			error = (*p->if_ioctl)(p, cmd, data);
-			if (error)
-				break;
-			/* Propogate vlan interface capabilities */
-			vlan_trunk_capabilities(p);
-		} else {
-			VLAN_UNLOCK();
-			error = EINVAL;
 		}
 		break;
 

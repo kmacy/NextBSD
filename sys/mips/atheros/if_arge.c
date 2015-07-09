@@ -90,6 +90,8 @@ MODULE_VERSION(arge, 1);
 
 #include "miibus_if.h"
 
+#include <net/ethernet.h>
+
 #include <mips/atheros/ar71xxreg.h>
 #include <mips/atheros/ar934xreg.h>	/* XXX tsk! */
 #include <mips/atheros/qca955xreg.h>	/* XXX tsk! */
@@ -240,24 +242,31 @@ DRIVER_MODULE(argemdio, nexus, argemdio_driver, argemdio_devclass, 0, 0);
 DRIVER_MODULE(mdio, argemdio, mdio_driver, mdio_devclass, 0, 0);
 #endif
 
-/*
- * RedBoot passes MAC address to entry point as environment
- * variable. platfrom_start parses it and stores in this variable
- */
-extern uint32_t ar711_base_mac[ETHER_ADDR_LEN];
-
 static struct mtx miibus_mtx;
 
 MTX_SYSINIT(miibus_mtx, &miibus_mtx, "arge mii lock", MTX_DEF);
 
 /*
  * Flushes all
+ *
+ * XXX this needs to be done at interrupt time! Grr!
  */
 static void
 arge_flush_ddr(struct arge_softc *sc)
 {
-
-	ar71xx_device_flush_ddr_ge(sc->arge_mac_unit);
+	switch (sc->arge_mac_unit) {
+	case 0:
+		ar71xx_device_flush_ddr(AR71XX_CPU_DDR_FLUSH_GE0);
+		break;
+	case 1:
+		ar71xx_device_flush_ddr(AR71XX_CPU_DDR_FLUSH_GE1);
+		break;
+	default:
+		device_printf(sc->arge_dev, "%s: unknown unit (%d)\n",
+		    __func__,
+		    sc->arge_mac_unit);
+		break;
+	}
 }
 
 static int
@@ -567,17 +576,55 @@ arge_attach(device_t dev)
 {
 	struct ifnet		*ifp;
 	struct arge_softc	*sc;
-	int			error = 0, rid;
-	int			is_base_mac_empty, i;
+	int			error = 0, rid, i;
 	uint32_t		hint;
 	long			eeprom_mac_addr = 0;
 	int			miicfg = 0;
 	int			readascii = 0;
 	int			local_mac = 0;
+	uint8_t			local_macaddr[ETHER_ADDR_LEN];
+	char *			local_macstr;
+	char			devid_str[32];
+	int			count;
 
 	sc = device_get_softc(dev);
 	sc->arge_dev = dev;
 	sc->arge_mac_unit = device_get_unit(dev);
+
+	/*
+	 * See if there's a "board" MAC address hint available for
+	 * this particular device.
+	 *
+	 * This is in the environment - it'd be nice to use the resource_*()
+	 * routines, but at the moment the system is booting, the resource hints
+	 * are set to the 'static' map so they're not pulling from kenv.
+	 */
+	snprintf(devid_str, 32, "hint.%s.%d.macaddr",
+	    device_get_name(dev),
+	    device_get_unit(dev));
+	if ((local_macstr = kern_getenv(devid_str)) != NULL) {
+		uint32_t tmpmac[ETHER_ADDR_LEN];
+
+		/* Have a MAC address; should use it */
+		device_printf(dev, "Overriding MAC address from environment: '%s'\n",
+		    local_macstr);
+
+		/* Extract out the MAC address */
+		/* XXX this should all be a generic method */
+		count = sscanf(local_macstr, "%x%*c%x%*c%x%*c%x%*c%x%*c%x",
+		    &tmpmac[0], &tmpmac[1],
+		    &tmpmac[2], &tmpmac[3],
+		    &tmpmac[4], &tmpmac[5]);
+		if (count == 6) {
+			/* Valid! */
+			local_mac = 1;
+			for (i = 0; i < ETHER_ADDR_LEN; i++)
+				local_macaddr[i] = tmpmac[i];
+		}
+		/* Done! */
+		freeenv(local_macstr);
+		local_macstr = NULL;
+	}
 
 	/*
 	 * Some units (eg the TP-Link WR-1043ND) do not have a convenient
@@ -593,8 +640,8 @@ arge_attach(device_t dev)
 	 * an array of numbers.  Expose a hint to turn on this conversion
 	 * feature via strtol()
 	 */
-	 if (resource_long_value(device_get_name(dev), device_get_unit(dev),
-	    "eeprommac", &eeprom_mac_addr) == 0) {
+	 if (local_mac == 0 && resource_long_value(device_get_name(dev),
+	     device_get_unit(dev), "eeprommac", &eeprom_mac_addr) == 0) {
 		local_mac = 1;
 		int i;
 		const char *mac =
@@ -604,11 +651,11 @@ arge_attach(device_t dev)
 			"readascii", &readascii) == 0) {
 			device_printf(dev, "Vendor stores MAC in ASCII format\n");
 			for (i = 0; i < 6; i++) {
-				ar711_base_mac[i] = strtol(&(mac[i*3]), NULL, 16);
+				local_macaddr[i] = strtol(&(mac[i*3]), NULL, 16);
 			}
 		} else {
 			for (i = 0; i < 6; i++) {
-				ar711_base_mac[i] = mac[i];
+				local_macaddr[i] = mac[i];
 			}
 		}
 	}
@@ -732,14 +779,11 @@ arge_attach(device_t dev)
 	ifp->if_capabilities |= IFCAP_POLLING;
 #endif
 
-	is_base_mac_empty = 1;
-	for (i = 0; i < ETHER_ADDR_LEN; i++) {
-		sc->arge_eaddr[i] = ar711_base_mac[i] & 0xff;
-		if (sc->arge_eaddr[i] != 0)
-			is_base_mac_empty = 0;
-	}
-
-	if (is_base_mac_empty) {
+	/* If there's a local mac defined, copy that in */
+	if (local_mac == 1) {
+		(void) ar71xx_mac_addr_init(sc->arge_eaddr,
+		    local_macaddr, 0, 0);
+	} else {
 		/*
 		 * No MAC address configured. Generate the random one.
 		 */
@@ -748,23 +792,6 @@ arge_attach(device_t dev)
 			    "Generating random ethernet address.\n");
 		(void) ar71xx_mac_addr_random_init(sc->arge_eaddr);
 	}
-
-	/*
-	 * This is a little hairy and stupid.
-	 *
-	 * For some older boards, the arge1 mac isn't pulled from anywhere.
-	 * It's just assumed the MAC is the base MAC + 1.
-	 *
-	 * For other boards, there's multiple MAC addresses stored in EEPROM.
-	 *
-	 * So, if we did read the eeprommac for this particular interface,
-	 * let's use the address as given.  Otherwise, just add the MAC unit
-	 * counter to it.
-	 *
-	 * XXX TODO: we really should handle MAC byte wraparound!
-	 */
-	if (local_mac == 0 && sc->arge_mac_unit != 0)
-		sc->arge_eaddr[5] +=  sc->arge_mac_unit;
 
 	if (arge_dma_alloc(sc) != 0) {
 		error = ENXIO;
@@ -2344,6 +2371,7 @@ arge_intr(void *arg)
 	}
 
 	ARGE_LOCK(sc);
+	arge_flush_ddr(sc);
 
 	if (status & DMA_INTR_RX_PKT_RCVD)
 		arge_rx_locked(sc);

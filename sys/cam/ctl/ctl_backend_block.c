@@ -521,7 +521,7 @@ ctl_be_block_biodone(struct bio *bio)
 	if (beio->num_errors > 0) {
 		if (error == EOPNOTSUPP) {
 			ctl_set_invalid_opcode(&io->scsiio);
-		} else if (error == ENOSPC) {
+		} else if (error == ENOSPC || error == EDQUOT) {
 			ctl_set_space_alloc_fail(&io->scsiio);
 		} else if (beio->bio_cmd == BIO_FLUSH) {
 			/* XXX KDM is there is a better error here? */
@@ -738,7 +738,7 @@ ctl_be_block_dispatch_file(struct ctl_be_block_lun *be_lun,
 		ctl_scsi_path_string(io, path_str, sizeof(path_str));
 		printf("%s%s command returned errno %d\n", path_str,
 		       (beio->bio_cmd == BIO_READ) ? "READ" : "WRITE", error);
-		if (error == ENOSPC) {
+		if (error == ENOSPC || error == EDQUOT) {
 			ctl_set_space_alloc_fail(&io->scsiio);
 		} else
 			ctl_set_medium_error(&io->scsiio);
@@ -810,24 +810,27 @@ ctl_be_block_getattr_file(struct ctl_be_block_lun *be_lun, const char *attrname)
 {
 	struct vattr		vattr;
 	struct statfs		statfs;
+	uint64_t		val;
 	int			error;
 
+	val = UINT64_MAX;
 	if (be_lun->vn == NULL)
-		return (UINT64_MAX);
+		return (val);
+	vn_lock(be_lun->vn, LK_SHARED | LK_RETRY);
 	if (strcmp(attrname, "blocksused") == 0) {
 		error = VOP_GETATTR(be_lun->vn, &vattr, curthread->td_ucred);
-		if (error != 0)
-			return (UINT64_MAX);
-		return (vattr.va_bytes >> be_lun->blocksize_shift);
+		if (error == 0)
+			val = vattr.va_bytes >> be_lun->blocksize_shift;
 	}
-	if (strcmp(attrname, "blocksavail") == 0) {
+	if (strcmp(attrname, "blocksavail") == 0 &&
+	    (be_lun->vn->v_iflag & VI_DOOMED) == 0) {
 		error = VFS_STATFS(be_lun->vn->v_mount, &statfs);
-		if (error != 0)
-			return (UINT64_MAX);
-		return ((statfs.f_bavail * statfs.f_bsize) >>
-		    be_lun->blocksize_shift);
+		if (error == 0)
+			val = (statfs.f_bavail * statfs.f_bsize) >>
+			    be_lun->blocksize_shift;
 	}
-	return (UINT64_MAX);
+	VOP_UNLOCK(be_lun->vn, 0);
+	return (val);
 }
 
 static void
@@ -895,7 +898,7 @@ ctl_be_block_dispatch_zvol(struct ctl_be_block_lun *be_lun,
 	 * return the I/O to the user.
 	 */
 	if (error != 0) {
-		if (error == ENOSPC) {
+		if (error == ENOSPC || error == EDQUOT) {
 			ctl_set_space_alloc_fail(&io->scsiio);
 		} else
 			ctl_set_medium_error(&io->scsiio);
@@ -2666,10 +2669,12 @@ ctl_be_block_modify(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 	oldsize = be_lun->size_bytes;
 	if (be_lun->vn == NULL)
 		error = ctl_be_block_open(softc, be_lun, req);
+	else if (vn_isdisk(be_lun->vn, &error))
+		error = ctl_be_block_modify_dev(be_lun, req);
 	else if (be_lun->vn->v_type == VREG)
 		error = ctl_be_block_modify_file(be_lun, req);
 	else
-		error = ctl_be_block_modify_dev(be_lun, req);
+		error = EINVAL;
 
 	if (error == 0 && be_lun->size_bytes != oldsize) {
 		be_lun->size_blocks = be_lun->size_bytes >>

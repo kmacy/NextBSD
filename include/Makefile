@@ -70,6 +70,7 @@ LSUBDIRS=	cam/ata cam/scsi \
 	geom/cache geom/concat geom/eli geom/gate geom/journal geom/label \
 	geom/mirror geom/mountver geom/multipath geom/nop \
 	geom/raid geom/raid3 geom/shsec geom/stripe geom/virstor \
+	net/altq \
 	netgraph/atm netgraph/netflow \
 	security/audit \
 	security/mac_biba security/mac_bsdextended security/mac_lomac \
@@ -148,7 +149,29 @@ _MARCHS=	${MACHINE_CPUARCH}
 _MARCHS+=	x86
 .endif
 
+.if ${MK_STAGING} == "yes"
+# tell bsd.incs.mk that we have it covered
+NO_STAGE_INCLUDES=
+.endif
+
 .include <bsd.prog.mk>
+
+.if ${MK_STAGING} != "no" && !defined(_SKIP_BUILD)
+.if make(all)
+DESTDIR= ${STAGE_OBJTOP}
+
+all:	stage_include
+installincludes: buildincludes
+buildincludes: stage_prep
+
+stage_prep:
+	@mkdir -p ${DESTDIR}${INCLUDEDIR}
+	@touch $@
+
+stage_include: .dirdep installincludes
+	@touch $@
+.endif
+.endif
 
 installincludes: ${SHARED}
 ${SHARED}: compat
@@ -162,10 +185,13 @@ compat:
 .endfor
 	mtree -deU ${MTREE_FOLLOWS_SYMLINKS} \
 	    -f ${.CURDIR}/../etc/mtree/BSD.include.dist \
-	    -p ${DESTDIR}${INCLUDEDIR}
+	    -p ${DESTDIR}${INCLUDEDIR} > /dev/null
+.if ${MK_META_MODE} == "yes"
+	touch ${.TARGET}
+.endif
 
 copies:
-.for i in ${LDIRS} ${LSUBDIRS} ${LSUBSUBDIRS} altq crypto machine machine/pc machine/mach \
+.for i in ${LDIRS} ${LSUBDIRS} ${LSUBSUBDIRS} crypto machine machine/pc \
 	${_MARCHS}
 .if exists(${DESTDIR}${INCLUDEDIR}/$i)
 	cd ${DESTDIR}${INCLUDEDIR}/$i; \
@@ -200,9 +226,6 @@ copies:
 	cd ${.CURDIR}/../sys/dev/pci; \
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 pcireg.h \
 	    ${DESTDIR}${INCLUDEDIR}/dev/pci
-	cd ${.CURDIR}/../sys/contrib/altq/altq; \
-	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
-	    ${DESTDIR}${INCLUDEDIR}/altq
 	cd ${.CURDIR}/../sys/fs/cd9660/; \
 	${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h \
 	    ${DESTDIR}${INCLUDEDIR}/isofs/cd9660
@@ -280,6 +303,9 @@ copies:
 		${INSTALL} -C -o ${BINOWN} -g ${BINGRP} -m 444 *.h *.defs \
 		${DESTDIR}${INCLUDEDIR}/sys/mach/device
 .endif
+.if ${MK_META_MODE} == "yes"
+	touch ${.TARGET}
+.endif
 
 symlinks:
 	@${ECHO} "Setting up symlinks to kernel source tree..."
@@ -330,11 +356,6 @@ symlinks:
 		ln -fs ../../../../../sys/$i/$$h ${DESTDIR}${INCLUDEDIR}/$i; \
 	done
 .endfor
-	cd ${.CURDIR}/../sys/contrib/altq/altq; \
-	for h in *.h; do \
-		ln -fs ../../../sys/contrib/altq/altq/$$h \
-		    ${DESTDIR}${INCLUDEDIR}/altq; \
-	done
 .if ${MK_IPFILTER} != "no"
 	cd ${.CURDIR}/../sys/contrib/ipfilter/netinet; \
 	for h in *.h; do \
@@ -371,18 +392,6 @@ symlinks:
 		    ${DESTDIR}${INCLUDEDIR}/machine/pc; \
 	done
 .endif
-.if exists(${.CURDIR}/../sys/${MACHINE}/include/mach)
-	cd ${.CURDIR}/../sys/${MACHINE}/include/mach; \
-	for h in *.h; do \
-		ln -fs ../../../../sys/${MACHINE}/include/mach/$$h \
-		    ${DESTDIR}${INCLUDEDIR}/machine/mach; \
-	done
-	for d in *.defs; do \
-		ln -fs ../../../../sys/${MACHINE}/include/mach/$$d \
-		    ${DESTDIR}${INCLUDEDIR}/machine/mach; \
-	done
-
-.endif
 .for _MARCH in ${_MARCHS}
 .if exists(${.CURDIR}/../sys/${_MARCH}/include)
 	${INSTALL} -d -o ${BINOWN} -g ${BINGRP} -m 755 \
@@ -413,3 +422,15 @@ symlinks:
 		ln -fs ../../../sys/rpc/$$h \
 		    ${DESTDIR}${INCLUDEDIR}/rpc; \
 	done
+.if ${MK_META_MODE} == "yes"
+	touch ${.TARGET}
+.endif
+
+.if ${MACHINE} == "host"
+# we're here because we are building a sysroot...
+# we need MACHINE et al set correctly
+HOST_MACHINE!= uname -m
+HOST_MACHINE_ARCH!= uname -p
+MACHINE:= ${HOST_MACHINE}
+MACHINE_ARCH:= ${HOST_MACHINE_ARCH}
+.endif

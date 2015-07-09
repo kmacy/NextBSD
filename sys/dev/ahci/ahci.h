@@ -427,6 +427,8 @@ struct ahci_channel {
 	int			pm_present;	/* PM presence reported */
 	int			fbs_enabled;	/* FIS-based switching enabled */
 
+	void			(*start)(struct ahci_channel *);
+
 	union ccb		*hold[AHCI_MAX_SLOTS];
 	struct ahci_slot	slot[AHCI_MAX_SLOTS];
 	uint32_t		oslots;		/* Occupied slots */
@@ -512,6 +514,7 @@ struct ahci_controller {
 		void			(*function)(void *);
 		void			*argument;
 	} interrupt[AHCI_MAX_PORTS];
+	void			(*ch_start)(struct ahci_channel *);
 };
 
 enum ahci_err_type {
@@ -578,7 +581,7 @@ enum ahci_err_type {
 #define AHCI_Q_RESTORE_CAP	0x00080000
 
 #define AHCI_Q_BIT_STRING	\
-	"\021"			\
+	"\020"			\
 	"\001NOFORCE"		\
 	"\002NOPMP"		\
 	"\003NONCQ"		\
@@ -597,8 +600,8 @@ enum ahci_err_type {
 	"\020SATA1_UNIT0"	\
 	"\021ABAR0"		\
 	"\0221MSI"              \
-	"\022FORCE_PI"          \
-	"\023RESTORE_CAP"
+	"\023FORCE_PI"          \
+	"\024RESTORE_CAP"
 
 int ahci_attach(device_t dev);
 int ahci_detach(device_t dev);

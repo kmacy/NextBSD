@@ -137,7 +137,6 @@ static struct fileops kqueueops = {
 
 static int 	knote_attach(struct knote *kn, struct kqueue *kq);
 static void 	knote_drop(struct knote *kn, struct thread *td);
-void 	knote_enqueue(struct knote *kn);
 static void 	knote_dequeue(struct knote *kn);
 static void 	knote_init(void);
 static struct 	knote *knote_alloc(int waitok);
@@ -301,11 +300,7 @@ static struct {
 	{ &user_filtops, 1 },			/* EVFILT_USER */
 	{ &null_filtops },			/* EVFILT_SENDFILE */
 	{ &null_filtops },		/* EVFILT_MACHPORT */
-#ifdef HAVE_EVFILT_VM
-	{ &vm_filtops },			/* EVFILT_VM */
-#else
-	{ &null_filtops },
-#endif
+	{ &null_filtops },			/* EVFILT_VM */
 };
 
 /*
@@ -447,7 +442,7 @@ filt_proc(struct knote *kn, long hint)
 		kn->kn_ptr.p_proc = NULL;
 		if (kn->kn_fflags & NOTE_EXIT) {
 			kn->kn_data = p->p_xstat;
-			/* OS X compatibility */
+			/* Darwin compatibility */
 			if (kn->kn_sfflags & NOTE_EXITSTATUS)
 				kn->kn_fflags |= NOTE_EXITSTATUS;
 		}
@@ -629,7 +624,7 @@ filt_timerattach(struct knote *kn)
 	kn->kn_status &= ~KN_DETACHED;		/* knlist_add clears it */
 	kn->kn_ptr.p_nexttime = malloc(sizeof(sbintime_t), M_KQUEUE, M_WAITOK);
 	calloutp = malloc(sizeof(*calloutp), M_KQUEUE, M_WAITOK);
-	callout_init(calloutp, CALLOUT_MPSAFE);
+	callout_init(calloutp, 1);
 	kn->kn_hook = calloutp;
 	*kn->kn_ptr.p_nexttime = to + sbinuptime();
 	callout_reset_sbt_on(calloutp, *kn->kn_ptr.p_nexttime, 0,
@@ -751,6 +746,13 @@ filt_usertouch(struct knote *kn, struct kevent64_s *kev, u_long type)
 int
 sys_kqueue(struct thread *td, struct kqueue_args *uap)
 {
+
+	return (kern_kqueue(td, 0));
+}
+
+int
+kern_kqueue(struct thread *td, int flags)
+{
 	struct filedesc *fdp;
 	struct kqueue *kq;
 	struct file *fp;
@@ -761,17 +763,13 @@ sys_kqueue(struct thread *td, struct kqueue_args *uap)
 	p = td->td_proc;
 	cred = td->td_ucred;
 	crhold(cred);
-	PROC_LOCK(p);
-	if (!chgkqcnt(cred->cr_ruidinfo, 1, lim_cur(td->td_proc,
-	    RLIMIT_KQUEUES))) {
-		PROC_UNLOCK(p);
+	if (!chgkqcnt(cred->cr_ruidinfo, 1, lim_cur(td, RLIMIT_KQUEUES))) {
 		crfree(cred);
 		return (ENOMEM);
 	}
-	PROC_UNLOCK(p);
 
 	fdp = p->p_fd;
-	error = falloc(td, &fp, &fd, 0);
+	error = falloc(td, &fp, &fd, flags);
 	if (error)
 		goto done2;
 
@@ -827,8 +825,8 @@ sys_kevent64(struct thread *td, struct kevent64_args *uap)
 	} else
 		tsp = NULL;
 
-	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
-			&k_ops, tsp, 1);
+	error = kern_kevent64(td, uap->fd, uap->nchanges, uap->nevents,
+			&k_ops, tsp);
 
 	return (error);
 }
@@ -881,7 +879,7 @@ sys_kevent(struct thread *td, struct kevent_args *uap)
 #endif
 
 	error = kern_kevent(td, uap->fd, uap->nchanges, uap->nevents,
-			&k_ops, tsp, 0);
+			&k_ops, tsp);
 
 #ifdef KTRACE
 	if (ktruioin != NULL) {
@@ -968,17 +966,11 @@ kevent_copyin(void *arg, void *kevp, int count)
 
 int
 kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
-	struct kevent_copyops *k_ops, const struct timespec *timeout,
-	int v1)
+	struct kevent_copyops *k_ops, const struct timespec *timeout)
 {
-	struct kevent keva[KQ_NEVENTS];
-	struct kevent64_s keva64[KQ_NEVENTS];
-	struct kevent *changes;
-	struct kevent64_s kevtmp, *kevp;
-	struct kqueue *kq;
-	struct file *fp;
 	cap_rights_t rights;
-	int i, n, nerrors, error;
+	struct file *fp;
+	int error;
 
 	cap_rights_init(&rights);
 	if (nchanges > 0)
@@ -989,9 +981,49 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 	if (error != 0)
 		return (error);
 
+	error = kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout, 0);
+	fdrop(fp, td);
+
+	return (error);
+}
+
+int
+kern_kevent64(struct thread *td, int fd, int nchanges, int nevents,
+	struct kevent_copyops *k_ops, const struct timespec *timeout)
+{
+	cap_rights_t rights;
+	struct file *fp;
+	int error;
+
+	cap_rights_init(&rights);
+	if (nchanges > 0)
+		cap_rights_set(&rights, CAP_KQUEUE_CHANGE);
+	if (nevents > 0)
+		cap_rights_set(&rights, CAP_KQUEUE_EVENT);
+	error = fget(td, fd, &rights, &fp);
+	if (error != 0)
+		return (error);
+
+	error = kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout, 1);
+	fdrop(fp, td);
+
+	return (error);
+}
+
+int
+kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
+			   struct kevent_copyops *k_ops, const struct timespec *timeout, int v1)
+{
+	struct kevent keva[KQ_NEVENTS];
+	struct kevent64_s keva64[KQ_NEVENTS];
+	struct kevent *changes;
+	struct kevent64_s kevtmp, *kevp;
+	struct kqueue *kq;
+	int i, n, nerrors, error;
+
 	error = kqueue_acquire(fp, &kq);
 	if (error != 0)
-		goto done_norel;
+		return (error);
 
 	nerrors = 0;
 	if (v1) {
@@ -1070,8 +1102,6 @@ check_errors:
 	error = kqueue_scan(kq, nevents, k_ops, timeout, keva64, td);
 done:
 	kqueue_release(kq, 0);
-done_norel:
-	fdrop(fp, td);
 	return (error);
 }
 

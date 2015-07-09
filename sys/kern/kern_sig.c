@@ -179,7 +179,7 @@ static int	set_core_nodump_flag = 0;
 SYSCTL_INT(_kern, OID_AUTO, nodump_coredump, CTLFLAG_RW, &set_core_nodump_flag,
 	0, "Enable setting the NODUMP flag on coredump files");
 
-static int	coredump_devctl = 1;
+static int	coredump_devctl = 0;
 SYSCTL_INT(_kern, OID_AUTO, coredump_devctl, CTLFLAG_RW, &coredump_devctl,
 	0, "Generate a devctl notification when processes coredump");
 
@@ -2374,9 +2374,12 @@ tdsigwakeup(struct thread *td, int sig, sig_t action, int intrval)
 	thread_lock(td);
 	/*
 	 * Bring the priority of a thread up if we want it to get
-	 * killed in this lifetime.
+	 * killed in this lifetime.  Be careful to avoid bumping the
+	 * priority of the idle thread, since we still allow to signal
+	 * kernel processes.
 	 */
-	if (action == SIG_DFL && (prop & SA_KILL) && td->td_priority > PUSER)
+	if (action == SIG_DFL && (prop & SA_KILL) != 0 &&
+	    td->td_priority > PUSER && !TD_IS_IDLETHREAD(td))
 		sched_prio(td, PUSER);
 	if (TD_ON_SLEEPQ(td)) {
 		/*
@@ -2414,7 +2417,7 @@ tdsigwakeup(struct thread *td, int sig, sig_t action, int intrval)
 		/*
 		 * Give low priority threads a better chance to run.
 		 */
-		if (td->td_priority > PUSER)
+		if (td->td_priority > PUSER && !TD_IS_IDLETHREAD(td))
 			sched_prio(td, PUSER);
 
 		wakeup_swapper = sleepq_abort(td, intrval);
@@ -2484,6 +2487,8 @@ ptracestop(struct thread *td, int sig)
 
 	td->td_dbgflags |= TDB_XSIG;
 	td->td_xsig = sig;
+	CTR4(KTR_PTRACE, "ptracestop: tid %d (pid %d) flags %#x sig %d",
+	    td->td_tid, p->p_pid, td->td_dbgflags, sig);
 	PROC_SLOCK(p);
 	while ((p->p_flag & P_TRACED) && (td->td_dbgflags & TDB_XSIG)) {
 		if (p->p_flag & P_SINGLE_EXIT) {
@@ -3310,7 +3315,7 @@ coredump(struct thread *td)
 	 * a corefile is truncated instead of not being created,
 	 * if it is larger than the limit.
 	 */
-	limit = (off_t)lim_cur(p, RLIMIT_CORE);
+	limit = (off_t)lim_cur(td, RLIMIT_CORE);
 	if (limit == 0 || racct_get_available(p, RACCT_CORE) == 0) {
 		PROC_UNLOCK(p);
 		return (EFBIG);

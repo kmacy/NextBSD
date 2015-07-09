@@ -10,10 +10,6 @@ SUBDIR=	\
 SUBDIR+=sendmail
 .endif
 
-.if ${MK_TESTS} != "no"
-SUBDIR+=tests
-.endif
-
 BIN1=	asl.conf \
 	crontab \
 	devd.conf \
@@ -54,10 +50,6 @@ BIN1=	asl.conf \
 	sysctl.conf \
 	syslog.conf \
 	termcap.small
-
-.if ${MACHINE_ARCH} == "amd64" || ${MACHINE_ARCH} == "powerpc64"
-BIN1+=	libmap32.conf
-.endif
 
 .if exists(${.CURDIR}/etc.${MACHINE}/ttys)
 BIN1+=	etc.${MACHINE}/ttys
@@ -197,13 +189,10 @@ distribute:
 .include <bsd.endian.mk>
 .if ${TARGET_ENDIANNESS} == "1234"
 CAP_MKDB_ENDIAN?= -l
-PWD_MKDB_ENDIAN?= -L
 .elif ${TARGET_ENDIANNESS} == "4321"
 CAP_MKDB_ENDIAN?= -b
-PWD_MKDB_ENDIAN?= -B
 .else
 CAP_MKDB_ENDIAN?=
-PWD_MKDB_ENDIAN?=
 .endif
 
 .if defined(NO_ROOT)
@@ -219,6 +208,8 @@ distribution:
 	    ${INSTALL} -o ${BINOWN} -g ${BINGRP} -m 644 \
 		${BIN1} ${DESTDIR}/etc; \
 	    cap_mkdb ${CAP_MKDB_ENDIAN} ${DESTDIR}/etc/login.conf; \
+	    services_mkdb ${CAP_MKDB_ENDIAN} -q -o ${DESTDIR}/var/db/services.db \
+		${DESTDIR}/etc/services; \
 	    ${INSTALL} -o ${BINOWN} -g ${BINGRP} -m 755 \
 		${BIN2} ${DESTDIR}/etc; \
 	    ${INSTALL} -o ${BINOWN} -g ${BINGRP} -m 600 \
@@ -229,8 +220,7 @@ distribution:
 .if ${MK_TCSH} == "no"
 	sed -i "" -e 's;/bin/csh;/bin/sh;' ${DESTDIR}/etc/master.passwd
 .endif
-	pwd_mkdb ${PWD_MKDB_ENDIAN} -i -p -d ${DESTDIR}/etc \
-	    ${DESTDIR}/etc/master.passwd
+	pwd_mkdb -i -p -d ${DESTDIR}/etc ${DESTDIR}/etc/master.passwd
 .if defined(NO_ROOT)
 	( \
 		echo "./etc/login.conf.db type=file mode=0644 uname=root gname=wheel"; \
@@ -342,6 +332,16 @@ distribution:
 
 MTREE_CMD?=	mtree
 
+.if ${MK_INSTALL_AS_USER} == "yes" && ${_uid} != 0
+MTREE_FILTER= sed -e 's,\([gu]\)name=,\1id=,g' \
+	-e 's,\(uid=\)[^ ]* ,\1${_uid} ,' \
+	-e 's,\(gid=\)[^ ]* ,\1${_gid} ,' \
+	-e 's,\(uid=\)[^ ]*$$,\1${_uid},' \
+	-e 's,\(gid=\)[^ ]*$$,\1${_gid},' 
+.else
+MTREE_FILTER= cat
+.endif
+
 MTREES=		mtree/BSD.root.dist		/		\
 		mtree/BSD.var.dist		/var		\
 		mtree/BSD.usr.dist		/usr		\
@@ -370,7 +370,8 @@ distrib-dirs: ${MTREES:N/*}
 		test -d $$d || mkdir -p $$d; \
 		${ECHO} ${MTREE_CMD} -deU ${MTREE_FOLLOWS_SYMLINKS} \
 		    -f $$m -p $$d; \
-		${MTREE_CMD} -deU ${MTREE_FOLLOWS_SYMLINKS} -f $$m -p $$d; \
+		${MTREE_FILTER} $$m | \
+		${MTREE_CMD} -deU ${MTREE_FOLLOWS_SYMLINKS} -p $$d; \
 	done; true
 .if defined(NO_ROOT)
 	@set ${MTREES}; \
@@ -381,10 +382,11 @@ distrib-dirs: ${MTREES:N/*}
 		test "$$d" == "/" && d=""; \
 		d=${DISTBASE}$$d; \
 		shift; \
-		test -d $$d || mkdir -p $$d; \
+		test -d ${DESTDIR}/$$d || mkdir -p ${DESTDIR}/$$d; \
 		${ECHO} "${MTREE_CMD:N-W} -C -f $$m -K uname,gname | " \
 		    "sed s#^\.#.$$d# | ${METALOG.add}" ; \
-		${MTREE_CMD:N-W} -C -f $$m -K uname,gname | sed s#^\.#.$$d# | \
+		${MTREE_FILTER} $$m | \
+		${MTREE_CMD:N-W} -C -K uname,gname | sed s#^\.#.$$d# | \
 		    ${METALOG.add} ; \
 	done; true
 .endif

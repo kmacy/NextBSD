@@ -301,6 +301,7 @@ struct rwlock;
 
 extern void	knote(struct knlist *list, long hint, int lockflags);
 extern void	knote_fork(struct knlist *list, int pid);
+extern void knote_enqueue(struct knote *kn);
 extern void	knlist_add(struct knlist *knl, struct knote *kn, int islocked);
 extern void	knlist_remove(struct knlist *knl, struct knote *kn, int islocked);
 extern void	knlist_remove_inevent(struct knlist *knl, struct knote *kn);

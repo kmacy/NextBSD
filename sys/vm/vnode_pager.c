@@ -237,6 +237,12 @@ retry:
 			 * Object has been created while we were sleeping
 			 */
 			VI_UNLOCK(vp);
+			VM_OBJECT_WLOCK(object);
+			KASSERT(object->ref_count == 1,
+			    ("leaked ref %p %d", object, object->ref_count));
+			object->type = OBJT_DEAD;
+			object->ref_count = 0;
+			VM_OBJECT_WUNLOCK(object);
 			vm_object_destroy(object);
 			goto retry;
 		}
@@ -340,16 +346,21 @@ vnode_pager_haspage(vm_object_t object, vm_pindex_t pindex, int *before,
 			*before += poff;
 		}
 		if (after) {
-			int numafter;
+			/*
+			 * The BMAP vop can report a partial block in the
+			 * 'after', but must not report blocks after EOF.
+			 * Assert the latter, and truncate 'after' in case
+			 * of the former.
+			 */
+			KASSERT((reqblock + *after) * pagesperblock <
+			    roundup2(object->size, pagesperblock),
+			    ("%s: reqblock %jd after %d size %ju", __func__,
+			    (intmax_t )reqblock, *after,
+			    (uintmax_t )object->size));
 			*after *= pagesperblock;
-			numafter = pagesperblock - (poff + 1);
-			if (IDX_TO_OFF(pindex + numafter) >
-			    object->un_pager.vnp.vnp_size) {
-				numafter =
-		    		    OFF_TO_IDX(object->un_pager.vnp.vnp_size) -
-				    pindex;
-			}
-			*after += numafter;
+			*after += pagesperblock - (poff + 1);
+			if (pindex + *after >= object->size)
+				*after = object->size - 1 - pindex;
 		}
 	} else {
 		if (before) {
@@ -686,7 +697,7 @@ vnode_pager_getpages_async(vm_object_t object, vm_page_t *m, int count,
 
 	vp = object->handle;
 	VM_OBJECT_WUNLOCK(object);
-	rtval = VOP_GETPAGES_ASYNC(vp, m, count * PAGE_SIZE, reqpage, 0,
+	rtval = VOP_GETPAGES_ASYNC(vp, m, count * PAGE_SIZE, reqpage,
 	    iodone, arg);
 	KASSERT(rtval != EOPNOTSUPP,
 	    ("vnode_pager: FS getpages_async not implemented\n"));

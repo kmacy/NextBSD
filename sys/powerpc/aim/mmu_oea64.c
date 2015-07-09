@@ -137,8 +137,6 @@ struct ofw_map {
 extern unsigned char _etext[];
 extern unsigned char _end[];
 
-extern int ofw_real_mode;
-
 /*
  * Map of physical memory regions.
  */
@@ -228,7 +226,7 @@ static boolean_t	moea64_query_bit(mmu_t, vm_page_t, uint64_t);
 static u_int		moea64_clear_bit(mmu_t, vm_page_t, uint64_t);
 static void		moea64_kremove(mmu_t, vm_offset_t);
 static void		moea64_syncicache(mmu_t, pmap_t pmap, vm_offset_t va, 
-			    vm_offset_t pa, vm_size_t sz);
+			    vm_paddr_t pa, vm_size_t sz);
 
 /*
  * Kernel MMU interface
@@ -269,11 +267,11 @@ void moea64_zero_page_idle(mmu_t, vm_page_t);
 void moea64_activate(mmu_t, struct thread *);
 void moea64_deactivate(mmu_t, struct thread *);
 void *moea64_mapdev(mmu_t, vm_paddr_t, vm_size_t);
-void *moea64_mapdev_attr(mmu_t, vm_offset_t, vm_size_t, vm_memattr_t);
+void *moea64_mapdev_attr(mmu_t, vm_paddr_t, vm_size_t, vm_memattr_t);
 void moea64_unmapdev(mmu_t, vm_offset_t, vm_size_t);
 vm_paddr_t moea64_kextract(mmu_t, vm_offset_t);
 void moea64_page_set_memattr(mmu_t, vm_page_t m, vm_memattr_t ma);
-void moea64_kenter_attr(mmu_t, vm_offset_t, vm_offset_t, vm_memattr_t ma);
+void moea64_kenter_attr(mmu_t, vm_offset_t, vm_paddr_t, vm_memattr_t ma);
 void moea64_kenter(mmu_t, vm_offset_t, vm_paddr_t);
 boolean_t moea64_dev_direct_mapped(mmu_t, vm_paddr_t, vm_size_t);
 static void moea64_sync_icache(mmu_t, pmap_t, vm_offset_t, vm_size_t);
@@ -421,7 +419,7 @@ moea64_pte_from_pvo(const struct pvo_entry *pvo, struct lpte *lpte)
 }
 
 static __inline uint64_t
-moea64_calc_wimg(vm_offset_t pa, vm_memattr_t ma)
+moea64_calc_wimg(vm_paddr_t pa, vm_memattr_t ma)
 {
 	uint64_t pte_lo;
 	int i;
@@ -852,8 +850,7 @@ moea64_late_bootstrap(mmu_t mmup, vm_offset_t kernelstart, vm_offset_t kernelend
 	 */
 
 	chosen = OF_finddevice("/chosen");
-	if (!ofw_real_mode && chosen != -1 &&
-	    OF_getprop(chosen, "mmu", &mmui, 4) != -1) {
+	if (chosen != -1 && OF_getprop(chosen, "mmu", &mmui, 4) != -1) {
 		mmu = OF_instance_to_package(mmui);
 		if (mmu == -1 ||
 		    (sz = OF_getproplen(mmu, "translations")) == -1)
@@ -1057,7 +1054,7 @@ moea64_unwire(mmu_t mmu, pmap_t pm, vm_offset_t sva, vm_offset_t eva)
  */
 
 static __inline
-void moea64_set_scratchpage_pa(mmu_t mmup, int which, vm_offset_t pa) {
+void moea64_set_scratchpage_pa(mmu_t mmup, int which, vm_paddr_t pa) {
 
 	KASSERT(!hw_direct_map, ("Using OEA64 scratchpage with a direct map!"));
 	mtx_assert(&moea64_scratchpage_mtx, MA_OWNED);
@@ -1162,7 +1159,7 @@ moea64_copy_pages(mmu_t mmu, vm_page_t *ma, vm_offset_t a_offset,
 void
 moea64_zero_page_area(mmu_t mmu, vm_page_t m, int off, int size)
 {
-	vm_offset_t pa = VM_PAGE_TO_PHYS(m);
+	vm_paddr_t pa = VM_PAGE_TO_PHYS(m);
 
 	if (size + off > PAGE_SIZE)
 		panic("moea64_zero_page: size + off > PAGE_SIZE");
@@ -1183,7 +1180,7 @@ moea64_zero_page_area(mmu_t mmu, vm_page_t m, int off, int size)
 void
 moea64_zero_page(mmu_t mmu, vm_page_t m)
 {
-	vm_offset_t pa = VM_PAGE_TO_PHYS(m);
+	vm_paddr_t pa = VM_PAGE_TO_PHYS(m);
 	vm_offset_t va, off;
 
 	if (!hw_direct_map) {
@@ -1313,7 +1310,7 @@ moea64_enter(mmu_t mmu, pmap_t pmap, vm_offset_t va, vm_page_t m,
 }
 
 static void
-moea64_syncicache(mmu_t mmu, pmap_t pmap, vm_offset_t va, vm_offset_t pa,
+moea64_syncicache(mmu_t mmu, pmap_t pmap, vm_offset_t va, vm_paddr_t pa,
     vm_size_t sz)
 {
 
@@ -1437,7 +1434,8 @@ retry:
 static mmu_t installed_mmu;
 
 static void *
-moea64_uma_page_alloc(uma_zone_t zone, int bytes, u_int8_t *flags, int wait) 
+moea64_uma_page_alloc(uma_zone_t zone, vm_size_t bytes, uint8_t *flags,
+    int wait)
 {
 	struct pvo_entry *pvo;
         vm_offset_t va;
@@ -1694,7 +1692,7 @@ moea64_page_set_memattr(mmu_t mmu, vm_page_t m, vm_memattr_t ma)
  * Map a wired page into kernel virtual address space.
  */
 void
-moea64_kenter_attr(mmu_t mmu, vm_offset_t va, vm_offset_t pa, vm_memattr_t ma)
+moea64_kenter_attr(mmu_t mmu, vm_offset_t va, vm_paddr_t pa, vm_memattr_t ma)
 {
 	int		error;	
 	struct pvo_entry *pvo, *oldpvo;
@@ -2519,7 +2517,7 @@ moea64_dev_direct_mapped(mmu_t mmu, vm_paddr_t pa, vm_size_t size)
  * NOT real memory.
  */
 void *
-moea64_mapdev_attr(mmu_t mmu, vm_offset_t pa, vm_size_t size, vm_memattr_t ma)
+moea64_mapdev_attr(mmu_t mmu, vm_paddr_t pa, vm_size_t size, vm_memattr_t ma)
 {
 	vm_offset_t va, tmpva, ppa, offset;
 

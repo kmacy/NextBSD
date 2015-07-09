@@ -1239,9 +1239,6 @@ zfs_domount(vfs_t *vfsp, char *osname)
 	}
 
 	vfs_mountedfrom(vfsp, osname);
-	/* Grab extra reference. */
-	VERIFY(VFS_ROOT(vfsp, LK_EXCLUSIVE, &vp) == 0);
-	VOP_UNLOCK(vp, 0);
 
 	if (!zfsvfs->z_issnap)
 		zfsctl_create(zfsvfs);
@@ -1720,9 +1717,19 @@ zfs_mount(vfs_t *vfsp)
 	 * according to those options set in the current VFS options.
 	 */
 	if (vfsp->vfs_flag & MS_REMOUNT) {
-		/* refresh mount options */
-		zfs_unregister_callbacks(vfsp->vfs_data);
+		zfsvfs_t *zfsvfs = vfsp->vfs_data;
+
+		/*
+		 * Refresh mount options with z_teardown_lock blocking I/O while
+		 * the filesystem is in an inconsistent state.
+		 * The lock also serializes this code with filesystem
+		 * manipulations between entry to zfs_suspend_fs() and return
+		 * from zfs_resume_fs().
+		 */
+		rrm_enter(&zfsvfs->z_teardown_lock, RW_WRITER, FTAG);
+		zfs_unregister_callbacks(zfsvfs);
 		error = zfs_register_callbacks(vfsp);
+		rrm_exit(&zfsvfs->z_teardown_lock, FTAG);
 		goto out;
 	}
 
@@ -1819,7 +1826,7 @@ zfs_root(vfs_t *vfsp, int flags, vnode_t **vpp)
 	znode_t *rootzp;
 	int error;
 
-	ZFS_ENTER_NOERROR(zfsvfs);
+	ZFS_ENTER(zfsvfs);
 
 	error = zfs_zget(zfsvfs, zfsvfs->z_root, &rootzp);
 	if (error == 0)
@@ -1994,7 +2001,7 @@ zfs_umount(vfs_t *vfsp, int fflag)
 	/*
 	 * Flush all the files.
 	 */
-	ret = vflush(vfsp, 1, (fflag & MS_FORCE) ? FORCECLOSE : 0, td);
+	ret = vflush(vfsp, 0, (fflag & MS_FORCE) ? FORCECLOSE : 0, td);
 	if (ret != 0) {
 		if (!zfsvfs->z_issnap) {
 			zfsctl_create(zfsvfs);
@@ -2317,8 +2324,10 @@ bail:
 		 * Since we couldn't setup the sa framework, try to force
 		 * unmount this file system.
 		 */
-		if (vn_vfswlock(zfsvfs->z_vfs->vfs_vnodecovered) == 0)
+		if (vn_vfswlock(zfsvfs->z_vfs->vfs_vnodecovered) == 0) {
+			vfs_ref(zfsvfs->z_vfs);
 			(void) dounmount(zfsvfs->z_vfs, MS_FORCE, curthread);
+		}
 	}
 	return (err);
 }

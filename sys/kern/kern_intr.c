@@ -888,7 +888,7 @@ intr_event_schedule_thread(struct intr_event *ie)
 	if (ie->ie_flags & IE_ENTROPY) {
 		entropy.event = (uintptr_t)ie;
 		entropy.td = ctd;
-		random_harvest(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
+		random_harvest_queue(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
 	}
 
 	KASSERT(p != NULL, ("ithread %s has no process", ie->ie_name));
@@ -1039,7 +1039,7 @@ intr_event_schedule_thread(struct intr_event *ie, struct intr_thread *it)
 	if (ie->ie_flags & IE_ENTROPY) {
 		entropy.event = (uintptr_t)ie;
 		entropy.td = ctd;
-		random_harvest(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
+		random_harvest_queue(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
 	}
 
 	KASSERT(p != NULL, ("ithread %s has no process", ie->ie_name));
@@ -1126,7 +1126,7 @@ swi_sched(void *cookie, int flags)
 
 	entropy.event = (uintptr_t)ih;
 	entropy.td = curthread;
-	random_harvest(&entropy, sizeof(entropy), 1, RANDOM_SWI);
+	random_harvest_queue(&entropy, sizeof(entropy), 1, RANDOM_SWI);
 
 	/*
 	 * Set ih_need for this handler so that if the ithread is already
@@ -1455,12 +1455,7 @@ intr_event_handle(struct intr_event *ie, struct trapframe *frame)
 	/* Schedule the ithread if needed. */
 	if (thread) {
 		error = intr_event_schedule_thread(ie);
-#ifndef XEN		
 		KASSERT(error == 0, ("bad stray interrupt"));
-#else
-		if (error != 0)
-			log(LOG_WARNING, "bad stray interrupt");
-#endif		
 	}
 	critical_exit();
 	td->td_intr_nesting_level--;

@@ -82,6 +82,10 @@
 #define	PAGE_SIZE	(1 << PAGE_SHIFT)	/* Page size */
 #define	PAGE_MASK	(PAGE_SIZE - 1)
 
+#define	PAGE_SHIFT_16K	14
+#define	PAGE_SIZE_16K	(1 << PAGE_SHIFT_16K)
+#define	PAGE_MASK_16K	(PAGE_SIZE_16K - 1)
+
 #define	PAGE_SHIFT_64K	16
 #define	PAGE_SIZE_64K	(1 << PAGE_SHIFT_64K)
 #define	PAGE_MASK_64K	(PAGE_SIZE_64K - 1)
@@ -117,9 +121,5 @@
 #define	arm64_ptob(x)		((unsigned long)(x) << PAGE_SHIFT)
 
 #define	pgtok(x)		((unsigned long)(x) * (PAGE_SIZE / 1024))
-
-#ifdef _KERNEL
-#define	NO_FUEWORD	1
-#endif
 
 #endif /* !_MACHINE_PARAM_H_ */
