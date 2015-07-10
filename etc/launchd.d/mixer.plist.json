@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/mixer.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/mixer.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "mixer"
-}

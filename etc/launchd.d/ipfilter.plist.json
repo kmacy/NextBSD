@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ipfilter.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ipfilter.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ipfilter"
-}

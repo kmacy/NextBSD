@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/newsyslog.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/newsyslog.sh"
-  ],
-  "RunAtLoad": false,
-  "Label": "newsyslog"
-}

@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/mountcritlocal.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/mountcritlocal.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "mountcritlocal"
-}

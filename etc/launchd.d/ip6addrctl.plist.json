@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ip6addrctl.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ip6addrctl.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ip6addrctl"
-}

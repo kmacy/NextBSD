@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ntpdate.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ntpdate.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ntpdate"
-}

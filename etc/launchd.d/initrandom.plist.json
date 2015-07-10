@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/initrandom.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/initrandom.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "initrandom"
-}

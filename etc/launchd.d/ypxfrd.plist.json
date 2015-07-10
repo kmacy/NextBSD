@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/rpc.ypxfrd",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/rpc.ypxfrd"
-  ],
-  "RunAtLoad": true,
-  "Label": "ypxfrd"
-}

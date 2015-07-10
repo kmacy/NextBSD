@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ipnat.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ipnat.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ipnat"
-}

@@ -1,6 +1,7 @@
 .include <bsd.init.mk>
 
 LIB= dispatch
+NO_WERROR= yes
 
 .PATH: ${.CURDIR}
 .PATH: ${.CURDIR}/dispatch

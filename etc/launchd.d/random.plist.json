@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/random.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/random.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "random"
-}

@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/syslogd.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/syslogd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "syslogd"
-}

@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/dmesg.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/dmesg.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "dmesg"
-}

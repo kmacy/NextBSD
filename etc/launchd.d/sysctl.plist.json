@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/sysctl.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/sysctl.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "sysctl"
-}

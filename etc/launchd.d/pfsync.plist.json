@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/pfsync.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/pfsync.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "pfsync"
-}

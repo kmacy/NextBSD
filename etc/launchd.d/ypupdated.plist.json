@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/rpc.ypupdated",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/rpc.ypupdated"
-  ],
-  "RunAtLoad": true,
-  "Label": "ypupdated"
-}

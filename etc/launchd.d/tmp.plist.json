@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/tmp.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/tmp.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "tmp"
-}

@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/cron.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/cron.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "cron"
-}

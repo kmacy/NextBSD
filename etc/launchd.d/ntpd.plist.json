@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ntpd.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ntpd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ntpd"
-}

@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/libexec/ftpd",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/libexec/ftpd"
-  ],
-  "RunAtLoad": true,
-  "Label": "ftpd"
-}

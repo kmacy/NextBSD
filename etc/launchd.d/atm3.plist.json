@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/atm3.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/atm3.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "atm3"
-}

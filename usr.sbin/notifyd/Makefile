@@ -1,5 +1,6 @@
 .include <src.opts.mk>
 PROG= notifyd
+NO_WERROR= yes
 
 .PATH: .
 .PATH: ${.CURDIR}
