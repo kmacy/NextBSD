@@ -133,7 +133,7 @@ struct ipc_space {
 
 extern uma_zone_t ipc_space_zone;
 
-#define is_alloc()		((ipc_space_t) uma_zalloc(ipc_space_zone, M_WAITOK))
+#define is_alloc()		((ipc_space_t) uma_zalloc(ipc_space_zone, M_WAITOK|M_ZERO))
 #define	is_free(is)		uma_zfree(ipc_space_zone, (is))
 
 extern ipc_space_t ipc_space_kernel;

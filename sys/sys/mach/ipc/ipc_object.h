@@ -133,7 +133,7 @@ typedef struct ipc_object *ipc_object_t;
 #define IOT_NUMBER		2		/* number of types used */
 extern uma_zone_t ipc_object_zones[IOT_NUMBER];
 #define	io_alloc(otype)		\
-	((ipc_object_t) uma_zalloc(ipc_object_zones[(otype)], M_WAITOK))
+	((ipc_object_t) uma_zalloc(ipc_object_zones[(otype)], M_WAITOK|M_ZERO))
 
 #define	io_free(otype, io)	\
 		uma_zfree(ipc_object_zones[(otype)], (io))
