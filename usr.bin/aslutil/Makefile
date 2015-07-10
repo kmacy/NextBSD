@@ -1,5 +1,6 @@
 .include <src.opts.mk>
 PROG= aslutil
+NO_WERROR= yes
 
 .PATH: .
 .PATH: ${.CURDIR}
