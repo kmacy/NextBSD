@@ -21,6 +21,30 @@ copy etc/bootstrap, etc/launchd.d/, and asl.conf to /etc
 Note that launchctl uses JSON format.
 
 
+Immediate issues:
+make buildworld with -DWITHOUT_LIB32 NO_WERROR=
+
+even after disabling libstdc++ in gnu/lib/Makefile the lib32 build will still error out with the following:
+
+
+===> gnu/lib/libdialog (obj,depend,all,install)
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+c++: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+In file included from /usr/home/kmacy/devel/freebsd-head/gnu/lib/libstdc++/../../../contrib/libstdc++/src/bitmap_allocator.cc:30:
+In file included from /usr/home/kmacy/devel/freebsd-head/gnu/lib/libstdc++/../../../contrib/libstdc++/include/ext/bitmap_allocator.
+/usr/home/kmacy/devel/freebsd-head/gnu/lib/libstdc++/../../../contrib/libstdc++/include/bits/functexcept.h:41:10: fatal error: 'bitd
+#include <bits/c++config.h>
+         ^
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+cc: warning: argument unused during compilation: '-L/home/kmacy/devel/build/usr/home/kmacy/devel/freebsd-head/lib32/usr/lib32'
+
+
 
 Unsupported OSX / Mach functionality:
  - updating the audit token when setuid/setgid/ etc are called
