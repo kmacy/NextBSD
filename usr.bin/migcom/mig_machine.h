@@ -22,14 +22,22 @@
  * cmk1.1
  */
 
+#if defined(__ILP32__)
 #define	machine_alignment(SZ,ESZ) 					\
 	(((SZ) = ((SZ) + 3) & ~3), (SZ) += (ESZ))
 
-#define	machine_padding(BYTES)						\
-	((BYTES & 3) ? (4 - (BYTES & 3)) : 0)
+#elif defined(__LP64__)
 
-#ifndef	NBBY
-#define NBBY	8
+#define	machine_alignment(SZ,ESZ) 					\
+ 	(((((ESZ) > 4) && ((SZ) & 7)) ?  				\
+	(SZ) = ((SZ) + 7) & ~7 : (((ESZ == 4) && ((SZ) & 3)) ?		\
+	(SZ) = ((SZ) + 3) & ~3 : 0)), (SZ) += (ESZ))
+
+#else
+#error "unknown type size"
 #endif
+
+#define	machine_padding(BYTES)						\
+	((bytes & 3) ? (4 - (bytes &  3)) : 0)
 
 #define PACK_MESSAGES TRUE
