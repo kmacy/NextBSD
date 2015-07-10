@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/sppp.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/sppp.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "sppp"
-}

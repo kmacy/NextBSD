@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/savecore.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/savecore.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "savecore"
-}

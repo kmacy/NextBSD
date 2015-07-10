@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/ypset",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/ypset"
-  ],
-  "RunAtLoad": true,
-  "Label": "ypset"
-}

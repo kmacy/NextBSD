@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/dhcpd.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/dhcpd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "dhcpd"
-}

@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ip6fw.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ip6fw.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ip6fw"
-}

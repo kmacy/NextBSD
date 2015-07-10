@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/cleartmp.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/cleartmp.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "cleartmp"
-}

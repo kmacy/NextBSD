@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/devfs.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/devfs.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "devfs"
-}

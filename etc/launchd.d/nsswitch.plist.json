@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/nsswitch.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/nsswitch.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "nsswitch"
-}

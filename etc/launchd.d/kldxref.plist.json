@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/kldxref.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/kldxref.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "kldxref"
-}

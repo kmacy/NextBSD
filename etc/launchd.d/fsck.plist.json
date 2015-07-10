@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/fsck.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/fsck.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "fsck"
-}

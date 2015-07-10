@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/hcsecd.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/hcsecd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "hcsecd"
-}

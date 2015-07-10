@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/resolv.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/resolv.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "resolv"
-}

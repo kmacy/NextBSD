@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/bgfsck.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/bgfsck.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "bgfsck"
-}

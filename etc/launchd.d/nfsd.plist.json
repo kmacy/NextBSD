@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/nfsd",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/nfsd"
-  ],
-  "RunAtLoad": true,
-  "Label": "nfsd"
-}

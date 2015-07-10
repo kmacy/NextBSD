@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/encswap.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/encswap.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "encswap"
-}

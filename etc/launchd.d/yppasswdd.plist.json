@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/rpc.yppasswdd",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/rpc.yppasswdd"
-  ],
-  "RunAtLoad": true,
-  "Label": "yppasswdd"
-}

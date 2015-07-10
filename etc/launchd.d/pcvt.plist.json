@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/pcvt.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/pcvt.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "pcvt"
-}

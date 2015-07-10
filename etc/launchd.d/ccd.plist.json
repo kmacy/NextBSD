@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/ccd.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/ccd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "ccd"
-}

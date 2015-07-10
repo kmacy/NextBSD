@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/netoptions.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/netoptions.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "netoptions"
-}

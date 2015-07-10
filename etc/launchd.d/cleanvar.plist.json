@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/cleanvar.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/cleanvar.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "cleanvar"
-}

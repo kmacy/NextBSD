@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/bootparamd",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/bootparamd"
-  ],
-  "RunAtLoad": true,
-  "Label": "bootparams"
-}

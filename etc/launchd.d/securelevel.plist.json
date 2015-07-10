@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/securelevel.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/securelevel.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "securelevel"
-}

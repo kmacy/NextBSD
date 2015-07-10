@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/lighttpd.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/lighttpd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "lighttpd"
-}

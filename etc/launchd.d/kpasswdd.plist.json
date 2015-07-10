@@ -1,9 +1,0 @@
-{
-  "Program": "/usr/sbin/kpasswdd",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/usr/sbin/kpasswdd"
-  ],
-  "RunAtLoad": true,
-  "Label": "kpasswdd"
-}

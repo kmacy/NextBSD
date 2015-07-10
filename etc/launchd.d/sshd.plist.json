@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/sshd.sh",
-  "Disabled": false,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/sshd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "sshd"
-}

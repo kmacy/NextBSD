@@ -1,9 +1,0 @@
-{
-  "Program": "/etc/launchd/scripts/amd.sh",
-  "Disabled": true,
-  "ProgramArguments": [
-    "/etc/launchd/scripts/amd.sh"
-  ],
-  "RunAtLoad": true,
-  "Label": "amd"
-}
