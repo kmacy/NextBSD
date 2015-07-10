@@ -788,7 +788,7 @@ static void
 vWriteCopyType(FILE *file, ipc_type_t *it, const char *left, const char *right, va_list pvar)
 {
   va_list pv2;
-  __va_copy(pv2,pvar);
+  va_copy(pv2,pvar);
     if (it->itStruct)
     {
     fprintf(file, "\t");

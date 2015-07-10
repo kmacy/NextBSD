@@ -41,9 +41,9 @@ include/x86: ${.CURDIR}/Makefile
 .endif
 
 .if ${TARGET} == "amd64" || ${TARGET} == "i386"
-ident.c: include/machine include/x86 
+ident.c: include/x86 
 .else
-ident.c: include/machine
+ident.c: 
 .endif
 	echo "#include \"alloc.h\" " >${.TARGET}
 	echo "const char *MigGenerationDate = \""`date`"\";" >>${.TARGET}
