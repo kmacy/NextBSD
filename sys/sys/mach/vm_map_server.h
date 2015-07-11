@@ -3,6 +3,10 @@
 
 /* Module vm_map */
 
+#if !defined(__i386__) && !defined(__amd64__)
+#pragma GCC diagnostic ignored "-Wredundant-decls"
+#endif
+
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #ifdef _KERNEL

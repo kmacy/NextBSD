@@ -417,7 +417,9 @@ extern void		consider_thread_collect(void);
 	(thread)->top_act->ast & (AST_HALT|AST_TERMINATE))
 
 /*
- * We consider a thread not preemptab	/*
+ * We consider a thread not preempt
+ */
+ /*
 	 * Beginning of thread_shuttle proper
 	 */
 	queue_chain_t	links;		/* current run queue links */

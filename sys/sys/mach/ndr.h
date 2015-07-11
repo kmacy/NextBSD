@@ -25,6 +25,11 @@
 #ifndef _NDR_H_
 #define _NDR_H_
 
+
+#if !defined(__i386__) && !defined(__amd64__)
+#pragma GCC diagnostic ignored "-Wredundant-decls"
+#endif
+
 typedef struct {
     unsigned char       mig_vers;
     unsigned char       if_vers;

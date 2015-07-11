@@ -3,6 +3,8 @@
 
 /* Module mach_host */
 
+#pragma GCC diagnostic ignored "-Wredundant-decls"
+
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #ifdef _KERNEL

@@ -170,8 +170,6 @@ extern ipc_port_t convert_thread_to_port(thread_t);
 extern mach_port_name_t mach_reply_port(void);
 
 
-extern ipc_port_t retrieve_thread_self_fast(thread_t thr_act);
-
 extern void set_security_token(task_t);
 
 

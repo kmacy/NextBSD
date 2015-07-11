@@ -229,9 +229,6 @@ extern void ipc_entry_add_refs(
 extern void ipc_entry_hold(
 	ipc_entry_t entry);
 
-extern void ipc_entry_release(
-	ipc_entry_t entry);
-
 kern_return_t ipc_entry_file_to_port(
 	ipc_space_t space,
 	mach_port_name_t name,

@@ -63,9 +63,6 @@
 /*
  * Standard prototypes
  */
-extern void			panic_init(mach_port_t);
-extern void			panic(const char *, ...);
-
 extern void			safe_gets(char *,
 					  char *,
 					  int);

@@ -245,14 +245,14 @@ insque(
 	pred->next = entry;
 }
 
-static __inline__ integer_t
+static __inline__ uintptr_t 
 remque(
 	register queue_entry_t elt)
 {
 	(elt->next)->prev = elt->prev;
 	(elt->prev)->next = elt->next;
 
-	return((integer_t)elt);
+	return((uintptr_t)elt);
 }
 
 #endif	/* defined(__GNUC__) */
