@@ -234,6 +234,7 @@ BOOTSTRAPPING?=	0
 
 # Common environment for world related stages
 CROSSENV=	MAKEOBJDIRPREFIX=${OBJTREE} \
+		MACHINE_INCLUDES="${WORLDTMP}/include" \
 		MACHINE_ARCH=${TARGET_ARCH} \
 		MACHINE=${TARGET} \
 		CPUTYPE=${TARGET_CPUTYPE}
@@ -248,6 +249,7 @@ CROSSENV+=	${TARGET_CFLAGS}
 
 # bootstrap-tools stage
 BMAKEENV=	INSTALL="sh ${.CURDIR}/tools/install.sh" \
+		MACHINE_INCLUDES="${WORLDTMP}/include" \
 		PATH=${BPATH}:${PATH} \
 		WORLDTMP=${WORLDTMP} \
 		VERSION="${VERSION}" \
@@ -543,7 +545,7 @@ _worldtmp:
 	    -p ${WORLDTMP}/usr/include >/dev/null
 	ln -sf ${.CURDIR}/sys ${WORLDTMP}
 	mkdir -p ${WORLDTMP}/include
-	ln -sf ${.CURDIR}/sys/${MACHINE_CPUARCH}/include ${WORLDTMP}/include/machine
+	ln -sf ${.CURDIR}/sys/${TARGET}/include ${WORLDTMP}/include/machine
 .if ${MK_DEBUG_FILES} != "no"
 	# We could instead disable debug files for these build stages
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.debug.dist \
@@ -634,7 +636,7 @@ build32:
 	@echo ">>> stage 5.1: building 32 bit shim libraries"
 	@echo "--------------------------------------------------------------"
 	mkdir -p ${LIB32TMP}/usr/include
-	ln -sf ${.CURDIR}/sys/${MACHINE_ARCH}/include ${LIB32TMP}/usr/include/machine
+	ln -sf ${.CURDIR}/sys/${TARGET}/include ${LIB32TMP}/usr/include/machine
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.usr.dist \
 	    -p ${LIB32TMP}/usr >/dev/null
 	mtree -deU -f ${.CURDIR}/etc/mtree/BSD.include.dist \
