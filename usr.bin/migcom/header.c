@@ -152,7 +152,7 @@ WriteIncludes(FILE *file, boolean_t isuser, boolean_t isdef)
 {
 	if (isdef) {
 		fprintf(file, "#include <mach/port.h>\n");
-		fprintf(file, "#include <machine/mach/kern_return.h>\n");
+		fprintf(file, "#include <sys/mach/kern_return.h>\n");
 		if (!isuser)
 			fprintf(file, "#include <mach/mig_errors.h>\n");
 	}
