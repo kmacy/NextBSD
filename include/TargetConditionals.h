@@ -160,6 +160,22 @@
         #define TARGET_RT_LITTLE_ENDIAN 1
         #define TARGET_RT_BIG_ENDIAN    0
         #define TARGET_RT_64_BIT        1
+    #elif defined(__sparc64__)
+        #define TARGET_CPU_PPC          0
+        #define TARGET_CPU_PPC64        0
+        #define TARGET_CPU_68K          0
+        #define TARGET_CPU_X86          0
+        #define TARGET_CPU_X86_64       0
+        #define TARGET_CPU_ARM          0
+        #define TARGET_CPU_ARM64        0
+        #define TARGET_CPU_MIPS         0
+        #define TARGET_CPU_SPARC        1
+        #define TARGET_CPU_ALPHA        0
+        #define TARGET_RT_MAC_CFM       0
+        #define TARGET_RT_MAC_MACHO     0
+        #define TARGET_RT_LITTLE_ENDIAN 0
+        #define TARGET_RT_BIG_ENDIAN    1
+        #define TARGET_RT_64_BIT        1
     #elif defined(__arm__) 
         #define TARGET_CPU_PPC          0
         #define TARGET_CPU_PPC64        0
