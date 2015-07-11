@@ -48,7 +48,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/mach/mach_types.h>
 
-#ifdef INVARIANTS
+#ifdef MACH_CORRUPTION_DEBUG
 MALLOC_DEFINE(M_MACH_TMP, "mach temp", "mach compatibility subsystem temp");
 #else
 MALLOC_DEFINE(M_MACH_TMP, "mach temp", "mach compatibility subsystem temp");
