@@ -627,7 +627,7 @@ cmd_bootstrap(int argc, char * const argv[])
 	unsigned long i;
 	int n;
 
-	while ((ch = getopt(argc, (char **)argv, "sS:")) != -1) {
+	while ((ch = getopt(argc, __DECONST(char **, argv), "sS:")) != -1) {
 		switch (ch) {
 		case 's':
 			sflag = true;
