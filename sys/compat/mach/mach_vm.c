@@ -152,6 +152,13 @@ done:
 }
 
 int
+vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
+{
+
+	return (mach_vm_allocate(map, addr, _size, flags));
+}
+
+int
 mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 {
 	size_t size = round_page(_size);
@@ -195,7 +202,12 @@ mach_vm_allocate(vm_map_t map, vm_offset_t *addr, size_t _size, int flags)
 	return (err);
 }
 
+int
+vm_deallocate(vm_map_t map, vm_offset_t addr, size_t len)
+{
 
+	return (mach_vm_deallocate(map, addr, len));
+}
 
 int
 mach_vm_deallocate(vm_map_t target __unused, mach_vm_address_t addr, mach_vm_size_t len)
