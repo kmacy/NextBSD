@@ -99,8 +99,8 @@ static int	epoll_to_kevent(struct thread *td, struct file *epfp,
 		    int fd, struct epoll_event *l_event, int *kev_flags,
 		    struct kevent *kevent, int *nkevents);
 static void	kevent_to_epoll(struct kevent *kevent, struct epoll_event *l_event);
-static int	epoll_kev_copyout(void *arg, struct kevent *kevp, int count);
-static int	epoll_kev_copyin(void *arg, struct kevent *kevp, int count);
+static int	epoll_kev_copyout(void *arg, void *kevp, int count);
+static int	epoll_kev_copyin(void *arg, void *kevp, int count);
 static int	epoll_delete_event(struct thread *td, struct file *epfp,
 		    int fd, int filter);
 static int	epoll_delete_all_events(struct thread *td, struct file *epfp,
@@ -327,14 +327,16 @@ kevent_to_epoll(struct kevent *kevent, struct epoll_event *l_event)
  * of the filter.
  */
 static int
-epoll_kev_copyout(void *arg, struct kevent *kevp, int count)
+epoll_kev_copyout(void *arg, void *_kevp, int count)
 {
 	struct epoll_copyout_args *args;
 	struct linux_pemuldata *pem;
 	struct epoll_emuldata *emd;
 	struct epoll_event *eep;
+	struct kevent *kevp;
 	int error, fd, i;
 
+	kevp = _kevp;
 	args = (struct epoll_copyout_args*) arg;
 	eep = malloc(sizeof(*eep) * count, M_EPOLL, M_WAITOK | M_ZERO);
 
@@ -372,10 +374,12 @@ epoll_kev_copyout(void *arg, struct kevent *kevp, int count)
  * copyin.
  */
 static int
-epoll_kev_copyin(void *arg, struct kevent *kevp, int count)
+epoll_kev_copyin(void *arg, void *_kevp, int count)
 {
 	struct epoll_copyin_args *args;
+	struct kevent *kevp;
 
+	kevp = _kevp;
 	args = (struct epoll_copyin_args*) arg;
 	
 	memcpy(kevp, args->changelist, count * sizeof(*kevp));

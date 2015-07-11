@@ -126,7 +126,10 @@ int	kern_kevent64(struct thread *td, int fd, int nchanges, int nevents,
 	    struct kevent_copyops *k_ops, const struct timespec *timeout);
 int	kern_kevent_fp(struct thread *td, struct file *fp, int nchanges,
 	    int nevents, struct kevent_copyops *k_ops,
-	    const struct timespec *timeout, int v1);
+	    const struct timespec *timeout);
+int	kern_kevent_fp64(struct thread *td, struct file *fp, int nchanges,
+	    int nevents, struct kevent_copyops *k_ops,
+	    const struct timespec *timeout);
 int	kern_kqueue(struct thread *td, int flags);
 int	kern_kldload(struct thread *td, const char *file, int *fileid);
 int	kern_kldstat(struct thread *td, int fileid, struct kld_file_stat *stat);

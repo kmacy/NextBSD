@@ -94,6 +94,8 @@ MTX_SYSINIT(kq_global, &kq_global, "kqueue order", MTX_DEF);
 
 TASKQUEUE_DEFINE_THREAD(kqueue);
 
+static int _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
+			struct kevent_copyops *k_ops, const struct timespec *timeout, int v1);
 static int	kevent_copyout(void *arg, void *kevp, int count);
 static int	kevent_copyin(void *arg, void *kevp, int count);
 static int	kevent64_copyout(void *arg, void *kevp, int count);
@@ -981,7 +983,7 @@ kern_kevent(struct thread *td, int fd, int nchanges, int nevents,
 	if (error != 0)
 		return (error);
 
-	error = kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout, 0);
+	error = kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout);
 	fdrop(fp, td);
 
 	return (error);
@@ -1004,7 +1006,7 @@ kern_kevent64(struct thread *td, int fd, int nchanges, int nevents,
 	if (error != 0)
 		return (error);
 
-	error = kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout, 1);
+	error = kern_kevent_fp64(td, fp, nchanges, nevents, k_ops, timeout);
 	fdrop(fp, td);
 
 	return (error);
@@ -1012,6 +1014,22 @@ kern_kevent64(struct thread *td, int fd, int nchanges, int nevents,
 
 int
 kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
+			   struct kevent_copyops *k_ops, const struct timespec *timeout)
+{
+
+	return (_kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout, 0));
+}
+
+int
+kern_kevent_fp64(struct thread *td, struct file *fp, int nchanges, int nevents,
+			   struct kevent_copyops *k_ops, const struct timespec *timeout)
+{
+
+	return (_kern_kevent_fp(td, fp, nchanges, nevents, k_ops, timeout, 1));
+}
+
+static int
+_kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 			   struct kevent_copyops *k_ops, const struct timespec *timeout, int v1)
 {
 	struct kevent keva[KQ_NEVENTS];
