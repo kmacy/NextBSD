@@ -413,6 +413,20 @@ task_create(
 
 static kern_return_t
 task_create_internal(
+	task_t		new_task)
+{
+
+	/* one ref for just being alive; one for our caller */
+	new_task->ref_count = 2;
+	new_task->semaphores_owned = 0;
+
+	ipc_task_create(new_task);
+
+	return (KERN_SUCCESS);
+}
+
+static kern_return_t
+task_init_internal(
 	task_t		parent_task,
 	task_t		new_task)
 {
@@ -1322,7 +1336,10 @@ mach_task_init(void *arg __unused, struct proc *p)
 
 	if (p == &proc0) {
 		kernel_task = task;
-		task_create_internal(TASK_NULL, task);
+		task_create_internal(task);
+		task_init_internal(TASK_NULL, task);
+	} else {
+		task_create_internal(task);
 	}
 }
 
@@ -1335,7 +1352,7 @@ mach_task_fork(void *arg __unused, struct proc *p1, struct proc *p2, int flags _
 	atomic_add_long(&task_uniqueid, 1);
 	task->itk_uniqueid = task_uniqueid;
 	task->itk_puniqueid = parent_task->itk_uniqueid;
-	task_create_internal(parent_task, task);
+	task_init_internal(parent_task, task);
 }
 
 static int

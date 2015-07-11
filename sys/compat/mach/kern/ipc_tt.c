@@ -149,20 +149,16 @@
  */
 
 void
-ipc_task_init(
-	task_t		task,
-	task_t		parent)
+ipc_task_create(
+	task_t		task)
 {
 	ipc_space_t space;
-	ipc_port_t kport;
 	kern_return_t kr;
-	int i;
-
+	ipc_port_t kport;
 
 	kr = ipc_space_create(&ipc_table_entries[0], &space);
 	if (kr != KERN_SUCCESS)
 		panic("ipc_task_init");
-
 
 	kport = ipc_port_alloc_kernel();
 	if (kport == IP_NULL)
@@ -172,6 +168,14 @@ ipc_task_init(
 	task->itk_sself = ipc_port_make_send(kport);
 	task->itk_space = space;
 	space->is_task = task;
+}
+
+void
+ipc_task_init(
+	task_t		task,
+	task_t		parent)
+{
+	int i;
 
 	if (parent == TASK_NULL) {
 		for (i = FIRST_EXCEPTION; i < EXC_TYPES_COUNT; i++) {

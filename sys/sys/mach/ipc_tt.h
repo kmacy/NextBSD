@@ -69,6 +69,10 @@
 #include <sys/mach/ipc/ipc_object.h>
 
 
+/* Allocate a task's kernel port and ipc_space */
+extern void ipc_task_create(
+	task_t		task);
+
 /* Initialize a task's IPC state */
 extern void ipc_task_init(
 	task_t		task,
