@@ -50,9 +50,11 @@
 #if !defined(OS_VOUCHER_ACTIVITY_SPI) && TARGET_OS_MAC
 #define OS_VOUCHER_ACTIVITY_SPI 1
 #endif
+#if 0
 #if !defined(OS_VOUCHER_ACTIVITY_BUFFER_SPI) && TARGET_OS_MAC && \
 		__has_include(<atm/atm_types.h>)
 #define OS_VOUCHER_ACTIVITY_BUFFER_SPI 1
+#endif
 #endif
 #if !defined(DISPATCH_LAYOUT_SPI) && TARGET_OS_MAC
 #define DISPATCH_LAYOUT_SPI 1
@@ -353,7 +355,7 @@ void _dispatch_log(const char *msg, ...);
  * For reporting bugs within libdispatch when using the "_debug" version of the
  * library.
  */
-#if __GNUC__
+#if 0 /* __GNUC__ */
 #define dispatch_assert(e) do { \
 		if (__builtin_constant_p(e)) { \
 			char __compile_time_assert__[(bool)(e) ? 1 : -1] DISPATCH_UNUSED; \
