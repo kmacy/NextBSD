@@ -7,10 +7,9 @@ SYSDIR?=${.CURDIR}/../..
 
 
 KMOD=	mach
-
-.if ${TARGET} == "amd64" || ${TARGET} == "i386"
 DEBUG_FLAGS+= -g -O0
-.else
+
+.if .defined(X_COMPILER_TYPE) && ${X_COMPILER_TYPE} == gcc
 WERROR=
 .endif
 
