@@ -13,6 +13,5 @@ INCS=	_OSByteOrder.h \
 	OSThermalNotification.h \
 	OSTypes.h
 INCSDIR=${INCLUDEDIR}/libkern
-SUBDIR=	i386
 
 .include <bsd.prog.mk>

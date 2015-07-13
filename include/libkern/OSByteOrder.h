@@ -37,19 +37,83 @@
 #define OSSwapConstInt32(x)	__DARWIN_OSSwapConstInt32(x)
 #define OSSwapConstInt64(x)	__DARWIN_OSSwapConstInt64(x)
 
-#if defined(__GNUC__)
 
-#if (defined(__i386__) || defined(__x86_64__))
-#include <libkern/i386/OSByteOrder.h>
-#else
-#include <libkern/machine/OSByteOrder.h>
-#endif
+#include <sys/endian.h>
 
-#else /* ! __GNUC__ */
+OS_INLINE
+uint16_t
+OSReadSwapInt16(
+    const volatile void   * base,
+    uintptr_t       byteOffset
+)
+{
+    uint16_t result;
 
-#include <libkern/machine/OSByteOrder.h>
+    result = *(volatile uint16_t *)((uintptr_t)base + byteOffset);
+    return bswap16(result);
+}
 
-#endif /* __GNUC__ */
+OS_INLINE
+uint32_t
+OSReadSwapInt32(
+    const volatile void   * base,
+    uintptr_t       byteOffset
+)
+{
+    uint32_t result;
+
+    result = *(volatile uint32_t *)((uintptr_t)base + byteOffset);
+    return bswap32(result);
+}
+
+OS_INLINE
+uint64_t
+OSReadSwapInt64(
+    const volatile void   * base,
+    uintptr_t       byteOffset
+)
+{
+    uint64_t result;
+
+    result = *(volatile uint64_t *)((uintptr_t)base + byteOffset);
+    return bswap64(result);
+}
+
+/* Functions for byte reversed stores. */
+
+OS_INLINE
+void
+OSWriteSwapInt16(
+    volatile void   * base,
+    uintptr_t       byteOffset,
+    uint16_t        data
+)
+{
+    *(volatile uint16_t *)((uintptr_t)base + byteOffset) = bswap16(data);
+}
+
+OS_INLINE
+void
+OSWriteSwapInt32(
+    volatile void   * base,
+    uintptr_t       byteOffset,
+    uint32_t        data
+)
+{
+    *(volatile uint32_t *)((uintptr_t)base + byteOffset) = bswap32(data);
+}
+
+OS_INLINE
+void
+OSWriteSwapInt64(
+    volatile void    * base,
+    uintptr_t        byteOffset,
+    uint64_t         data
+)
+{
+    *(volatile uint64_t *)((uintptr_t)base + byteOffset) = bswap64(data);
+}
+
 
 #define OSSwapInt16(x)	__DARWIN_OSSwapInt16(x)
 #define OSSwapInt32(x)	__DARWIN_OSSwapInt32(x)
