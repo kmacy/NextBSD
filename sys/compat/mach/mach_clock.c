@@ -42,6 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
 #include <sys/mach/mach.h>
+#include <sys/mach/ipc/ipc_mqueue.h>
+#include <sys/mach/thread.h>
 
 #include <sys/mach/clock_types.h>
 #include <sys/mach/clock_server.h>
@@ -63,11 +65,9 @@ clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, 
 {
 	struct timespec mts, cts, tts;
 	mach_timespec_t mcts;
-#if 0
-	int dontcare;
-#endif
 	int error;
 	int ticks;
+	thread_t thread;
 
 	mts.tv_sec = sleep_sec;
 	mts.tv_nsec = sleep_nsec;
@@ -85,8 +85,11 @@ clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, 
 
 	if (ticks <= 0)
 		return (EINVAL);
-	/* mach thread abort ignores uninterruptible sleep so this works */
-	pause("sleep", ticks);
+
+	thread = current_thread();
+	thread->ith_block_lock_data = &curproc->p_mtx;
+	thread->timeout = ticks;
+	thread_block();
 
 	if (wakeup_time != NULL) {
 		nanotime(&cts);
