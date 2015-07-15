@@ -26,6 +26,9 @@ pthread_mutex_t my_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define VM_MAKE_TAG(tag) ((tag) << 24)
 #define VM_MEMORY_MACH_MSG 20
+#define vm_allocate mach_vm_allocate
+#define vm_deallocate mach_vm_deallocate
+
 
 /*
  * create_random_name - creates a file with a random / unique name in the given directory.
