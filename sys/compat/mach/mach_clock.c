@@ -89,7 +89,9 @@ clock_sleep(mach_port_name_t clock_name, mach_sleep_type_t type, int sleep_sec, 
 	thread = current_thread();
 	thread->ith_block_lock_data = &curproc->p_mtx;
 	thread->timeout = ticks;
+	PROC_LOCK(curproc);
 	thread_block();
+	PROC_UNLOCK(curproc);
 
 	if (wakeup_time != NULL) {
 		nanotime(&cts);
