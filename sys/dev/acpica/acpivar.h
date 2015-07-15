@@ -12,7 +12,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *
+ *1
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -185,7 +185,7 @@ extern struct mtx			acpi_mutex;
  * Various features and capabilities for the acpi_get_features() method.
  * In particular, these are used for the ACPI 3.0 _PDC and _OSC methods.
  * See the Intel document titled "Intel Processor Vendor-Specific ACPI",
- * number 302223-005.
+ * number 302223-007.
  */
 #define	ACPI_CAP_PERF_MSRS	(1 << 0)  /* Intel SpeedStep PERF_CTL MSRs */
 #define	ACPI_CAP_C1_IO_HALT	(1 << 1)  /* Intel C1 "IO then halt" sequence */
@@ -198,6 +198,9 @@ extern struct mtx			acpi_mutex;
 #define	ACPI_CAP_SMP_C1_NATIVE	(1 << 8)  /* MP C1 support other than halt */
 #define	ACPI_CAP_SMP_C3_NATIVE	(1 << 9)  /* MP C2 and C3 support */
 #define	ACPI_CAP_PX_HW_COORD	(1 << 11) /* Intel P-state HW coordination */
+#define	ACPI_CAP_INTR_CPPC	(1 << 12) /* Native Interrupt Handling for
+	     Collaborative Processor Performance Control notifications */
+#define	ACPI_CAP_HW_DUTY_C	(1 << 13) /* Hardware Duty Cycling */
 
 /*
  * Quirk flags.
@@ -464,6 +467,8 @@ int		acpi_PkgInt32(ACPI_OBJECT *res, int idx, uint32_t *dst);
 int		acpi_PkgStr(ACPI_OBJECT *res, int idx, void *dst, size_t size);
 int		acpi_PkgGas(device_t dev, ACPI_OBJECT *res, int idx, int *type,
 		    int *rid, struct resource **dst, u_int flags);
+int		acpi_PkgFFH_IntelCpu(ACPI_OBJECT *res, int idx, int *vendor,
+		    int *class, uint64_t *address, int *accsize);
 ACPI_HANDLE	acpi_GetReference(ACPI_HANDLE scope, ACPI_OBJECT *obj);
 
 /*
@@ -498,9 +503,10 @@ SYSCTL_DECL(_debug_acpi);
 int	acpi_map_pxm_to_vm_domainid(int pxm);
 #endif
 
-int	acpi_get_cpus(device_t dev, device_t child, enum cpu_sets op,
+extern int	acpi_get_cpus(device_t dev, device_t child, enum cpu_sets op,
 	    cpuset_t *cpuset);
-int	acpi_get_domain(device_t dev, device_t child, int *domain);
+extern	int acpi_get_domain(device_t dev, device_t child, int *domain);
+extern	int acpi_parse_pxm(device_t dev, int *domain);
 
 #endif /* _KERNEL */
 #endif /* !_ACPIVAR_H_ */

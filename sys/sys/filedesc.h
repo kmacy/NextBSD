@@ -83,8 +83,8 @@ struct filedesc {
 	int	fd_lastfile;		/* high-water mark of fd_ofiles */
 	int	fd_freefile;		/* approx. next free file */
 	u_short	fd_cmask;		/* mask for file creation */
-	u_short	fd_refcnt;		/* thread reference count */
-	u_short	fd_holdcnt;		/* hold count on structure + mutex */
+	int	fd_refcnt;		/* thread reference count */
+	int	fd_holdcnt;		/* hold count on structure + mutex */
 	struct	sx fd_sx;		/* protects members of this struct */
 	struct	kqlist fd_kqlist;	/* list of kqueues on this filedesc */
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
@@ -134,6 +134,18 @@ struct filedesc_to_leader {
 					    SX_NOTRECURSED)
 #define	FILEDESC_UNLOCK_ASSERT(fdp)	sx_assert(&(fdp)->fd_sx, SX_UNLOCKED)
 
+/* Operation types for kern_dup(). */
+enum {
+	FDDUP_NORMAL,		/* dup() behavior. */
+	FDDUP_FCNTL,		/* fcntl()-style errors. */
+	FDDUP_FIXED,		/* Force fixed allocation. */
+	FDDUP_MUSTREPLACE,	/* Target must exist. */
+	FDDUP_LASTMODE,
+};
+
+/* Flags for kern_dup(). */
+#define	FDDUP_FLAG_CLOEXEC	0x1	/* Atomically set UF_EXCLOSE. */
+
 struct thread;
 
 void	filecaps_init(struct filecaps *fcaps);
@@ -147,12 +159,14 @@ int	dupfdopen(struct thread *td, struct filedesc *fdp, int dfd, int mode,
 int	falloc(struct thread *td, struct file **resultfp, int *resultfd,
 	    int flags);
 int	falloc_noinstall(struct thread *td, struct file **resultfp);
-int	finstall(struct thread *td, struct file *fp, int *resultfp, int flags,
+void	_finstall(struct filedesc *fdp, struct file *fp, int fd, int flags,
+	    struct filecaps *fcaps);
+int	finstall(struct thread *td, struct file *fp, int *resultfd, int flags,
 	    struct filecaps *fcaps);
 int	fdalloc(struct thread *td, int minfd, int *result);
 int	fdallocn(struct thread *td, int minfd, int *fds, int n);
 int	fdcheckstd(struct thread *td);
-void	fdclose(struct filedesc *fdp, struct file *fp, int idx, struct thread *td);
+void	fdclose(struct thread *td, struct file *fp, int idx);
 void	fdcloseexec(struct thread *td);
 void	fdsetugidsafety(struct thread *td);
 struct	filedesc *fdcopy(struct filedesc *fdp);
@@ -163,7 +177,7 @@ struct	filedesc *fdshare(struct filedesc *fdp);
 struct filedesc_to_leader *
 	filedesc_to_leader_alloc(struct filedesc_to_leader *old,
 	    struct filedesc *fdp, struct proc *leader);
-int	getvnode(struct filedesc *fdp, int fd, cap_rights_t *rightsp,
+int	getvnode(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
 void	mountcheckdirs(struct vnode *olddp, struct vnode *newdp);
 
@@ -190,6 +204,11 @@ fd_modified(struct filedesc *fdp, int fd, seq_t seq)
 
 	return (!seq_consistent(fd_seq(fdp->fd_files, fd), seq));
 }
+
+/* cdir/rdir/jdir manipulation functions. */
+void	pwd_chdir(struct thread *td, struct vnode *vp);
+int	pwd_chroot(struct thread *td, struct vnode *vp);
+void	pwd_ensure_dirs(void);
 
 #endif /* _KERNEL */
 

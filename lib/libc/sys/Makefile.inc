@@ -26,18 +26,6 @@ SRCS+=	\
 	__error.c \
 	interposing_table.c
 
-.if ${MK_SYSCALL_COMPAT} != "no"
-SYSCALL_COMPAT_SRCS= \
-	ftruncate.c \
-	lseek.c \
-	mmap.c \
-	pread.c \
-	pwrite.c \
-	truncate.c
-SRCS+=	${SYSCALL_COMPAT_SRCS}
-NOASM+=	${SYSCALL_COMPAT_SRCS:S/.c/.o/}
-.endif
-
 SRCS+= futimens.c utimensat.c
 NOASM+= futimens.o utimensat.o
 PSEUDO+= _futimens.o _utimensat.o
@@ -57,6 +45,7 @@ INTERPOSED = \
 	open \
 	openat \
 	poll \
+	ppoll \
 	pselect \
 	read \
 	readv \
@@ -73,6 +62,7 @@ INTERPOSED = \
 	sigwaitinfo \
 	swapcontext \
 	wait4 \
+	wait6 \
 	write \
 	writev
 
@@ -245,6 +235,7 @@ MAN+=	abort2.2 \
 	nanosleep.2 \
 	nfssvc.2 \
 	ntp_adjtime.2 \
+	numa_getaffinity.2 \
 	open.2 \
 	pathconf.2 \
 	pdfork.2 \
@@ -405,6 +396,7 @@ MLINKS+=mount.2 nmount.2 \
 MLINKS+=mq_receive.2 mq_timedreceive.2
 MLINKS+=mq_send.2 mq_timedsend.2
 MLINKS+=ntp_adjtime.2 ntp_gettime.2
+MLINKS+=numa_getaffinity.2 numa_setaffinity.2
 MLINKS+=open.2 openat.2
 MLINKS+=pathconf.2 fpathconf.2
 MLINKS+=pathconf.2 lpathconf.2

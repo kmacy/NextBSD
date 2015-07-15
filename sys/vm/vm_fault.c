@@ -348,6 +348,10 @@ RetryFault:;
 		vm_map_lock(fs.map);
 		if (vm_map_lookup_entry(fs.map, vaddr, &fs.entry) &&
 		    (fs.entry->eflags & MAP_ENTRY_IN_TRANSITION)) {
+			if (fs.vp != NULL) {
+				vput(fs.vp);
+				fs.vp = NULL;
+			}
 			fs.entry->eflags |= MAP_ENTRY_NEEDS_WAKEUP;
 			vm_map_unlock_and_wait(fs.map, 0);
 		} else
@@ -675,19 +679,12 @@ vnode_locked:
 				/*
 				 * Found the page. Leave it busy while we play
 				 * with it.
-				 */
-
-				/*
-				 * Relookup in case pager changed page. Pager
+				 *
+				 * Pager could have changed the page.  Pager
 				 * is responsible for disposition of old page
 				 * if moved.
 				 */
-				fs.m = vm_page_lookup(fs.object, fs.pindex);
-				if (!fs.m) {
-					unlock_and_deallocate(&fs);
-					goto RetryFault;
-				}
-
+				fs.m = marray[reqpage];
 				hardfault++;
 				break; /* break to PAGE HAS BEEN FOUND */
 			}

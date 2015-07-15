@@ -86,6 +86,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_page.h>
 #include <vm/uma.h>
+#include <vm/vm_domain.h>
 
 #ifdef KDTRACE_HOOKS
 #include <sys/dtrace_bsd.h>
@@ -203,6 +204,12 @@ exit1(struct thread *td, int rv)
 		    WTERMSIG(rv), WEXITSTATUS(rv));
 		panic("Going nowhere without my init!");
 	}
+
+	/*
+	 * Deref SU mp, since the thread does not return to userspace.
+	 */
+	if (softdep_ast_cleanup != NULL)
+		softdep_ast_cleanup();
 
 	/*
 	 * MUST abort all other threads before proceeding past here.
@@ -525,6 +532,8 @@ exit1(struct thread *td, int rv)
 	 */
 	while ((q = LIST_FIRST(&p->p_orphans)) != NULL) {
 		PROC_LOCK(q);
+		CTR2(KTR_PTRACE, "exit: pid %d, clearing orphan %d", p->p_pid,
+		    q->p_pid);
 		clear_orphan(q);
 		PROC_UNLOCK(q);
 	}
@@ -831,7 +840,6 @@ proc_reap(struct thread *td, struct proc *p, int *status, int options)
 	q = td->td_proc;
 
 	PROC_SUNLOCK(p);
-	td->td_retval[0] = p->p_pid;
 	if (status)
 		*status = p->p_xstat;	/* convert to int */
 	if (options & WNOWAIT) {
@@ -847,16 +855,19 @@ proc_reap(struct thread *td, struct proc *p, int *status, int options)
 	PROC_LOCK(q);
 	sigqueue_take(p->p_ksi);
 	PROC_UNLOCK(q);
-	PROC_UNLOCK(p);
 
 	/*
 	 * If we got the child via a ptrace 'attach', we need to give it back
 	 * to the old parent.
 	 */
-	if (p->p_oppid != 0) {
+	if (p->p_oppid != 0 && p->p_oppid != p->p_pptr->p_pid) {
+		PROC_UNLOCK(p);
 		t = proc_realparent(p);
 		PROC_LOCK(t);
 		PROC_LOCK(p);
+		CTR2(KTR_PTRACE,
+		    "wait: traced child %d moved back to parent %d", p->p_pid,
+		    t->p_pid);
 		proc_reparent(p, t);
 		p->p_oppid = 0;
 		PROC_UNLOCK(p);
@@ -867,6 +878,8 @@ proc_reap(struct thread *td, struct proc *p, int *status, int options)
 		sx_xunlock(&proctree_lock);
 		return;
 	}
+	p->p_oppid = 0;
+	PROC_UNLOCK(p);
 
 	/*
 	 * Remove other references to this process to ensure we have an
@@ -907,9 +920,11 @@ proc_reap(struct thread *td, struct proc *p, int *status, int options)
 	 * Destroy resource accounting information associated with the process.
 	 */
 #ifdef RACCT
-	PROC_LOCK(p);
-	racct_sub(p, RACCT_NPROC, 1);
-	PROC_UNLOCK(p);
+	if (racct_enable) {
+		PROC_LOCK(p);
+		racct_sub(p, RACCT_NPROC, 1);
+		PROC_UNLOCK(p);
+	}
 #endif
 	racct_proc_exit(p);
 
@@ -936,6 +951,11 @@ proc_reap(struct thread *td, struct proc *p, int *status, int options)
 #ifdef MAC
 	mac_proc_destroy(p);
 #endif
+	/*
+	 * Free any domain policy that's still hiding around.
+	 */
+	vm_domain_policy_cleanup(&p->p_vm_dom_policy);
+
 	KASSERT(FIRST_THREAD_IN_PROC(p),
 	    ("proc_reap: no residual thread!"));
 	uma_zfree(proc_zone, p);
@@ -946,14 +966,13 @@ proc_reap(struct thread *td, struct proc *p, int *status, int options)
 
 static int
 proc_to_reap(struct thread *td, struct proc *p, idtype_t idtype, id_t id,
-    int *status, int options, struct __wrusage *wrusage, siginfo_t *siginfo)
+    int *status, int options, struct __wrusage *wrusage, siginfo_t *siginfo,
+    int check_only)
 {
-	struct proc *q;
 	struct rusage *rup;
 
 	sx_assert(&proctree_lock, SA_XLOCKED);
 
-	q = td->td_proc;
 	PROC_LOCK(p);
 
 	switch (idtype) {
@@ -1084,7 +1103,7 @@ proc_to_reap(struct thread *td, struct proc *p, idtype_t idtype, id_t id,
 		calccru(p, &rup->ru_utime, &rup->ru_stime);
 	}
 
-	if (p->p_state == PRS_ZOMBIE) {
+	if (p->p_state == PRS_ZOMBIE && !check_only) {
 		PROC_SLOCK(p);
 		proc_reap(td, p, status, options);
 		return (-1);
@@ -1139,6 +1158,7 @@ kern_wait6(struct thread *td, idtype_t idtype, id_t id, int *status,
     int options, struct __wrusage *wrusage, siginfo_t *siginfo)
 {
 	struct proc *p, *q;
+	pid_t pid;
 	int error, nfound, ret;
 
 	AUDIT_ARG_VALUE((int)idtype);	/* XXX - This is likely wrong! */
@@ -1177,14 +1197,17 @@ loop:
 	nfound = 0;
 	sx_xlock(&proctree_lock);
 	LIST_FOREACH(p, &q->p_children, p_sibling) {
+		pid = p->p_pid;
 		ret = proc_to_reap(td, p, idtype, id, status, options,
-		    wrusage, siginfo);
+		    wrusage, siginfo, 0);
 		if (ret == 0)
 			continue;
 		else if (ret == 1)
 			nfound++;
-		else
+		else {
+			td->td_retval[0] = pid;
 			return (0);
+		}
 
 		PROC_LOCK(p);
 		PROC_SLOCK(p);
@@ -1198,7 +1221,6 @@ loop:
 			if ((options & WNOWAIT) == 0)
 				p->p_flag |= P_WAITED;
 			sx_xunlock(&proctree_lock);
-			td->td_retval[0] = p->p_pid;
 
 			if (status != NULL)
 				*status = W_STOPCODE(p->p_xstat);
@@ -1212,7 +1234,12 @@ loop:
 				PROC_UNLOCK(q);
 			}
 
+			CTR4(KTR_PTRACE,
+	    "wait: returning trapped pid %d status %#x (xstat %d) xthread %d",
+			    p->p_pid, W_STOPCODE(p->p_xstat), p->p_xstat,
+			    p->p_xthread != NULL ? p->p_xthread->td_tid : -1);
 			PROC_UNLOCK(p);
+			td->td_retval[0] = pid;
 			return (0);
 		}
 		if ((options & WUNTRACED) != 0 &&
@@ -1223,7 +1250,6 @@ loop:
 			if ((options & WNOWAIT) == 0)
 				p->p_flag |= P_WAITED;
 			sx_xunlock(&proctree_lock);
-			td->td_retval[0] = p->p_pid;
 
 			if (status != NULL)
 				*status = W_STOPCODE(p->p_xstat);
@@ -1238,13 +1264,13 @@ loop:
 			}
 
 			PROC_UNLOCK(p);
+			td->td_retval[0] = pid;
 			return (0);
 		}
 		PROC_SUNLOCK(p);
 		if ((options & WCONTINUED) != 0 &&
 		    (p->p_flag & P_CONTINUED) != 0) {
 			sx_xunlock(&proctree_lock);
-			td->td_retval[0] = p->p_pid;
 			if ((options & WNOWAIT) == 0) {
 				p->p_flag &= ~P_CONTINUED;
 				PROC_LOCK(q);
@@ -1259,6 +1285,7 @@ loop:
 				siginfo->si_status = SIGCONT;
 				siginfo->si_code = CLD_CONTINUED;
 			}
+			td->td_retval[0] = pid;
 			return (0);
 		}
 		PROC_UNLOCK(p);
@@ -1276,15 +1303,17 @@ loop:
 	 * for.  By maintaining a list of orphans we allow the parent
 	 * to successfully wait until the child becomes a zombie.
 	 */
-	LIST_FOREACH(p, &q->p_orphans, p_orphan) {
-		ret = proc_to_reap(td, p, idtype, id, status, options,
-		    wrusage, siginfo);
-		if (ret == 0)
-			continue;
-		else if (ret == 1)
-			nfound++;
-		else
-			return (0);
+	if (nfound == 0) {
+		LIST_FOREACH(p, &q->p_orphans, p_orphan) {
+			ret = proc_to_reap(td, p, idtype, id, NULL, options,
+			    NULL, NULL, 1);
+			if (ret != 0) {
+				KASSERT(ret != -1, ("reaped an orphan (pid %d)",
+				    (int)td->td_retval[0]));
+				nfound++;
+				break;
+			}
+		}
 	}
 	if (nfound == 0) {
 		sx_xunlock(&proctree_lock);

@@ -174,9 +174,9 @@ SUBDIR=	\
 	${_iwifw} \
 	${_iwn} \
 	${_iwnfw} \
-	${_ixgb} \
 	${_ix} \
 	${_ixv} \
+	${_ixgb} \
 	${_ixl} \
 	${_ixlv} \
 	jme \
@@ -196,6 +196,8 @@ SUBDIR=	\
 	${_linprocfs} \
 	${_linsysfs} \
 	${_linux} \
+	${_linux_common} \
+	${_linux64} \
 	${_linuxapi} \
 	lmc \
 	lpt \
@@ -289,7 +291,6 @@ SUBDIR=	\
 	${_qlxgbe} \
 	ral \
 	${_ralfw} \
-	${_random} \
 	rc4 \
 	${_rdma} \
 	${_rdrand_rng} \
@@ -393,9 +394,6 @@ _autofs=	autofs
 _crypto=	crypto
 _cryptodev=	cryptodev
 .endif
-.if exists(${.CURDIR}/../crypto)
-_random=	random
-.endif
 .endif
 
 .if ${MK_CUSE} != "no" || defined(ALL_MODULES)
@@ -456,6 +454,7 @@ _txp=		txp
 .endif
 
 .if ${MK_SOURCELESS_UCODE} != "no" && ${MACHINE_CPUARCH} != "arm" && \
+	${MACHINE_ARCH:C/mips(el)?/mips/} != "mips" && \
 	${MACHINE_ARCH} != "powerpc"
 _cxgbe=		cxgbe
 .endif
@@ -618,6 +617,8 @@ _x86bios=	x86bios
 .if ${MACHINE_CPUARCH} == "amd64"
 _ixl=		ixl
 _ixlv=		ixlv
+_linux64=	linux64
+_linux_common=	linux_common
 _ntb=		ntb
 _qlxge=		qlxge
 _qlxgb=		qlxgb

@@ -189,6 +189,7 @@ MAN=	accept_filter.9 \
 	mutex.9 \
 	namei.9 \
 	netisr.9 \
+	nv.9 \
 	osd.9 \
 	panic.9 \
 	pbuf.9 \
@@ -196,10 +197,10 @@ MAN=	accept_filter.9 \
 	p_candebug.9 \
 	p_cansee.9 \
 	pci.9 \
-	PCI_ADD_VF.9 \
-	PCI_INIT_IOV.9 \
+	PCI_IOV_ADD_VF.9 \
+	PCI_IOV_INIT.9 \
 	pci_iov_schema.9 \
-	PCI_UNINIT_IOV.9 \
+	PCI_IOV_UNINIT.9 \
 	pfil.9 \
 	pfind.9 \
 	pget.9 \
@@ -1115,7 +1116,6 @@ MLINKS+=mutex.9 mtx_assert.9 \
 	mutex.9 mtx_unlock_spin.9 \
 	mutex.9 mtx_unlock_spin_flags.9
 MLINKS+=namei.9 NDFREE.9 \
-	namei.9 NDHASGIANT.9 \
 	namei.9 NDINIT.9
 MLINKS+=netisr.9 netisr_clearqdrops.9 \
 	netisr.9 netisr_default_flow2cpu.9 \
@@ -1130,6 +1130,68 @@ MLINKS+=netisr.9 netisr_clearqdrops.9 \
 	netisr.9 netisr_register.9 \
 	netisr.9 netisr_setqlimit.9 \
 	netisr.9 netisr_unregister.9
+MLINKS+=nv.9 libnv.9 \
+	nv.9 nvlist.9 \
+	nv.9 nvlist_add_binary.9 \
+	nv.9 nvlist_add_bool.9 \
+	nv.9 nvlist_add_descriptor.9 \
+	nv.9 nvlist_add_null.9 \
+	nv.9 nvlist_add_number.9 \
+	nv.9 nvlist_add_nvlist.9 \
+	nv.9 nvlist_add_string.9 \
+	nv.9 nvlist_add_stringf.9 \
+	nv.9 nvlist_add_stringv.9 \
+	nv.9 nvlist_clone.9 \
+	nv.9 nvlist_create.9 \
+	nv.9 nvlist_destroy.9 \
+	nv.9 nvlist_dump.9 \
+	nv.9 nvlist_empty.9 \
+	nv.9 nvlist_error.9 \
+	nv.9 nvlist_exists.9 \
+	nv.9 nvlist_exists_binary.9 \
+	nv.9 nvlist_exists_bool.9 \
+	nv.9 nvlist_exists_descriptor.9 \
+	nv.9 nvlist_exists_null.9 \
+	nv.9 nvlist_exists_number.9 \
+	nv.9 nvlist_exists_nvlist.9 \
+	nv.9 nvlist_exists_string.9 \
+	nv.9 nvlist_exists_type.9 \
+	nv.9 nvlist_fdump.9 \
+	nv.9 nvlist_flags.9 \
+	nv.9 nvlist_free.9 \
+	nv.9 nvlist_free_binary.9 \
+	nv.9 nvlist_free_bool.9 \
+	nv.9 nvlist_free_descriptor.9 \
+	nv.9 nvlist_free_null.9 \
+	nv.9 nvlist_free_number.9 \
+	nv.9 nvlist_free_nvlist.9 \
+	nv.9 nvlist_free_string.9 \
+	nv.9 nvlist_free_type.9 \
+	nv.9 nvlist_get_binary.9 \
+	nv.9 nvlist_get_bool.9 \
+	nv.9 nvlist_get_descriptor.9 \
+	nv.9 nvlist_get_number.9 \
+	nv.9 nvlist_get_nvlist.9 \
+	nv.9 nvlist_get_parent.9 \
+	nv.9 nvlist_get_string.9 \
+	nv.9 nvlist_move_binary.9 \
+	nv.9 nvlist_move_descriptor.9 \
+	nv.9 nvlist_move_nvlist.9 \
+	nv.9 nvlist_move_string.9 \
+	nv.9 nvlist_next.9 \
+	nv.9 nvlist_pack.9 \
+	nv.9 nvlist_recv.9 \
+	nv.9 nvlist_send.9 \
+	nv.9 nvlist_set_error.9 \
+	nv.9 nvlist_size.9 \
+	nv.9 nvlist_take_binary.9 \
+	nv.9 nvlist_take_bool.9 \
+	nv.9 nvlist_take_descriptor.9 \
+	nv.9 nvlist_take_number.9 \
+	nv.9 nvlist_take_nvlist.9 \
+	nv.9 nvlist_take_string.9 \
+	nv.9 nvlist_unpack.9 \
+	nv.9 nvlist_xfer.9
 MLINKS+=osd.9 osd_call.9 \
 	osd.9 osd_del.9 \
 	osd.9 osd_deregister.9 \
@@ -1137,6 +1199,7 @@ MLINKS+=osd.9 osd_call.9 \
 	osd.9 osd_get.9 \
 	osd.9 osd_register.9 \
 	osd.9 osd_set.9
+MLINKS+=panic.9 vpanic.9
 MLINKS+=pbuf.9 getpbuf.9 \
 	pbuf.9 relpbuf.9 \
 	pbuf.9 trypbuf.9
@@ -1220,6 +1283,7 @@ MLINKS+=psignal.9 gsignal.9 \
 MLINKS+=random.9 arc4rand.9 \
 	random.9 arc4random.9 \
 	random.9 read_random.9 \
+	random.9 read_random_uio.9 \
 	random.9 srandom.9
 MLINKS+=refcount.9 refcount_acquire.9 \
 	refcount.9 refcount_init.9 \

@@ -29,13 +29,29 @@
 #ifndef	_MACHINE_ATOMIC_H_
 #define	_MACHINE_ATOMIC_H_
 
-#define	isb()  __asm __volatile("isb" : : : "memory")
-#define	dsb()  __asm __volatile("dsb sy" : : : "memory")
-#define	dmb()  __asm __volatile("dmb sy" : : : "memory")
+#define	isb()		__asm __volatile("isb" : : : "memory")
 
-#define	mb()   dmb()
-#define	wmb()  dmb()
-#define	rmb()  dmb()
+/*
+ * Options for DMB and DSB:
+ *	oshld	Outer Shareable, load
+ *	oshst	Outer Shareable, store
+ *	osh	Outer Shareable, all
+ *	nshld	Non-shareable, load
+ *	nshst	Non-shareable, store
+ *	nsh	Non-shareable, all
+ *	ishld	Inner Shareable, load
+ *	ishst	Inner Shareable, store
+ *	ish	Inner Shareable, all
+ *	ld	Full system, load
+ *	st	Full system, store
+ *	sy	Full system, all
+ */
+#define	dsb(opt)	__asm __volatile("dsb " __STRING(opt) : : : "memory")
+#define	dmb(opt)	__asm __volatile("dmb " __STRING(opt) : : : "memory")
+
+#define	mb()	dmb(sy)	/* Full system memory barrier all */
+#define	wmb()	dmb(st)	/* Full system memory barrier store */
+#define	rmb()	dmb(ld)	/* Full system memory barrier load */
 
 static __inline void
 atomic_add_32(volatile uint32_t *p, uint32_t val)
@@ -710,6 +726,34 @@ atomic_subtract_rel_64(volatile uint64_t *p, uint64_t val)
             "   cbnz	%w1, 1b       \n"
 	    : "=&r"(tmp), "=&r"(res), "+r" (p), "+r" (val) : : "cc", "memory"
 	);
+}
+
+static __inline void
+atomic_thread_fence_acq(void)
+{
+
+	dmb(ld);
+}
+
+static __inline void
+atomic_thread_fence_rel(void)
+{
+
+	dmb(sy);
+}
+
+static __inline void
+atomic_thread_fence_acq_rel(void)
+{
+
+	dmb(sy);
+}
+
+static __inline void
+atomic_thread_fence_seq_cst(void)
+{
+
+	dmb(sy);
 }
 
 #define	atomic_add_rel_long		atomic_add_rel_64

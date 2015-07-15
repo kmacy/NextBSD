@@ -38,12 +38,15 @@ __FBSDID("$FreeBSD$");
 #include <vm/pmap.h>
 
 #include <machine/bus.h>
+#include <machine/cpufunc.h>
 #include <machine/devmap.h>
+#include <machine/intr.h>
 #include <machine/machdep.h>
 #include <machine/platform.h>
 
 #include <dev/fdt/fdt_common.h>
 
+#include <arm/amlogic/aml8726/aml8726_soc.h>
 #include <arm/amlogic/aml8726/aml8726_clkmsr.h>
 
 #if defined(SOCDEV_PA) && defined(SOCDEV_VA)
@@ -55,12 +58,12 @@ vm_offset_t aml8726_aobus_kva_base;
 static void
 aml8726_fixup_busfreq()
 {
-	phandle_t node, child;
+	phandle_t node;
 	pcell_t freq, prop;
 	ssize_t len;
 
 	/*
-	 * Set the bus-frequency for any top level SoC simple-bus which
+	 * Set the bus-frequency for the SoC simple-bus if it
 	 * needs updating (meaning the current frequency is zero).
 	 */
 
@@ -74,16 +77,6 @@ aml8726_fixup_busfreq()
 	len = OF_getencprop(node, "bus-frequency", &prop, sizeof(prop));
 	if ((len / sizeof(prop)) == 1 && prop == 0)
 		OF_setprop(node, "bus-frequency", (void *)&freq, sizeof(freq));
-
-	for (child = OF_child(node); child != 0; child = OF_peer(child)) {
-		if (fdt_is_compatible_strict(child, "simple-bus")) {
-			len = OF_getencprop(child, "bus-frequency",
-			    &prop, sizeof(prop));
-			if ((len / sizeof(prop)) == 1 && prop == 0)
-				OF_setprop(child, "bus-frequency",
-				    (void *)&freq, sizeof(freq));
-		}
-	}
 }
 
 vm_offset_t
@@ -114,6 +107,26 @@ platform_gpio_init(void)
 	 */
 	aml8726_aobus_kva_base =
 	    (vm_offset_t)arm_devmap_ptov(0xc8100000, 0x100000);
+
+	/*
+	 * The hardware mux used by clkmsr is unique to the SoC (though
+	 * currently clk81 is at a fixed location, however that might
+	 * change in the future).
+	 */
+	aml8726_identify_soc();
+
+	/*
+	 * My aml8726-m3 development box which identifies the CPU as
+	 * a Cortex A9-r2 rev 4 randomly locks up during boot when WFI
+	 * is used.
+	 */
+	switch (aml8726_soc_hw_rev) {
+	case AML_SOC_HW_REV_M3:
+		cpufuncs.cf_sleep = (void *)cpufunc_nullop;
+		break;
+	default:
+		break;
+	}
 
 	/*
 	 * This FDT fixup should arguably be called through fdt_fixup_table,
@@ -169,43 +182,31 @@ struct fdt_fixup_entry fdt_fixup_table[] = {
 	{ NULL, NULL }
 };
 
+#ifndef DEV_GIC
 static int
 fdt_pic_decode_ic(phandle_t node, pcell_t *intr, int *interrupt, int *trig,
     int *pol)
 {
 
 	/*
-	 * The single core chips have just an Amlogic PIC.  However the
-	 * multi core chips also have a GIC.
+	 * The single core chips have just an Amlogic PIC.
 	 */
-#ifdef SMP
-	if (!fdt_is_compatible_strict(node, "arm,gic"))
-#else
 	if (!fdt_is_compatible_strict(node, "amlogic,aml8726-pic"))
-#endif
 		return (ENXIO);
 
-	*interrupt = fdt32_to_cpu(intr[0]);
+	*interrupt = fdt32_to_cpu(intr[1]);
 	*trig = INTR_TRIGGER_EDGE;
 	*pol = INTR_POLARITY_HIGH;
 
-	switch (*interrupt) {
-	case 30: /* INT_USB_A */
-	case 31: /* INT_USB_B */
-		*trig = INTR_TRIGGER_LEVEL;
-		break;
-	default:
-		break;
-	}
-
-#ifdef SMP
-	*interrupt += 32;
-#endif
-
 	return (0);
 }
+#endif
 
 fdt_pic_decode_t fdt_pic_table[] = {
+#ifdef DEV_GIC
+	&gic_decode_fdt,
+#else
 	&fdt_pic_decode_ic,
+#endif
 	NULL
 };

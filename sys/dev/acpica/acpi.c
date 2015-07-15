@@ -448,7 +448,7 @@ acpi_attach(device_t dev)
 
     sc = device_get_softc(dev);
     sc->acpi_dev = dev;
-    callout_init(&sc->susp_force_to, TRUE);
+    callout_init(&sc->susp_force_to, 1);
 
     error = ENXIO;
 
@@ -606,9 +606,11 @@ acpi_attach(device_t dev)
     if (AcpiGbl_FADT.Flags & ACPI_FADT_RESET_REGISTER)
 	sc->acpi_handle_reboot = 1;
 
+#if !ACPI_REDUCED_HARDWARE
     /* Only enable S4BIOS by default if the FACS says it is available. */
-    if (AcpiGbl_FACS->Flags & ACPI_FACS_S4_BIOS_PRESENT)
+    if (AcpiGbl_FACS != NULL && AcpiGbl_FACS->Flags & ACPI_FACS_S4_BIOS_PRESENT)
 	sc->acpi_s4bios = 1;
+#endif
 
     /* Probe all supported sleep states. */
     acpi_sleep_states[ACPI_STATE_S0] = TRUE;
@@ -1071,33 +1073,6 @@ acpi_hint_device_unit(device_t acdev, device_t child, const char *name,
     }
 }
 
-/*
- * Fetch the NUMA domain for a device by mapping the value returned by
- * _PXM to a NUMA domain.  If the device does not have a _PXM method,
- * -2 is returned.  If any other error occurs, -1 is returned.
- */
-static int
-acpi_parse_pxm(device_t dev, int *domainid)
-{
-#if MAXMEMDOM > 1
-	ACPI_HANDLE handle;
-	ACPI_STATUS status;
-	int pxm;
-
-	handle = acpi_get_handle(dev);
-	if (handle == NULL)
-		return (ENOENT);
-	status = acpi_GetInteger(handle, "_PXM", &pxm);
-	if (ACPI_SUCCESS(status)) {
-		*domainid = acpi_map_pxm_to_vm_domainid(pxm);
-		return (0);
-	}
-	if (status == AE_NOT_FOUND)
-		return (ENOATTR);
-#endif
-	return (ENOENT);
-}
-
 int
 acpi_get_cpus(device_t dev, device_t child, enum cpu_sets op, cpuset_t *cpuset)
 {
@@ -1125,6 +1100,36 @@ acpi_get_cpus(device_t dev, device_t child, enum cpu_sets op, cpuset_t *cpuset)
  * Fetch the NUMA domain for the given device.
  *
  * If a device has a _PXM method, map that to a NUMA domain.
+ * Fetch the VM domain for the given device 'dev'.
+ *
+ * Return 1 + domain if there's a domain, 0 if not found;
+ * -1 upon an error.
+ */
+int
+acpi_parse_pxm(device_t dev, int *domain)
+{
+#if MAXMEMDOM > 1
+	ACPI_HANDLE h;
+	int d, pxm;
+
+	h = acpi_get_handle(dev);
+	if ((h != NULL) &&
+	    ACPI_SUCCESS(acpi_GetInteger(h, "_PXM", &pxm))) {
+		d = acpi_map_pxm_to_vm_domainid(pxm);
+		if (d < 0)
+			return (-1);
+		*domain = d;
+		return (1);
+	}
+#endif
+
+	return (0);
+}
+
+/*
+ * Fetch the NUMA domain for the given device.
+ *
+ * If a device has a _PXM method, map that to a NUMA domain.
  *
  * If none is found, then it'll call the parent method.
  * If there's no domain, return ENOENT.
@@ -1132,15 +1137,18 @@ acpi_get_cpus(device_t dev, device_t child, enum cpu_sets op, cpuset_t *cpuset)
 int
 acpi_get_domain(device_t dev, device_t child, int *domain)
 {
-	int rc, d;
+	int ret;
 
-	rc = acpi_parse_pxm(child, &d);
-	if (rc == 0)
-		*domain = d;
-	else if (rc == ENOATTR) /* No _PXM node; go up a level */
-		return (bus_generic_get_domain(dev, child, domain));
+	ret = acpi_parse_pxm(child, domain);
+	/* Error */
+	if (ret == -1)
+		return (ENOENT);
+	/* Found */
+	if (ret == 1)
+		return (0);
 
-	return (rc);
+	/* No _PXM node; go up a level */
+	return (bus_generic_get_domain(dev, child, domain));
 }
 
 /*

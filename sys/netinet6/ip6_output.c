@@ -2189,12 +2189,14 @@ ip6_getpcbopt(struct ip6_pktopts *pktopt, int optname, struct sockopt *sopt)
 
 	switch (optname) {
 	case IPV6_PKTINFO:
-		if (pktopt && pktopt->ip6po_pktinfo)
-			optdata = (void *)pktopt->ip6po_pktinfo;
-		else {
+		optdata = (void *)&null_pktinfo;
+		if (pktopt && pktopt->ip6po_pktinfo) {
+			bcopy(pktopt->ip6po_pktinfo, &null_pktinfo,
+			    sizeof(null_pktinfo));
+			in6_clearscope(&null_pktinfo.ipi6_addr);
+		} else {
 			/* XXX: we don't have to do this every time... */
 			bzero(&null_pktinfo, sizeof(null_pktinfo));
-			optdata = (void *)&null_pktinfo;
 		}
 		optdatalen = sizeof(struct in6_pktinfo);
 		break;
@@ -2566,6 +2568,7 @@ ip6_setpktopt(int optname, u_char *buf, int len, struct ip6_pktopts *opt,
 		    !IN6_IS_ADDR_UNSPECIFIED(&pktinfo->ipi6_addr)) {
 			struct in6_ifaddr *ia;
 
+			in6_setscope(&pktinfo->ipi6_addr, ifp, NULL);
 			ia = in6ifa_ifpwithaddr(ifp, &pktinfo->ipi6_addr);
 			if (ia == NULL)
 				return (EADDRNOTAVAIL);
@@ -2900,14 +2903,6 @@ ip6_mloopback(struct ifnet *ifp, struct mbuf *m, struct sockaddr_in6 *dst)
 		if (copym == NULL)
 			return;
 	}
-
-#ifdef DIAGNOSTIC
-	if (copym->m_len < sizeof(*ip6)) {
-		m_freem(copym);
-		return;
-	}
-#endif
-
 	ip6 = mtod(copym, struct ip6_hdr *);
 	/*
 	 * clear embedded scope identifiers if necessary.
@@ -2915,7 +2910,11 @@ ip6_mloopback(struct ifnet *ifp, struct mbuf *m, struct sockaddr_in6 *dst)
 	 */
 	in6_clearscope(&ip6->ip6_src);
 	in6_clearscope(&ip6->ip6_dst);
-
+	if (copym->m_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6) {
+		copym->m_pkthdr.csum_flags |= CSUM_DATA_VALID_IPV6 |
+		    CSUM_PSEUDO_HDR;
+		copym->m_pkthdr.csum_data = 0xffff;
+	}
 	(void)if_simloop(ifp, copym, dst->sin6_family, 0);
 }
 

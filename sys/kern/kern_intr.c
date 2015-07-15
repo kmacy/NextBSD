@@ -888,7 +888,7 @@ intr_event_schedule_thread(struct intr_event *ie)
 	if (ie->ie_flags & IE_ENTROPY) {
 		entropy.event = (uintptr_t)ie;
 		entropy.td = ctd;
-		random_harvest(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
+		random_harvest_queue(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
 	}
 
 	KASSERT(p != NULL, ("ithread %s has no process", ie->ie_name));
@@ -1039,7 +1039,7 @@ intr_event_schedule_thread(struct intr_event *ie, struct intr_thread *it)
 	if (ie->ie_flags & IE_ENTROPY) {
 		entropy.event = (uintptr_t)ie;
 		entropy.td = ctd;
-		random_harvest(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
+		random_harvest_queue(&entropy, sizeof(entropy), 2, RANDOM_INTERRUPT);
 	}
 
 	KASSERT(p != NULL, ("ithread %s has no process", ie->ie_name));
@@ -1126,7 +1126,7 @@ swi_sched(void *cookie, int flags)
 
 	entropy.event = (uintptr_t)ih;
 	entropy.td = curthread;
-	random_harvest(&entropy, sizeof(entropy), 1, RANDOM_SWI);
+	random_harvest_queue(&entropy, sizeof(entropy), 1, RANDOM_SWI);
 
 	/*
 	 * Set ih_need for this handler so that if the ithread is already
@@ -1327,14 +1327,13 @@ ithread_loop(void *arg)
 		 * we are running, it will set it_need to note that we
 		 * should make another pass.
 		 */
-		while (atomic_load_acq_int(&ithd->it_need) != 0) {
+		while (atomic_swap_int(&ithd->it_need, 0) != 0) {
 			/*
-			 * This might need a full read and write barrier
-			 * to make sure that this write posts before any
-			 * of the memory or device accesses in the
-			 * handlers.
+			 * This needs a release barrier to make sure
+			 * that this write posts before any of the
+			 * memory or device accesses in the handlers.
 			 */
-			atomic_store_rel_int(&ithd->it_need, 0);
+			atomic_thread_fence_acq_rel();
 			ithread_execute_handlers(p, ie);
 		}
 		WITNESS_WARN(WARN_PANIC, NULL, "suspending ithread");
@@ -1346,8 +1345,8 @@ ithread_loop(void *arg)
 		 * set again, so we have to check it again.
 		 */
 		thread_lock(td);
-		if ((atomic_load_acq_int(&ithd->it_need) == 0) &&
-		    !(ithd->it_flags & (IT_DEAD | IT_WAIT))) {
+		if (atomic_load_acq_int(&ithd->it_need) == 0 &&
+		    (ithd->it_flags & (IT_DEAD | IT_WAIT)) == 0) {
 			TD_SET_IWAIT(td);
 			ie->ie_count = 0;
 			mi_switch(SW_VOL | SWT_IWAIT, NULL);
@@ -1455,12 +1454,7 @@ intr_event_handle(struct intr_event *ie, struct trapframe *frame)
 	/* Schedule the ithread if needed. */
 	if (thread) {
 		error = intr_event_schedule_thread(ie);
-#ifndef XEN		
 		KASSERT(error == 0, ("bad stray interrupt"));
-#else
-		if (error != 0)
-			log(LOG_WARNING, "bad stray interrupt");
-#endif		
 	}
 	critical_exit();
 	td->td_intr_nesting_level--;
@@ -1512,14 +1506,13 @@ ithread_loop(void *arg)
 		 * we are running, it will set it_need to note that we
 		 * should make another pass.
 		 */
-		while (atomic_load_acq_int(&ithd->it_need) != 0) {
+		while (atomic_swap_int(&ithd->it_need, 0) != 0) {
 			/*
-			 * This might need a full read and write barrier
-			 * to make sure that this write posts before any
-			 * of the memory or device accesses in the
-			 * handlers.
+			 * This needs a release barrier to make sure
+			 * that this write posts before any of the
+			 * memory or device accesses in the handlers.
 			 */
-			atomic_store_rel_int(&ithd->it_need, 0);
+			atomic_thread_fence_acq_rel();
 			if (priv)
 				priv_ithread_execute_handler(p, ih);
 			else 
@@ -1534,8 +1527,8 @@ ithread_loop(void *arg)
 		 * set again, so we have to check it again.
 		 */
 		thread_lock(td);
-		if ((atomic_load_acq_int(&ithd->it_need) == 0) &&
-		    !(ithd->it_flags & (IT_DEAD | IT_WAIT))) {
+		if (atomic_load_acq_int(&ithd->it_need) == 0 &&
+		    (ithd->it_flags & (IT_DEAD | IT_WAIT)) == 0) {
 			TD_SET_IWAIT(td);
 			ie->ie_count = 0;
 			mi_switch(SW_VOL | SWT_IWAIT, NULL);

@@ -202,6 +202,7 @@ typedef struct {
 #define	EM_386		3	/* Intel i386. */
 #define	EM_68K		4	/* Motorola 68000. */
 #define	EM_88K		5	/* Motorola 88000. */
+#define	EM_IAMCU	6	/* Intel MCU. */
 #define	EM_860		7	/* Intel i860. */
 #define	EM_MIPS		8	/* MIPS R3000 Big-Endian only. */
 #define	EM_S370		9	/* IBM System/370. */
@@ -471,6 +472,9 @@ typedef struct {
 #define	SHF_TLS			0x400	/* Section contains TLS data. */
 #define	SHF_MASKOS	0x0ff00000	/* OS-specific semantics. */
 #define	SHF_MASKPROC	0xf0000000	/* Processor-specific semantics. */
+
+/* Flags for section groups. */
+#define	GRP_COMDAT	0x1	/* COMDAT semantics. */
 
 /* Values for p_type. */
 #define	PT_NULL		0	/* Unused entry. */
@@ -863,6 +867,7 @@ typedef struct {
 #define	R_386_TLS_TPOFF32	37	/* GOT entry of -ve static TLS offset */
 #define	R_386_IRELATIVE		42	/* PLT entry resolved indirectly at runtime */
 
+#define	R_AARCH64_NONE		0	/* No relocation */
 #define	R_AARCH64_ABS64		257	/* Absolute offset */
 #define	R_AARCH64_ABS32		258	/* Absolute, 32-bit overflow check */
 #define	R_AARCH64_ABS16		259	/* Absolute, 16-bit overflow check */

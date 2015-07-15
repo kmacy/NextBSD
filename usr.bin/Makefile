@@ -36,7 +36,7 @@ SUBDIR=	${_addr2line} \
 	csplit \
 	ctlstat \
 	cut \
-	demandoc \
+	${_cxxfilt} \
 	dirname \
 	dpv \
 	du \
@@ -117,6 +117,7 @@ SUBDIR=	${_addr2line} \
 	nice \
 	nl \
 	${_nm} \
+	numactl \
 	nohup \
 	opieinfo \
 	opiekey \
@@ -150,7 +151,7 @@ SUBDIR=	${_addr2line} \
 	showmount \
 	${_size} \
 	sockstat \
-	soeliminate \
+	soelim \
 	sort \
 	split \
 	stat \
@@ -237,6 +238,7 @@ SUBDIR+=	ee
 
 .if ${MK_ELFTOOLCHAIN_TOOLS} != "no"
 _addr2line=	addr2line
+_cxxfilt=	cxxfilt
 _elfcopy=	elfcopy
 _nm=		nm
 _readelf=	readelf
@@ -250,10 +252,6 @@ SUBDIR+=	file
 
 .if ${MK_FINGER} != "no"
 SUBDIR+=	finger
-.endif
-
-.if ${MK_FMAKE} != "no"
-SUBDIR+=	make
 .endif
 
 .if ${MK_FTP} != "no"
@@ -284,7 +282,9 @@ SUBDIR+=	iscsictl
 
 .if ${MK_KDUMP} != "no"
 SUBDIR+=        kdump
+.if ${MACHINE_ARCH} != "aarch64" # ARM64TODO truss does not build
 SUBDIR+=        truss
+.endif
 .endif
 
 .if ${MK_KERBEROS_SUPPORT} != "no"
@@ -314,7 +314,9 @@ SUBDIR+=	bmake
 
 .if ${MK_MAN_UTILS} != "no"
 SUBDIR+=	catman
+.if ${MK_MANDOCDB} == "no"
 _makewhatis=	makewhatis
+.endif
 _man=		man
 .endif
 
@@ -382,13 +384,17 @@ SUBDIR+=	c89
 SUBDIR+=	c99
 SUBDIR+=	ctags
 SUBDIR+=	file2c
+.if ${MACHINE_ARCH} != "aarch64" # ARM64TODO gprof does not build
 SUBDIR+=	gprof
+.endif
 SUBDIR+=	indent
 SUBDIR+=	lex
 SUBDIR+=	mkstr
 SUBDIR+=	rpcgen
 SUBDIR+=	unifdef
+.if ${MACHINE_ARCH} != "aarch64" # ARM64TODO xlint does not build
 SUBDIR+=	xlint
+.endif
 SUBDIR+=	xstr
 SUBDIR+=	yacc
 .endif

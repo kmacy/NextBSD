@@ -616,8 +616,8 @@ m_getzone(int size)
  * should go away with constant propagation for !MGETHDR.
  */
 static __inline int
-m_init(struct mbuf *m, uma_zone_t zone, int size, int how, short type,
-    int flags)
+m_init(struct mbuf *m, uma_zone_t zone __unused, int size __unused, int how,
+    short type, int flags)
 {
 	int error;
 
@@ -959,6 +959,7 @@ struct mbuf	*m_copypacket(struct mbuf *, int);
 void		 m_copy_pkthdr(struct mbuf *, struct mbuf *);
 struct mbuf	*m_copyup(struct mbuf *, int, int);
 struct mbuf	*m_defrag(struct mbuf *, int);
+void		 m_demote_pkthdr(struct mbuf *);
 void		 m_demote(struct mbuf *, int, int);
 struct mbuf	*m_devget(char *, int, int, struct ifnet *,
 		    void (*)(char *, caddr_t, u_int));
@@ -1122,7 +1123,7 @@ m_tag_first(struct mbuf *m)
  * Return the next tag in the list of tags associated with an mbuf.
  */
 static __inline struct m_tag *
-m_tag_next(struct mbuf *m, struct m_tag *t)
+m_tag_next(struct mbuf *m __unused, struct m_tag *t)
 {
 
 	return (SLIST_NEXT(t, m_tag_link));
@@ -1178,7 +1179,7 @@ m_free(struct mbuf *m)
 	return (n);
 }
 
-static int inline
+static __inline int
 rt_m_getfib(struct mbuf *m)
 {
 	KASSERT(m->m_flags & M_PKTHDR , ("Attempt to get FIB from non header mbuf."));

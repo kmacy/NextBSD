@@ -27,7 +27,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd March 4, 2015
+.Dd June 24, 2015
 .Dt CTL.CONF 5
 .Os
 .Sh NAME
@@ -324,7 +324,9 @@ Optional second argument specifies auth group name for connections
 to this specific portal group.
 If second argument is not specified, target auth group is used.
 .It Ic port Ar name
-Assign specified CTL port (such as "isp0") to the target.
+.It Ic port Ar name/pp
+.It Ic port Ar name/pp/vp
+Assign specified CTL port (such as "isp0" or "isp2/1") to the target.
 On startup ctld configures LUN mapping and enables all assigned ports.
 Each port can be assigned to only one target.
 .It Ic redirect Ar address
@@ -365,7 +367,12 @@ All CTL-specific options are documented in the
 section of
 .Xr ctladm 8 .
 .It Ic path Ar path
-The path to the file or device node used to back the LUN.
+The path to the file, device node, or
+.Xr zfs 8
+volume used to back the LUN.
+For optimal performance, create the volume with the
+.Qq Ar volmode=dev
+property set.
 .It Ic serial Ar string
 The SCSI serial number presented to the initiator.
 .It Ic size Ar size
@@ -435,7 +442,8 @@ target naa.50015178f369f092 {
 .Sh SEE ALSO
 .Xr ctl 4 ,
 .Xr ctladm 8 ,
-.Xr ctld 8
+.Xr ctld 8 ,
+.Xr zfs 8
 .Sh AUTHORS
 The
 .Nm

@@ -248,8 +248,7 @@ ip6_forward(struct mbuf *m, int srcrt)
 
 	/*
 	 * when the kernel forwards a packet, it is not proper to apply
-	 * IPsec transport mode to the packet is not proper.  this check
-	 * avoid from this.
+	 * IPsec transport mode to the packet. This check avoid from this.
 	 * at present, if there is even a transport mode SA request in the
 	 * security policy, the kernel does not apply IPsec to the packet.
 	 * this check is not enough because the following case is valid.
@@ -283,9 +282,9 @@ ip6_forward(struct mbuf *m, int srcrt)
 	 * ipsec6_proces_packet will send the packet using ip6_output
 	 */
 	error = ipsec6_process_packet(m, sp->req);
-
-	KEY_FREESP(&sp);
-
+	/* Release SP if an error occured */
+	if (error != 0)
+		KEY_FREESP(&sp);
 	if (error == EJUSTRETURN) {
 		/*
 		 * We had a SP with a level of 'use' and no SA. We
@@ -410,39 +409,6 @@ again2:
 	    inzone != outzone) {
 		IP6STAT_INC(ip6s_cantforward);
 		IP6STAT_INC(ip6s_badscope);
-		goto bad;
-	}
-
-	if (m->m_pkthdr.len > IN6_LINKMTU(rt->rt_ifp)) {
-		in6_ifstat_inc(rt->rt_ifp, ifs6_in_toobig);
-		if (mcopy) {
-			u_long mtu;
-#ifdef IPSEC
-			size_t ipsechdrsiz;
-#endif /* IPSEC */
-
-			mtu = IN6_LINKMTU(rt->rt_ifp);
-#ifdef IPSEC
-			/*
-			 * When we do IPsec tunnel ingress, we need to play
-			 * with the link value (decrement IPsec header size
-			 * from mtu value).  The code is much simpler than v4
-			 * case, as we have the outgoing interface for
-			 * encapsulated packet as "rt->rt_ifp".
-			 */
-			ipsechdrsiz = ipsec_hdrsiz(mcopy, IPSEC_DIR_OUTBOUND,
-			    NULL);
-			if (ipsechdrsiz < mtu)
-				mtu -= ipsechdrsiz;
-			/*
-			 * if mtu becomes less than minimum MTU,
-			 * tell minimum MTU (and I'll need to fragment it).
-			 */
-			if (mtu < IPV6_MMTU)
-				mtu = IPV6_MMTU;
-#endif /* IPSEC */
-			icmp6_error(mcopy, ICMP6_PACKET_TOO_BIG, 0, mtu);
-		}
 		goto bad;
 	}
 
@@ -571,6 +537,40 @@ again2:
 	}
 
 pass:
+	/* See if the size was changed by the packet filter. */
+	if (m->m_pkthdr.len > IN6_LINKMTU(rt->rt_ifp)) {
+		in6_ifstat_inc(rt->rt_ifp, ifs6_in_toobig);
+		if (mcopy) {
+			u_long mtu;
+#ifdef IPSEC
+			size_t ipsechdrsiz;
+#endif /* IPSEC */
+
+			mtu = IN6_LINKMTU(rt->rt_ifp);
+#ifdef IPSEC
+			/*
+			 * When we do IPsec tunnel ingress, we need to play
+			 * with the link value (decrement IPsec header size
+			 * from mtu value).  The code is much simpler than v4
+			 * case, as we have the outgoing interface for
+			 * encapsulated packet as "rt->rt_ifp".
+			 */
+			ipsechdrsiz = ipsec_hdrsiz(mcopy, IPSEC_DIR_OUTBOUND,
+			    NULL);
+			if (ipsechdrsiz < mtu)
+				mtu -= ipsechdrsiz;
+			/*
+			 * if mtu becomes less than minimum MTU,
+			 * tell minimum MTU (and I'll need to fragment it).
+			 */
+			if (mtu < IPV6_MMTU)
+				mtu = IPV6_MMTU;
+#endif /* IPSEC */
+			icmp6_error(mcopy, ICMP6_PACKET_TOO_BIG, 0, mtu);
+		}
+		goto bad;
+	}
+
 	error = nd6_output(rt->rt_ifp, origifp, m, dst, rt);
 	if (error) {
 		in6_ifstat_inc(rt->rt_ifp, ifs6_out_discard);

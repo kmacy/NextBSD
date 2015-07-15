@@ -2582,6 +2582,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 	case SIOCGIFPSRCADDR:
 	case SIOCGIFPDSTADDR:
 	case SIOCGIFMEDIA:
+	case SIOCGIFXMEDIA:
 	case SIOCGIFGENERIC:
 		if (ifp->if_ioctl == NULL)
 			return (EOPNOTSUPP);
@@ -4017,7 +4018,7 @@ if_setgetcounterfn(if_t ifp, if_get_counter_t fn)
 int
 drbr_inuse_drv(if_t ifh, struct buf_ring *br)
 {
-	return drbr_inuse_drv(ifh, br);
+	return drbr_inuse(ifh, br);
 }
 
 struct mbuf*

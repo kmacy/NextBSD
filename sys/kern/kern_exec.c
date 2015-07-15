@@ -193,21 +193,20 @@ struct execve_args {
 #endif
 
 int
-sys_execve(td, uap)
-	struct thread *td;
-	struct execve_args /* {
-		char *fname;
-		char **argv;
-		char **envv;
-	} */ *uap;
+sys_execve(struct thread *td, struct execve_args *uap)
 {
-	int error;
 	struct image_args args;
+	struct vmspace *oldvmspace;
+	int error;
 
+	error = pre_execve(td, &oldvmspace);
+	if (error != 0)
+		return (error);
 	error = exec_copyin_args(&args, uap->fname, UIO_USERSPACE,
 	    uap->argv, uap->envv);
 	if (error == 0)
 		error = kern_execve(td, &args, NULL);
+	post_execve(td, error, oldvmspace);
 	return (error);
 }
 
@@ -221,15 +220,20 @@ struct fexecve_args {
 int
 sys_fexecve(struct thread *td, struct fexecve_args *uap)
 {
-	int error;
 	struct image_args args;
+	struct vmspace *oldvmspace;
+	int error;
 
+	error = pre_execve(td, &oldvmspace);
+	if (error != 0)
+		return (error);
 	error = exec_copyin_args(&args, NULL, UIO_SYSSPACE,
 	    uap->argv, uap->envv);
 	if (error == 0) {
 		args.fd = uap->fd;
 		error = kern_execve(td, &args, NULL);
 	}
+	post_execve(td, error, oldvmspace);
 	return (error);
 }
 
@@ -243,65 +247,56 @@ struct __mac_execve_args {
 #endif
 
 int
-sys___mac_execve(td, uap)
-	struct thread *td;
-	struct __mac_execve_args /* {
-		char *fname;
-		char **argv;
-		char **envv;
-		struct mac *mac_p;
-	} */ *uap;
+sys___mac_execve(struct thread *td, struct __mac_execve_args *uap)
 {
 #ifdef MAC
-	int error;
 	struct image_args args;
+	struct vmspace *oldvmspace;
+	int error;
 
+	error = pre_execve(td, &oldvmspace);
+	if (error != 0)
+		return (error);
 	error = exec_copyin_args(&args, uap->fname, UIO_USERSPACE,
 	    uap->argv, uap->envv);
 	if (error == 0)
 		error = kern_execve(td, &args, uap->mac_p);
+	post_execve(td, error, oldvmspace);
 	return (error);
 #else
 	return (ENOSYS);
 #endif
 }
 
-/*
- * XXX: kern_execve has the astonishing property of not always returning to
- * the caller.  If sufficiently bad things happen during the call to
- * do_execve(), it can end up calling exit1(); as a result, callers must
- * avoid doing anything which they might need to undo (e.g., allocating
- * memory).
- */
 int
-kern_execve(td, args, mac_p)
-	struct thread *td;
-	struct image_args *args;
-	struct mac *mac_p;
+pre_execve(struct thread *td, struct vmspace **oldvmspace)
 {
-	struct proc *p = td->td_proc;
-	struct vmspace *oldvmspace;
+	struct proc *p;
 	int error;
 
-	AUDIT_ARG_ARGV(args->begin_argv, args->argc,
-	    args->begin_envv - args->begin_argv);
-	AUDIT_ARG_ENVV(args->begin_envv, args->envc,
-	    args->endp - args->begin_envv);
-	if (p->p_flag & P_HADTHREADS) {
+	KASSERT(td == curthread, ("non-current thread %p", td));
+	error = 0;
+	p = td->td_proc;
+	if ((p->p_flag & P_HADTHREADS) != 0) {
 		PROC_LOCK(p);
-		if (thread_single(p, SINGLE_BOUNDARY)) {
-			PROC_UNLOCK(p);
-	       		exec_free_args(args);
-			return (ERESTART);	/* Try again later. */
-		}
+		if (thread_single(p, SINGLE_BOUNDARY) != 0)
+			error = ERESTART;
 		PROC_UNLOCK(p);
 	}
+	KASSERT(error != 0 || (td->td_pflags & TDP_EXECVMSPC) == 0,
+	    ("nested execve"));
+	*oldvmspace = p->p_vmspace;
+	return (error);
+}
 
-	KASSERT((td->td_pflags & TDP_EXECVMSPC) == 0, ("nested execve"));
-	oldvmspace = td->td_proc->p_vmspace;
-	error = do_execve(td, args, mac_p);
+void
+post_execve(struct thread *td, int error, struct vmspace *oldvmspace)
+{
+	struct proc *p;
 
-	if (p->p_flag & P_HADTHREADS) {
+	KASSERT(td == curthread, ("non-current thread %p", td));
+	p = td->td_proc;
+	if ((p->p_flag & P_HADTHREADS) != 0) {
 		PROC_LOCK(p);
 		/*
 		 * If success, we upgrade to SINGLE_EXIT state to
@@ -314,13 +309,29 @@ kern_execve(td, args, mac_p)
 		PROC_UNLOCK(p);
 	}
 	if ((td->td_pflags & TDP_EXECVMSPC) != 0) {
-		KASSERT(td->td_proc->p_vmspace != oldvmspace,
+		KASSERT(p->p_vmspace != oldvmspace,
 		    ("oldvmspace still used"));
 		vmspace_free(oldvmspace);
 		td->td_pflags &= ~TDP_EXECVMSPC;
 	}
+}
 
-	return (error);
+/*
+ * XXX: kern_execve has the astonishing property of not always returning to
+ * the caller.  If sufficiently bad things happen during the call to
+ * do_execve(), it can end up calling exit1(); as a result, callers must
+ * avoid doing anything which they might need to undo (e.g., allocating
+ * memory).
+ */
+int
+kern_execve(struct thread *td, struct image_args *args, struct mac *mac_p)
+{
+
+	AUDIT_ARG_ARGV(args->begin_argv, args->argc,
+	    args->begin_envv - args->begin_argv);
+	AUDIT_ARG_ENVV(args->begin_envv, args->envc,
+	    args->endp - args->begin_envv);
+	return (do_execve(td, args, mac_p));
 }
 
 /*
@@ -348,7 +359,7 @@ do_execve(td, args, mac_p)
 	struct vnode *tracevp = NULL;
 	struct ucred *tracecred = NULL;
 #endif
-	struct vnode *textvp = NULL, *binvp;
+	struct vnode *oldtextvp = NULL, *newtextvp;
 	cap_rights_t rights;
 	int credential_changing;
 	int textset;
@@ -422,20 +433,20 @@ interpret:
 		if (error)
 			goto exec_fail;
 
-		binvp = nd.ni_vp;
-		imgp->vp = binvp;
+		newtextvp = nd.ni_vp;
+		imgp->vp = newtextvp;
 	} else {
 		AUDIT_ARG_FD(args->fd);
 		/*
 		 * Descriptors opened only with O_EXEC or O_RDONLY are allowed.
 		 */
 		error = fgetvp_exec(td, args->fd,
-		    cap_rights_init(&rights, CAP_FEXECVE), &binvp);
+		    cap_rights_init(&rights, CAP_FEXECVE), &newtextvp);
 		if (error)
 			goto exec_fail;
-		vn_lock(binvp, LK_EXCLUSIVE | LK_RETRY);
-		AUDIT_ARG_VNODE1(binvp);
-		imgp->vp = binvp;
+		vn_lock(newtextvp, LK_EXCLUSIVE | LK_RETRY);
+		AUDIT_ARG_VNODE1(newtextvp);
+		imgp->vp = newtextvp;
 	}
 
 	/*
@@ -512,13 +523,13 @@ interpret:
 		if (args->fname != NULL)
 			NDFREE(&nd, NDF_ONLY_PNBUF);
 #ifdef MAC
-		mac_execve_interpreter_enter(binvp, &interpvplabel);
+		mac_execve_interpreter_enter(newtextvp, &interpvplabel);
 #endif
 		if (imgp->opened) {
-			VOP_CLOSE(binvp, FREAD, td->td_ucred, td);
+			VOP_CLOSE(newtextvp, FREAD, td->td_ucred, td);
 			imgp->opened = 0;
 		}
-		vput(binvp);
+		vput(newtextvp);
 		vm_object_deallocate(imgp->object);
 		imgp->object = NULL;
 		/* set new name to that of the interpreter */
@@ -589,9 +600,6 @@ interpret:
 
 	vn_lock(imgp->vp, LK_SHARED | LK_RETRY);
 
-	/* Get a reference to the vnode prior to locking the proc */
-	VREF(binvp);
-
 	/*
 	 * For security and other reasons, signal handlers cannot
 	 * be shared after an exec. The new process gets a copy of the old
@@ -622,7 +630,7 @@ interpret:
 	if (args->fname)
 		bcopy(nd.ni_cnd.cn_nameptr, p->p_comm,
 		    min(nd.ni_cnd.cn_namelen, MAXCOMLEN));
-	else if (vn_commname(binvp, p->p_comm, sizeof(p->p_comm)) != 0)
+	else if (vn_commname(newtextvp, p->p_comm, sizeof(p->p_comm)) != 0)
 		bcopy(fexecv_proc_title, p->p_comm, sizeof(fexecv_proc_title));
 	bcopy(p->p_comm, td->td_name, sizeof(td->td_name));
 #ifdef KTR
@@ -756,11 +764,11 @@ interpret:
 	}
 
 	/*
-	 * Store the vp for use in procfs.  This vnode was referenced prior
-	 * to locking the proc lock.
+	 * Store the vp for use in procfs.  This vnode was referenced by namei
+	 * or fgetvp_exec.
 	 */
-	textvp = p->p_textvp;
-	p->p_textvp = binvp;
+	oldtextvp = p->p_textvp;
+	p->p_textvp = newtextvp;
 
 #ifdef KDTRACE_HOOKS
 	/*
@@ -837,10 +845,8 @@ done1:
 	/*
 	 * Handle deferred decrement of ref counts.
 	 */
-	if (textvp != NULL)
-		vrele(textvp);
-	if (error != 0)
-		vrele(binvp);
+	if (oldtextvp != NULL)
+		vrele(oldtextvp);
 #ifdef KTRACE
 	if (tracevp != NULL)
 		vrele(tracevp);
@@ -866,7 +872,10 @@ exec_fail_dealloc:
 			NDFREE(&nd, NDF_ONLY_PNBUF);
 		if (imgp->opened)
 			VOP_CLOSE(imgp->vp, FREAD, td->td_ucred, td);
-		vput(imgp->vp);
+		if (error != 0)
+			vput(imgp->vp);
+		else
+			VOP_UNLOCK(imgp->vp, 0);
 	}
 
 	if (imgp->object != NULL)
@@ -955,13 +964,10 @@ exec_map_first_page(imgp)
 		}
 		initial_pagein = i;
 		rv = vm_pager_get_pages(object, ma, initial_pagein, 0);
-		ma[0] = vm_page_lookup(object, 0);
-		if ((rv != VM_PAGER_OK) || (ma[0] == NULL)) {
-			if (ma[0] != NULL) {
-				vm_page_lock(ma[0]);
-				vm_page_free(ma[0]);
-				vm_page_unlock(ma[0]);
-			}
+		if (rv != VM_PAGER_OK) {
+			vm_page_lock(ma[0]);
+			vm_page_free(ma[0]);
+			vm_page_unlock(ma[0]);
 			VM_OBJECT_WUNLOCK(object);
 			return (EIO);
 		}
@@ -1009,6 +1015,7 @@ exec_new_vmspace(imgp, sv)
 	struct proc *p = imgp->proc;
 	struct vmspace *vmspace = p->p_vmspace;
 	vm_object_t obj;
+	struct rlimit rlim_stack;
 	vm_offset_t sv_minuser, stack_addr;
 	vm_map_t map;
 	u_long ssiz;
@@ -1058,10 +1065,22 @@ exec_new_vmspace(imgp, sv)
 	}
 
 	/* Allocate a new stack */
-	if (sv->sv_maxssiz != NULL)
+	if (imgp->stack_sz != 0) {
+		ssiz = trunc_page(imgp->stack_sz);
+		PROC_LOCK(p);
+		lim_rlimit_proc(p, RLIMIT_STACK, &rlim_stack);
+		PROC_UNLOCK(p);
+		if (ssiz > rlim_stack.rlim_max)
+			ssiz = rlim_stack.rlim_max;
+		if (ssiz > rlim_stack.rlim_cur) {
+			rlim_stack.rlim_cur = ssiz;
+			kern_setrlimit(curthread, RLIMIT_STACK, &rlim_stack);
+		}
+	} else if (sv->sv_maxssiz != NULL) {
 		ssiz = *sv->sv_maxssiz;
-	else
+	} else {
 		ssiz = maxssiz;
+	}
 	stack_addr = sv->sv_usrstack - ssiz;
 	error = vm_map_stack(map, stack_addr, (vm_size_t)ssiz,
 	    obj != NULL && imgp->stack_prot != 0 ? imgp->stack_prot :
@@ -1075,7 +1094,7 @@ exec_new_vmspace(imgp, sv)
 	 * are still used to enforce the stack rlimit on the process stack.
 	 */
 	vmspace->vm_ssize = sgrowsiz >> PAGE_SHIFT;
-	vmspace->vm_maxsaddr = (char *)sv->sv_usrstack - ssiz;
+	vmspace->vm_maxsaddr = (char *)stack_addr;
 
 	return (0);
 }

@@ -51,7 +51,7 @@
 /*********************************************************************
  *  Driver version
  *********************************************************************/
-char ixl_driver_version[] = "1.4.1";
+char ixl_driver_version[] = "1.4.3";
 
 /*********************************************************************
  *  PCI Device ID Table
@@ -73,7 +73,14 @@ static ixl_vendor_info_t ixl_vendor_info_array[] =
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_B, 0, 0, 0},
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_C, 0, 0, 0},
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T, 0, 0, 0},
+	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T4, 0, 0, 0},
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_20G_KR2, 0, 0, 0},
+	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_20G_KR2_A, 0, 0, 0},
+#ifdef X722_SUPPORT
+	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_SFP_X722, 0, 0, 0},
+	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_1G_BASE_T_X722, 0, 0, 0},
+	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T_X722, 0, 0, 0},
+#endif
 	/* required last entry */
 	{0, 0, 0, 0, 0}
 };
@@ -186,8 +193,8 @@ static int	ixl_sysctl_switch_config(SYSCTL_HANDLER_ARGS);
 #ifdef PCI_IOV
 static int	ixl_adminq_err_to_errno(enum i40e_admin_queue_err err);
 
-static int	ixl_init_iov(device_t dev, uint16_t num_vfs, const nvlist_t*);
-static void	ixl_uninit_iov(device_t dev);
+static int	ixl_iov_init(device_t dev, uint16_t num_vfs, const nvlist_t*);
+static void	ixl_iov_uninit(device_t dev);
 static int	ixl_add_vf(device_t dev, uint16_t vfnum, const nvlist_t*);
 
 static void	ixl_handle_vf_msg(struct ixl_pf *,
@@ -233,9 +240,9 @@ static device_method_t ixl_methods[] = {
 	DEVMETHOD(device_detach, iflib_device_detach),
 	DEVMETHOD(device_shutdown, iflib_device_suspend),
 #ifdef PCI_IOV
-	DEVMETHOD(pci_init_iov, ixl_init_iov),
-	DEVMETHOD(pci_uninit_iov, ixl_uninit_iov),
-	DEVMETHOD(pci_add_vf, ixl_add_vf),
+	DEVMETHOD(pci_iov_init, ixl_iov_init),
+	DEVMETHOD(pci_iov_uninit, ixl_iov_uninit),
+	DEVMETHOD(pci_iov_add_vf, ixl_add_vf),
 #endif
 	{0, 0}
 };
@@ -280,7 +287,6 @@ static driver_t ixl_if_driver = {
 #ifdef DEV_NETMAP
 MODULE_DEPEND(ixl, netmap, 1, 1, 1);
 #endif /* DEV_NETMAP */
-
 
 /*
 ** TUNEABLE PARAMETERS:
@@ -555,6 +561,22 @@ ixl_attach(device_t dev)
 #ifdef IXL_DEBUG_SYSCTL
 	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
 	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
+	    OID_AUTO, "debug", CTLTYPE_INT|CTLFLAG_RW, pf, 0,
+	    ixl_debug_info, "I", "Debug Information");
+
+	/* Debug shared-code message level */
+	SYSCTL_ADD_UINT(device_get_sysctl_ctx(dev),
+	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
+	    OID_AUTO, "debug_mask", CTLFLAG_RW,
+	    &pf->hw.debug_mask, 0, "Debug Message Level");
+
+	SYSCTL_ADD_UINT(device_get_sysctl_ctx(dev),
+	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
+	    OID_AUTO, "vc_debug_level", CTLFLAG_RW, &pf->vc_debug_lvl,
+	    0, "PF/VF Virtual Channel debug level");
+
+	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
+	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
 	    OID_AUTO, "link_status", CTLTYPE_STRING | CTLFLAG_RD,
 	    pf, 0, ixl_sysctl_link_status, "A", "Current Link Status");
 
@@ -618,13 +640,6 @@ ixl_attach(device_t dev)
 		error = ENXIO;
 		goto err_out;
 	}
-
-	/* Create for initial debugging use */
-	SYSCTL_ADD_PROC(device_get_sysctl_ctx(dev),
-	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
-	    OID_AUTO, "debug", CTLTYPE_INT|CTLFLAG_RW, pf, 0,
-	    ixl_debug_info, "I", "Debug Information");
-
 
 	/* Establish a clean starting point */
 	i40e_clear_hw(hw);
@@ -736,7 +751,7 @@ ixl_attach(device_t dev)
 
 	/* Determine link state */
 	i40e_aq_get_link_info(hw, TRUE, NULL, NULL);
-	pf->link_up = i40e_get_link_status(hw);
+	i40e_get_link_status(hw, &pf->link_up);
 
 	iflib_hwaddr_set(sctx, hw->mac.addr);
 
@@ -791,7 +806,6 @@ ixl_attach(device_t dev)
 #ifdef DEV_NETMAP
 	ixl_netmap_attach(vsi);
 #endif /* DEV_NETMAP */
-
 	INIT_DEBUGOUT("ixl_attach: end");
 	return (0);
 
@@ -1153,7 +1167,7 @@ ixl_if_media_status(if_shared_ctx_t sctx, struct ifmediareq * ifmr)
 	INIT_DEBUGOUT("ixl_media_status: begin");
 
 	hw->phy.get_link_info = TRUE;
-	pf->link_up = i40e_get_link_status(hw);
+	i40e_get_link_status(hw, &pf->link_up);
 	ixl_update_link_status(pf);
 
 	ifmr->ifm_status = IFM_AVALID;
@@ -1183,12 +1197,7 @@ ixl_if_media_status(if_shared_ctx_t sctx, struct ifmediareq * ifmr)
 			ifmr->ifm_active |= IFM_1000_LX;
 			break;
 		/* 10 G */
-		case I40E_PHY_TYPE_10GBASE_CR1:
-		case I40E_PHY_TYPE_10GBASE_CR1_CU:
 		case I40E_PHY_TYPE_10GBASE_SFPP_CU:
-		/* Using this until a real KR media type */
-		case I40E_PHY_TYPE_10GBASE_KR:
-		case I40E_PHY_TYPE_10GBASE_KX4:
 			ifmr->ifm_active |= IFM_10G_TWINAX;
 			break;
 		case I40E_PHY_TYPE_10GBASE_SR:
@@ -1211,16 +1220,49 @@ ixl_if_media_status(if_shared_ctx_t sctx, struct ifmediareq * ifmr)
 		case I40E_PHY_TYPE_40GBASE_LR4:
 			ifmr->ifm_active |= IFM_40G_LR4;
 			break;
-		/*
-		** Set these to CR4 because OS does not
-		** have types available yet.
-		*/
-		case I40E_PHY_TYPE_40GBASE_KR4:
-		case I40E_PHY_TYPE_XLAUI:
-		case I40E_PHY_TYPE_XLPPI:
-		case I40E_PHY_TYPE_40GBASE_AOC:
-			ifmr->ifm_active |= IFM_40G_CR4;
+#ifndef IFM_ETH_XTYPE
+		case I40E_PHY_TYPE_1000BASE_KX:
+			ifmr->ifm_active |= IFM_1000_CX;
 			break;
+		case I40E_PHY_TYPE_10GBASE_CR1_CU:
+		case I40E_PHY_TYPE_10GBASE_CR1:
+			ifmr->ifm_active |= IFM_10G_TWINAX;
+			break;
+		case I40E_PHY_TYPE_10GBASE_KX4:
+			ifmr->ifm_active |= IFM_10G_CX4;
+			break;
+		case I40E_PHY_TYPE_10GBASE_KR:
+			ifmr->ifm_active |= IFM_10G_SR;
+			break;
+		case I40E_PHY_TYPE_40GBASE_KR4:
+		case I40E_PHY_TYPE_XLPPI:
+			ifmr->ifm_active |= IFM_40G_SR4;
+			break;
+#else
+		case I40E_PHY_TYPE_1000BASE_KX:
+			ifmr->ifm_active |= IFM_1000_KX;
+			break;
+		/* ERJ: What's the difference between these? */
+		case I40E_PHY_TYPE_10GBASE_CR1_CU:
+		case I40E_PHY_TYPE_10GBASE_CR1:
+			ifmr->ifm_active |= IFM_10G_CR1;
+			break;
+		case I40E_PHY_TYPE_10GBASE_KX4:
+			ifmr->ifm_active |= IFM_10G_KX4;
+			break;
+		case I40E_PHY_TYPE_10GBASE_KR:
+			ifmr->ifm_active |= IFM_10G_KR;
+			break;
+		case I40E_PHY_TYPE_20GBASE_KR2:
+			ifmr->ifm_active |= IFM_20G_KR2;
+			break;
+		case I40E_PHY_TYPE_40GBASE_KR4:
+			ifmr->ifm_active |= IFM_40G_KR4;
+			break;
+		case I40E_PHY_TYPE_XLPPI:
+			ifmr->ifm_active |= IFM_40G_XLPPI;
+			break;
+#endif
 		default:
 			ifmr->ifm_active |= IFM_UNKNOWN;
 			break;
@@ -1851,13 +1893,8 @@ ixl_add_ifmedia(struct ixl_vsi *vsi, u32 phy_type)
 	if (phy_type & (1 << I40E_PHY_TYPE_1000BASE_LX))
 		ifmedia_add(&vsi->media, IFM_ETHER | IFM_1000_LX, 0, NULL);
 
-	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_CR1_CU) ||
-	    phy_type & (1 << I40E_PHY_TYPE_10GBASE_KX4) ||
-	    phy_type & (1 << I40E_PHY_TYPE_10GBASE_KR) ||
-	    phy_type & (1 << I40E_PHY_TYPE_10GBASE_AOC) ||
-	    phy_type & (1 << I40E_PHY_TYPE_XAUI) ||
+	if (phy_type & (1 << I40E_PHY_TYPE_XAUI) ||
 	    phy_type & (1 << I40E_PHY_TYPE_XFI) ||
-	    phy_type & (1 << I40E_PHY_TYPE_SFI) ||
 	    phy_type & (1 << I40E_PHY_TYPE_10GBASE_SFPP_CU))
 		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_TWINAX, 0, NULL);
 
@@ -1872,15 +1909,55 @@ ixl_add_ifmedia(struct ixl_vsi *vsi, u32 phy_type)
 	    phy_type & (1 << I40E_PHY_TYPE_40GBASE_CR4_CU) ||
 	    phy_type & (1 << I40E_PHY_TYPE_40GBASE_AOC) ||
 	    phy_type & (1 << I40E_PHY_TYPE_XLAUI) ||
-	    phy_type & (1 << I40E_PHY_TYPE_XLPPI) ||
-	    /* KR4 uses CR4 until the OS has the real media type */
 	    phy_type & (1 << I40E_PHY_TYPE_40GBASE_KR4))
 		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_CR4, 0, NULL);
-
 	if (phy_type & (1 << I40E_PHY_TYPE_40GBASE_SR4))
 		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_SR4, 0, NULL);
 	if (phy_type & (1 << I40E_PHY_TYPE_40GBASE_LR4))
 		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_LR4, 0, NULL);
+
+#ifndef IFM_ETH_XTYPE
+	if (phy_type & (1 << I40E_PHY_TYPE_1000BASE_KX))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_1000_CX, 0, NULL);
+
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_CR1_CU) ||
+	    phy_type & (1 << I40E_PHY_TYPE_10GBASE_CR1) ||
+	    phy_type & (1 << I40E_PHY_TYPE_10GBASE_AOC) ||
+	    phy_type & (1 << I40E_PHY_TYPE_SFI))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_TWINAX, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_KX4))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_CX4, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_KR))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_SR, 0, NULL);
+
+	if (phy_type & (1 << I40E_PHY_TYPE_40GBASE_KR4))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_SR4, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_XLPPI))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_CR4, 0, NULL);
+#else
+	if (phy_type & (1 << I40E_PHY_TYPE_1000BASE_KX))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_1000_KX, 0, NULL);
+
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_CR1_CU)
+	    || phy_type & (1 << I40E_PHY_TYPE_10GBASE_CR1))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_CR1, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_AOC))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_TWINAX_LONG, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_SFI))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_SFI, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_KX4))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_KX4, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_10GBASE_KR))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_10G_KR, 0, NULL);
+
+	if (phy_type & (1 << I40E_PHY_TYPE_20GBASE_KR2))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_20G_KR2, 0, NULL);
+
+	if (phy_type & (1 << I40E_PHY_TYPE_40GBASE_KR4))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_KR4, 0, NULL);
+	if (phy_type & (1 << I40E_PHY_TYPE_XLPPI))
+		ifmedia_add(&vsi->media, IFM_ETHER | IFM_40G_XLPPI, 0, NULL);
+#endif
 }
 
 /*********************************************************************
@@ -1898,7 +1975,6 @@ ixl_setup_interface(device_t dev, struct ixl_vsi *vsi)
 	struct i40e_aq_get_phy_abilities_resp abilities;
 	enum i40e_status_code aq_error = 0;
 	uint64_t cap;
-
 
 	INIT_DEBUGOUT("ixl_setup_interface: begin");
 	/* initialize fast path functions */
@@ -1963,7 +2039,7 @@ ixl_link_event(struct ixl_pf *pf, struct i40e_arq_event_info *e)
 	bool check;
 
 	hw->phy.get_link_info = TRUE;
-	check = i40e_get_link_status(hw);
+	i40e_get_link_status(hw, &check);
 	pf->link_up = check;
 #ifdef IXL_DEBUG
 	printf("Link is %s\n", check ? "up":"down");
@@ -2485,10 +2561,6 @@ ixl_add_hw_stats(struct ixl_pf *pf)
 			CTLFLAG_RD, &pf->admin_irq,
 			"Admin Queue IRQ Handled");
 
-	SYSCTL_ADD_INT(ctx, child, OID_AUTO, "vc_debug_level",
-	    CTLFLAG_RW, &pf->vc_debug_lvl, 0,
-	    "PF/VF Virtual Channel debug logging level");
-
 	ixl_add_vsi_sysctls(pf, &pf->vsi, ctx, "pf");
 	vsi_list = SYSCTL_CHILDREN(pf->vsi.vsi_node);
 
@@ -2631,6 +2703,7 @@ ixl_add_sysctls_mac_stats(struct sysctl_ctx_list *ctx,
 		entry++;
 	}
 }
+
 
 /*
 ** ixl_config_rss - setup RSS 
@@ -4255,8 +4328,8 @@ static int
 ixl_res_alloc_cmp(const void *a, const void *b)
 {
 	const struct i40e_aqc_switch_resource_alloc_element_resp *one, *two;
-	one = (struct i40e_aqc_switch_resource_alloc_element_resp *)a;
-	two = (struct i40e_aqc_switch_resource_alloc_element_resp *)b;
+	one = (const struct i40e_aqc_switch_resource_alloc_element_resp *)a;
+	two = (const struct i40e_aqc_switch_resource_alloc_element_resp *)b;
 
 	return ((int)one->resource_type - (int)two->resource_type);
 }
@@ -4273,7 +4346,7 @@ ixl_sysctl_hw_res_alloc(SYSCTL_HANDLER_ARGS)
 	u8 num_entries;
 	struct i40e_aqc_switch_resource_alloc_element_resp resp[IXL_SW_RES_SIZE];
 
-	buf = sbuf_new_for_sysctl(NULL, NULL, 128, req);
+	buf = sbuf_new_for_sysctl(NULL, NULL, 0, req);
 	if (!buf) {
 		device_printf(dev, "Could not allocate sbuf for output.\n");
 		return (ENOMEM);
@@ -4317,7 +4390,13 @@ ixl_sysctl_hw_res_alloc(SYSCTL_HANDLER_ARGS)
 	error = sbuf_finish(buf);
 	if (error) {
 		device_printf(dev, "Error finishing sbuf: %d\n", error);
+		sbuf_delete(buf);
+		return error;
 	}
+
+	error = sysctl_handle_string(oidp, sbuf_data(buf), sbuf_len(buf), req);
+	if (error)
+		device_printf(dev, "sysctl error: %d\n", error);
 	sbuf_delete(buf);
 	return error;
 }
@@ -4375,7 +4454,7 @@ ixl_sysctl_switch_config(SYSCTL_HANDLER_ARGS)
 	struct i40e_aqc_get_switch_config_resp *sw_config;
 	sw_config = (struct i40e_aqc_get_switch_config_resp *)aq_buf;
 
-	buf = sbuf_new_for_sysctl(NULL, NULL, 128, req);
+	buf = sbuf_new_for_sysctl(NULL, NULL, 0, req);
 	if (!buf) {
 		device_printf(dev, "Could not allocate sbuf for sysctl output.\n");
 		return (ENOMEM);
@@ -4394,7 +4473,6 @@ ixl_sysctl_switch_config(SYSCTL_HANDLER_ARGS)
 	nmbuf = sbuf_new_auto();
 	if (!nmbuf) {
 		device_printf(dev, "Could not allocate sbuf for name output.\n");
-		sbuf_delete(buf);
 		return (ENOMEM);
 	}
 
@@ -4429,7 +4507,13 @@ ixl_sysctl_switch_config(SYSCTL_HANDLER_ARGS)
 	error = sbuf_finish(buf);
 	if (error) {
 		device_printf(dev, "Error finishing sbuf: %d\n", error);
+		sbuf_delete(buf);
+		return error;
 	}
+
+	error = sysctl_handle_string(oidp, sbuf_data(buf), sbuf_len(buf), req);
+	if (error)
+		device_printf(dev, "sysctl error: %d\n", error);
 	sbuf_delete(buf);
 
 	return (error);
@@ -5735,7 +5819,7 @@ ixl_adminq_err_to_errno(enum i40e_admin_queue_err err)
 }
 
 static int
-ixl_init_iov(device_t dev, uint16_t num_vfs, const nvlist_t *params)
+ixl_iov_init(device_t dev, uint16_t num_vfs, const nvlist_t *params)
 {
 	struct ixl_pf *pf;
 	struct i40e_hw *hw;
@@ -5783,7 +5867,7 @@ fail:
 }
 
 static void
-ixl_uninit_iov(device_t dev)
+ixl_iov_uninit(device_t dev)
 {
 	struct ixl_pf *pf;
 	struct i40e_hw *hw;

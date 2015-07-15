@@ -33,7 +33,7 @@
 #define EFI_SUCCESS		0
 
 /*
- * EFI entry point. 
+ * EFI entry point.
  * _start(EFI_IMAGE image_handle, EFI_SYSTEM_TABLE *system_table);
  *
  * We calculate the base address along with _DYNAMIC, relocate us and finally
@@ -53,9 +53,7 @@ ENTRY(_start)
 	addl	$_DYNAMIC-0b, %ebx
 	pushl	%ebx		/* dynamic */
 	pushl	%eax		/* ImageBase */
-	call	_reloc
-	cmpl	$EFI_SUCCESS, %eax
-	jne	1f
+	call	self_reloc
 	popl	%ebx		/* remove ImageBase from the stack */
 	popl	%ebx		/* remove dynamic from the stack */
 	call	efi_main
