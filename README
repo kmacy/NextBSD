@@ -22,7 +22,8 @@ Note that launchctl uses JSON format.
 
 
 Immediate issues:
-make buildworld with NO_WERROR=
+migcom is building during bootstrap but includes target headers - it needs to be
+refactored to not include any special headers and only use self-contained defines
 
 
 Unsupported OSX / Mach functionality:
