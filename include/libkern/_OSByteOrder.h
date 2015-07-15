@@ -84,33 +84,6 @@
 #        define __DARWIN_OS_INLINE static __inline__
 # endif
 #endif
-
-__DARWIN_OS_INLINE
-uint16_t
-_OSSwapInt16(
-    uint16_t			data
-)
-{
-    return __DARWIN_OSSwapConstInt16(data);
-}
-
-__DARWIN_OS_INLINE
-uint32_t
-_OSSwapInt32(
-    uint32_t			data
-)
-{
-    return __DARWIN_OSSwapConstInt32(data);
-}
-
-__DARWIN_OS_INLINE
-uint64_t
-_OSSwapInt64(
-    uint64_t			data
-)
-{
-    return __DARWIN_OSSwapConstInt64(data);
-}
 #endif
 
 #define __DARWIN_OSSwapInt16(x) _OSSwapInt16(x)
@@ -120,5 +93,34 @@ _OSSwapInt64(
 #define __DARWIN_OSSwapInt64(x) _OSSwapInt64(x)
 
 #endif /* __GNUC__ */
+
+static inline
+uint16_t
+_OSSwapInt16(
+    uint16_t			data
+)
+{
+    return __DARWIN_OSSwapConstInt16(data);
+}
+
+static inline
+uint32_t
+_OSSwapInt32(
+    uint32_t			data
+)
+{
+    return __DARWIN_OSSwapConstInt32(data);
+}
+
+static inline
+uint64_t
+_OSSwapInt64(
+    uint64_t			data
+)
+{
+    return __DARWIN_OSSwapConstInt64(data);
+}
+
+
 
 #endif /* ! _OS__OSBYTEORDER_H */

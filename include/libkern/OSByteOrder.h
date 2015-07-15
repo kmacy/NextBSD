@@ -39,6 +39,9 @@
 
 
 #include <sys/endian.h>
+#ifndef OS_INLINE
+#define OS_INLINE static inline
+#endif
 
 OS_INLINE
 uint16_t
