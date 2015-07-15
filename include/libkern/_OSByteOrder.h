@@ -62,12 +62,6 @@
 
 #if defined(__GNUC__)
 
-#if defined(__i386__) || defined(__x86_64__)
-#include <libkern/i386/_OSByteOrder.h>
-#endif
-
-
-
 #define __DARWIN_OSSwapInt16(x) \
     ((__uint16_t)(__builtin_constant_p(x) ? __DARWIN_OSSwapConstInt16(x) : _OSSwapInt16(x)))
 
