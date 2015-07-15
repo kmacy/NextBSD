@@ -6,5 +6,4 @@ MAN=	rip6query.8
 
 CFLAGS+= -I${.CURDIR}/../route6d
 
-NO_WCAST_ALIGN=
 .include <bsd.prog.mk>

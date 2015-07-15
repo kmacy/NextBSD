@@ -5,8 +5,6 @@ MAN=	moused.8
 
 LIBADD=	m util
 
-NO_WCAST_ALIGN=
-
 #BINMODE=4555
 #PRECIOUSPROG=
 

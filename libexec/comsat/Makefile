@@ -2,9 +2,6 @@
 # $FreeBSD$
 
 PROG=	comsat
-
 MAN=	comsat.8
-
-NO_WCAST_ALIGN=yes
 
 .include <bsd.prog.mk>

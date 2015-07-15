@@ -24,7 +24,6 @@ LIBADD=	rpcsvc crypt util
 
 CLEANFILES= ${GENSRCS}
 
-NO_WCAST_ALIGN=
 RPCGEN=	RPCGEN_CPP=${CPP:Q} rpcgen -I -C
 
 # We need to remove the 'static' keyword from _rpcsvcstate so that

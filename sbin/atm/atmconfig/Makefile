@@ -25,8 +25,6 @@ LIBADD+=	crypto
 
 CLEANFILES+= oid.h
 
-NO_WCAST_ALIGN=
-
 # XXX - this is verboten
 .if ${MACHINE_CPUARCH} == "arm"
 WARNS?= 3

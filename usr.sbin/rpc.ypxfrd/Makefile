@@ -18,8 +18,6 @@ CLEANFILES= ypxfrd_svc.c ypxfrd.h
 RPCDIR=	${.CURDIR}/../../include/rpcsvc
 RPCGEN= RPCGEN_CPP=${CPP:Q} rpcgen -I -C
 
-NO_WCAST_ALIGN=yes
-
 # We need to remove the 'static' keyword from _rpcsvcstate so that
 # ypxfrd_main.c can see it.
 ypxfrd_svc.c: ${RPCDIR}/ypxfrd.x
