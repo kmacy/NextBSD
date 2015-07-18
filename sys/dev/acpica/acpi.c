@@ -1078,9 +1078,8 @@ acpi_get_cpus(device_t dev, device_t child, enum cpu_sets op, cpuset_t *cpuset)
 {
 	int rc, d, error;
 
-	rc = acpi_parse_pxm(child, &d);
-	if (rc != 0)
-		return (bus_generic_get_cpus(dev, child, op, cpuset));
+	if ((rc = acpi_get_domain(dev, child, &d)) != 0)
+		return (rc);
 
 	switch (op) {
 	case LOCAL_CPUS:
@@ -1112,9 +1111,10 @@ acpi_parse_pxm(device_t dev, int *domain)
 	ACPI_HANDLE h;
 	int d, pxm;
 
-	h = acpi_get_handle(dev);
-	if ((h != NULL) &&
-	    ACPI_SUCCESS(acpi_GetInteger(h, "_PXM", &pxm))) {
+	if ((h = acpi_get_handle(dev)) == NULL)
+		return (ENOENT);
+
+	if (ACPI_SUCCESS(acpi_GetInteger(h, "_PXM", &pxm))) {
 		d = acpi_map_pxm_to_vm_domainid(pxm);
 		if (d < 0)
 			return (-1);
