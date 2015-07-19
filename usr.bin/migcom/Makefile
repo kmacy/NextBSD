@@ -29,10 +29,9 @@ SRCS= ident.c error.c global.c header.c \
 	statement.c string.c type.c user.c utils.c
 
 
-CFLAGS+= -nostdinc -I./include -I${.CURDIR} -I${.CURDIR}/shims -I./include
-CFLAGS+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${MACHINE_INCLUDES}
-CFLAGS+= -I${.CURDIR} -DYY_NO_UNPUT -DYY_NO_INPUT -I${.CURDIR}/../../apsl/include
-
+CFLAGS+= -I${.CURDIR} -I${.CURDIR}/shims -I${.CURDIR}/../../include
+CFLAGS+= -I${.CURDIR}/../../sys 
+CFLAGS+= -DYY_NO_UNPUT
 
 .if ${TARGET} == "amd64" || ${TARGET} == "i386"
 include/x86: ${.CURDIR}/Makefile
