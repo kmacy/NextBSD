@@ -500,6 +500,22 @@ buf_ring_sc_drain(struct buf_ring_sc *br, int budget)
  *      -  abdicating + owned -> abdicating + unowned + enqueue tx task
  *      How do we handle abdication when the ring is full
  */
+
+static inline int
+get_avail(struct buf_ring_sc *br, int cidx, int pidx)
+{
+	int used;
+
+	if (pidx == cidx)
+		used = 0;
+	else if (pidx > cidx)
+		used = pidx - cidx;
+	else
+		used = br->br_size - cidx + pidx;
+
+	return (br->br_size - used);
+}
+
 int
 buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 {
@@ -537,8 +553,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		pidx = BR_INDEX(prod_head);
 		cons = br->br_cons;
 		cidx = BR_INDEX(cons);
-		if ((avail = pidx - cidx) < 0)
-			avail += br->br_size;
+		avail = get_avail(br, cidx, pidx);
 
 		if (count > avail) {
 			if (pidx != BR_INDEX(atomic_load_acq_32(&br->br_prod_value)) ||
@@ -566,8 +581,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		pidx = BR_INDEX(prod_head);
 		cons = br->br_cons;
 		cidx = BR_INDEX(cons);
-		if ((avail = pidx - cidx) < 0)
-			avail += br->br_size;
+		avail = get_avail(br, cidx, pidx);
 
 		if (count > avail) {
 			/* ensure that we only return ENOBUFS
