@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/sched.h>
+#include <sys/sysctl.h>
 
 #include <sys/buf_ring.h>
 #include <sys/buf_ring_sc.h>
@@ -99,6 +100,41 @@ buf_ring_free(struct buf_ring *br, struct malloc_type *type)
 #ifndef BR_ALIGN_ENTRIES
 #define BR_ALIGN_ENTRIES 0
 #endif
+
+static SYSCTL_NODE(_net, OID_AUTO, brsc, CTLFLAG_RD, 0,
+                   "buf_ring_stats");
+
+static int brsc_drains;
+static int brsc_drain_handled;
+static int brsc_nqs;
+static int brsc_nq_pendings;
+static int brsc_nq_entry_sets;
+static int brsc_nq_enobufs;
+static int brsc_nq_eowned;
+static int brsc_nq_domain_eq;
+static int brsc_deferred;
+
+
+SYSCTL_INT(_net_brsc, OID_AUTO, drain, CTLFLAG_RD,
+		   &brsc_drains, 0, "# times drain was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, drain_handled, CTLFLAG_RD,
+		   &brsc_drain_handled, 0, "# times drain handler was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, nqs, CTLFLAG_RD,
+		   &brsc_nqs, 0, "# times enqueue was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_pendings, CTLFLAG_RD,
+		   &brsc_nq_pendings, 0, "# times pending was set in nq");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_sets, CTLFLAG_RD,
+		   &brsc_nq_entry_sets, 0, "# times entry_set was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, enobufs, CTLFLAG_RD,
+		   &brsc_nq_enobufs, 0, "# times ENOBUFS was returned from nq");
+SYSCTL_INT(_net_brsc, OID_AUTO, eowned, CTLFLAG_RD,
+		   &brsc_nq_eowned, 0, "# times lock was acquired in enqueue");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_domain_eq, CTLFLAG_RD,
+		   &brsc_nq_domain_eq, 0, "# times domain was set and matched");
+SYSCTL_INT(_net_brsc, OID_AUTO, deferred, CTLFLAG_RD,
+		   &brsc_deferred, 0, "# times deferred");
+
+
 
 struct br_sc_entry_ {
 	volatile void *bre_ptr;
@@ -215,6 +251,8 @@ static __inline void
 brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 {
 
+	atomic_add_int(&brsc_nq_entry_sets, 1);
+
 	if (br->br_flags & BR_FLAGS_ALIGNED)
 		br->br_ring[i*ALIGN_SCALE].bre_ptr = buf;
 	else
@@ -305,6 +343,8 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	int avail;
 	br_state state;
 
+	atomic_add_int(&brsc_drains, 1);
+
 	KASSERT(budget > 0, ("calling drain with invalid budget"));
 	MPASS(br->br_prod_value & BR_RING_OWNED);
 	state = BR_IDLE;
@@ -313,6 +353,7 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 			avail += br->br_size;
 		if (avail > budget)
 			avail = budget;
+		atomic_add_int(&brsc_drain_handled, 1);
 		n = br->br_drain(br, avail, br->br_sc);
 		KASSERT(n <= avail, ("drain handler return invalid count"));
 		if (n == 0) {
@@ -472,6 +513,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				panic("buf=%p already enqueue at %d prod=%d cons=%d",
 					  ents[j], i, br->br_prod_tail, BR_CONS_IDX(br));
 #endif
+	atomic_add_int(&brsc_nqs, 1);
 	critical_enter();
 
 	if (br->br_domain == BR_NODOMAIN || br->br_domain == PCPU_GET(domain))
@@ -500,6 +542,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
+			atomic_add_int(&brsc_nq_enobufs, 1);
 			return (ENOBUFS);
 		}
 		value = state.ps_value;
@@ -508,6 +551,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		state.ps_head = pidx;
 		if (atomic_cmpset_acq_32(&br->br_prod_value, value, state.ps_value)) {
 			pending = true;
+			atomic_add_int(&brsc_nq_pendings, 1);
 			goto done;
 		}
 		state = br->br_prod_state;
@@ -530,6 +574,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
+			atomic_add_int(&brsc_nq_enobufs, 1);
 			return (ENOBUFS);
 		}
 		prod_next = (pidx + count) & br->br_mask;
@@ -537,6 +582,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 
 		if (state.ps_flags == 0 && budget > 0 && domainvalid) {
 			prod_next |= BR_RING_OWNED;
+			atomic_add_int(&brsc_nq_eowned, 1);
 			rc = EOWNED;
 		} else
 			prod_next |= (state.ps_value & BR_RING_FLAGS_MASK);
@@ -566,6 +612,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		while ((br->br_prod_value & BR_RING_OWNED) == BR_RING_OWNED)
 			cpu_spinwait();
 		atomic_set_acq_32(&br->br_prod_value, BR_RING_OWNED);
+		atomic_add_int(&brsc_nq_eowned, 1);
 		rc = EOWNED;
 	}
 	if (rc == EOWNED) {
@@ -587,8 +634,10 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		br_state state = buf_ring_sc_drain_locked(br, budget);
 		if (br->br_domain == PCPU_GET(domain))
 			sched_unpin();
-		if (buf_ring_sc_unlock(br, state) == 0 && state == BR_ABDICATED)
+		if (buf_ring_sc_unlock(br, state) == 0 && state == BR_ABDICATED) {
+			atomic_add_int(&brsc_deferred, 1);
 			br->br_deferred(br, br->br_sc); /* consumer's re-drive mechanism */
+		}
 	}
 #if 0
 	else if (BR_STALLED(br)) {
