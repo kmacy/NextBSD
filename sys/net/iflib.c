@@ -306,7 +306,6 @@ static SYSCTL_NODE(_net, OID_AUTO, iflib, CTLFLAG_RD, 0,
 static int iflib_tx_frees;
 static int iflib_tx_seen;
 static int iflib_rx_allocs;
-static int iflib_rx_allocs;
 static int iflib_fl_refills;
 static int iflib_fl_refills_large;
 
