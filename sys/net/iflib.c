@@ -235,8 +235,26 @@ struct iflib_fl {
 	caddr_t		ifl_vm_addrs[256];
 };
 
+static inline int
+iflib_txq_avail(iflib_txq_t txq)
+{
+	int avail, used;
+
+	if (txq->ift_pidx == txq->ift_cidx)
+		used = 0;
+	else if (txq->ift_pidx > txq->ift_cidx)
+		used = txq->ift_pidx - txq->ift_cidx;
+	else
+		used = txq->ift_size  - txq->ift_cidx + txq->ift_pidx;
+
+	avail = txq->ift_size - used;
+
+	return (avail);
+}
+
 /* XXX check this */
-#define TXQ_AVAIL(txq) (txq)->ift_pidx > (txq)->ift_cidx ? ((txq)->ift_size - ((txq)->ift_pidx - (txq)->ift_cidx)) : ((txq)->ift_cidx - (txq)->ift_pidx)
+#define TXQ_AVAIL(txq) iflib_txq_avail(txq)
+
 typedef struct iflib_global_context {
 	struct taskqgroup	*igc_io_tqg;		/* per-cpu taskqueues for io */
 	struct taskqgroup	*igc_config_tqg;	/* taskqueue for config operations */
