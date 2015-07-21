@@ -667,6 +667,7 @@ iflib_txq_setup(iflib_txq_t txq)
 
 	/* Reset indices */
 	txq->ift_pidx = txq->ift_cidx = txq->ift_npending = 0;
+	txq->ift_size = sctx->isc_ntxd;
 
 	/* Free any existing tx buffers. */
 	txsd = txq->ift_sds;
