@@ -244,7 +244,6 @@ brsc_entry_get(struct buf_ring_sc *br, int i)
 {
 	volatile void *ent;
 
-	atomic_add_int(&brsc_nq_entry_gets, 1);
 	if (br->br_flags & BR_FLAGS_ALIGNED)
 		ent = br->br_ring[i*ALIGN_SCALE].bre_ptr;
 	else
@@ -706,9 +705,10 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 		return (0);
 
 	prod_avail = min(inuse, count);
-	for (i = 0; i < prod_avail; i++)
+	for (i = 0; i < prod_avail; i++) {
+		atomic_add_int(&brsc_nq_entry_gets, 1);
 		ents[i] = brsc_entry_get(br, (cons + i) & br->br_mask);
-
+	}
 	return (prod_avail);
 }
 
