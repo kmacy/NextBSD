@@ -235,6 +235,36 @@ static void buf_ring_sc_advance(struct buf_ring_sc *br, int count);
 #endif
 
 
+static inline int
+brsc_get_avail(struct buf_ring_sc *br, int cidx, int pidx)
+{
+	int used;
+
+	if (pidx == cidx)
+		used = 0;
+	else if (pidx > cidx)
+		used = pidx - cidx;
+	else
+		used = br->br_size - cidx + pidx;
+
+	return (br->br_size - used);
+}
+
+static inline int
+brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
+{
+	int used;
+
+	if (pidx == cidx)
+		used = 0;
+	else if (pidx > cidx)
+		used = pidx - cidx;
+	else
+		used = br->br_size - cidx + pidx;
+
+	return (used);
+}
+
 /*
  * ring entry accessors to allow us to make ring entry
  * alignment determined at runtime
@@ -347,7 +377,7 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	uint32_t cidx = BR_CONS_IDX(br);
 	uint32_t pidx = br->br_prod_tail;
 	uint32_t n;
-	int avail;
+	int inuse, prod_avail;
 	br_state state;
 
 	atomic_add_int(&brsc_drains, 1);
@@ -357,13 +387,11 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	MPASS(br->br_owner == curthread);
 	state = BR_IDLE;
 	while (cidx != pidx) {
-		if ((avail = pidx - cidx) < 0)
-			avail += br->br_size;
-		if (avail > budget)
-			avail = budget;
+		inuse = brsc_get_inuse(br, cidx, pidx);
+		prod_avail = min(inuse, budget);
 		atomic_add_int(&brsc_drain_handled, 1);
-		n = br->br_drain(br, avail, br->br_sc);
-		KASSERT(n <= avail, ("drain handler return invalid count"));
+		n = br->br_drain(br, prod_avail, br->br_sc);
+		KASSERT(n <= prod_avail, ("drain handler return invalid count"));
 		if (n == 0) {
 			state = BR_STALLED;
 			break;
@@ -374,6 +402,8 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 		if (budget == 0) {
 			if (BR_CONS_IDX(br) != br->br_prod_tail)
 				state = BR_ABDICATED;
+			else
+				state = BR_IDLE;
 			break;
 		}
 		pidx = br->br_prod_tail;
@@ -506,36 +536,6 @@ buf_ring_sc_drain(struct buf_ring_sc *br, int budget)
  *      How do we handle abdication when the ring is full
  */
 
-static inline int
-get_avail(struct buf_ring_sc *br, int cidx, int pidx)
-{
-	int used;
-
-	if (pidx == cidx)
-		used = 0;
-	else if (pidx > cidx)
-		used = pidx - cidx;
-	else
-		used = br->br_size - cidx + pidx;
-
-	return (br->br_size - used);
-}
-
-static inline int
-get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
-{
-	int used;
-
-	if (pidx == cidx)
-		used = 0;
-	else if (pidx > cidx)
-		used = pidx - cidx;
-	else
-		used = br->br_size - cidx + pidx;
-
-	return (used);
-}
-
 int
 buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 {
@@ -572,7 +572,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		pidx = BR_INDEX(prod_head);
 		cons = br->br_cons;
 		cidx = BR_INDEX(cons);
-		avail = get_avail(br, cidx, pidx);
+		avail = brsc_get_avail(br, cidx, pidx);
 
 		if (count > avail) {
 			if (pidx != BR_INDEX(atomic_load_acq_32(&br->br_prod_head)) ||
@@ -598,7 +598,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		pidx = BR_INDEX(prod_head);
 		cons = br->br_cons;
 		cidx = BR_INDEX(cons);
-		avail = get_avail(br, cidx, pidx);
+		avail = brsc_get_avail(br, cidx, pidx);
 
 		if (count > avail) {
 			/* ensure that we only return ENOBUFS
@@ -701,7 +701,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 	 */
 	cons = BR_CONS_IDX(br);
 	prod_tail = ORDERED_LOAD_32(&br->br_prod_tail);
-	if ((inuse = get_inuse(br, cons, prod_tail)) == 0)
+	if ((inuse = brsc_get_inuse(br, cons, prod_tail)) == 0)
 		return (0);
 
 	prod_avail = min(inuse, count);
