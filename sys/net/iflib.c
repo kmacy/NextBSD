@@ -309,11 +309,6 @@ static int iflib_rx_allocs;
 static int iflib_fl_refills;
 static int iflib_fl_refills_large;
 
-static int iflib_txq_drain_flushing;
-static int iflib_txq_drain_oactive;
-static int iflib_txq_drain_notready;
-static int iflib_txq_drain_encapfail;
-
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
@@ -326,6 +321,11 @@ SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills_large, CTLFLAG_RD,
 		   &iflib_fl_refills_large, 0, "# large refills");
 
 
+static int iflib_txq_drain_flushing;
+static int iflib_txq_drain_oactive;
+static int iflib_txq_drain_notready;
+static int iflib_txq_drain_encapfail;
+
 SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_flushing, CTLFLAG_RD,
 		   &iflib_txq_drain_flushing, 0, "# drain flushes");
 SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_oactive, CTLFLAG_RD,
@@ -334,6 +334,22 @@ SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_notready, CTLFLAG_RD,
 		   &iflib_txq_drain_notready, 0, "# drain notready");
 SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_encapfail, CTLFLAG_RD,
 		   &iflib_txq_drain_encapfail, 0, "# drain encap fails");
+
+
+static int iflib_encap_load_mbuf_fail;
+static int iflib_encap_txq_avail_fail;
+static int iflib_encap_txd_encap_fail;
+
+SYSCTL_INT(_net_iflib, OID_AUTO, encap_load_mbuf_fail, CTLFLAG_RD,
+		   &iflib_encap_load_mbuf_fail, 0, "# busdma load failures");
+SYSCTL_INT(_net_iflib, OID_AUTO, encap_txq_avail_fail, CTLFLAG_RD,
+		   &iflib_encap_txq_avail_fail, 0, "# txq avail failures");
+SYSCTL_INT(_net_iflib, OID_AUTO, encap_txd_encap_fail, CTLFLAG_RD,
+		   &iflib_encap_txd_encap_fail, 0, "# driver encap failures");
+
+
+
+
 
 
 
@@ -1427,6 +1443,7 @@ retry:
 			*m_headp = NULL;
 			break;
 		}
+		atomic_add_int(&iflib_encap_load_mbuf_fail, 1);
 		return (err);
 	}
 
@@ -1438,6 +1455,7 @@ retry:
 	if (nsegs > TXQ_AVAIL(txq)) {
 		txq->ift_no_desc_avail++;
 		bus_dmamap_unload(txq->ift_desc_tag, map);
+		atomic_add_int(&iflib_encap_txq_avail_fail, 1);
 		return (ENOBUFS);
 	}
 	m_head = *m_headp;
@@ -1467,6 +1485,8 @@ retry:
 		txq->ift_pidx = pi.ipi_new_pidx;
 		txq->ift_npending += pi.ipi_ndescs;
 		iflib_txd_db_check(ctx, txq, 0);
+	} else {
+		atomic_add_int(&iflib_encap_txd_encap_fail, 1);
 	}
 	return (err);
 }
