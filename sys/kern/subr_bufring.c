@@ -32,6 +32,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/counter.h>
 #include <sys/kernel.h>
+#include <sys/libkern.h>
 #include <sys/malloc.h>
 #include <sys/ktr.h>
 #include <sys/pcpu.h>
@@ -521,6 +522,21 @@ get_avail(struct buf_ring_sc *br, int cidx, int pidx)
 	return (br->br_size - used);
 }
 
+static inline int
+get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
+{
+	int used;
+
+	if (pidx == cidx)
+		used = 0;
+	else if (pidx > cidx)
+		used = pidx - cidx;
+	else
+		used = br->br_size - cidx + pidx;
+
+	return (used);
+}
+
 int
 buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 {
@@ -677,7 +693,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 {
 	uint32_t cons;
 	uint32_t prod_tail;
-	int i, avail;
+	int i, inuse, prod_avail;
 
 	KASSERT(count > 0, ("peeking for zero entries"));
 	KASSERT((br->br_prod_head & BR_RING_OWNED) == BR_RING_OWNED, ("peeking without lock being held"));
@@ -686,18 +702,14 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 	 */
 	cons = BR_CONS_IDX(br);
 	prod_tail = ORDERED_LOAD_32(&br->br_prod_tail);
-	avail = prod_tail - cons;
-
-	if (avail == 0)
+	if ((inuse = get_inuse(br, cons, prod_tail)) == 0)
 		return (0);
-	if (avail < 0)
-		avail += br->br_size;
-	if (avail > count)
-		avail = count;
-	for (i = 0; i < avail; i++)
+
+	prod_avail = min(inuse, count);
+	for (i = 0; i < prod_avail; i++)
 		ents[i] = brsc_entry_get(br, (cons + i) & br->br_mask);
 
-	return (avail);
+	return (prod_avail);
 }
 
 /*
