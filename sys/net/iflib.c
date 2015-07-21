@@ -326,6 +326,16 @@ SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills_large, CTLFLAG_RD,
 		   &iflib_fl_refills_large, 0, "# large refills");
 
 
+SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_flushing, CTLFLAG_RD,
+		   &iflib_txq_drain_flushing, 0, "# drain flushes");
+SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_oactive, CTLFLAG_RD,
+		   &iflib_txq_drain_oactive, 0, "# drain oactives");
+SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_notready, CTLFLAG_RD,
+		   &iflib_txq_drain_notready, 0, "# drain notready");
+SYSCTL_INT(_net_iflib, OID_AUTO, txq_drain_encapfail, CTLFLAG_RD,
+		   &iflib_txq_drain_encapfail, 0, "# drain encap fails");
+
+
 
 static void iflib_tx_structures_free(if_shared_ctx_t sctx);
 static void iflib_rx_structures_free(if_shared_ctx_t sctx);
