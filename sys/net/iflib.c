@@ -1747,7 +1747,7 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	do {
 		count++;
 		next = next->m_nextpkt;
-	} while (next->m_nextpkt != NULL);
+	} while (next != NULL);
 
 	if (count > 16)
 		if ((mp = malloc(count*sizeof(struct mbuf *), M_IFLIB, M_NOWAIT)) == NULL) {
