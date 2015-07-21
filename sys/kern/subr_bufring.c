@@ -801,6 +801,7 @@ buf_ring_sc_lock(struct buf_ring_sc *br)
 		while ((value = br->br_prod_head) & BR_RING_OWNED)
 			cpu_spinwait();
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, value, value | BR_RING_OWNED));
+	br->br_owner = curthread;
 	if (br->br_cons & BR_RING_IDLE)
 		counter_u64_add(br->br_starts, 1);
 	else if (br->br_cons & BR_RING_STALLED)
@@ -820,6 +821,7 @@ buf_ring_sc_trylock(struct buf_ring_sc *br)
 			return (0);
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, value, value | BR_RING_OWNED));
 
+	br->br_owner = curthread;
 	if (br->br_cons & BR_RING_IDLE)
 		counter_u64_add(br->br_starts, 1);
 	else if (br->br_cons & BR_RING_STALLED)
