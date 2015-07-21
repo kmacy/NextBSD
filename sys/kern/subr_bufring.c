@@ -109,7 +109,8 @@ static int brsc_drain_handled;
 static int brsc_nqs;
 static int brsc_nq_pendings;
 static int brsc_nq_entry_sets;
-static int brsc_nq_enobufs;
+static int brsc_nq_enobufs1;
+static int brsc_nq_enobufs2;
 static int brsc_nq_eowned;
 static int brsc_nq_domain_eq;
 static int brsc_deferred;
@@ -125,8 +126,10 @@ SYSCTL_INT(_net_brsc, OID_AUTO, nq_pendings, CTLFLAG_RD,
 		   &brsc_nq_pendings, 0, "# times pending was set in nq");
 SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_sets, CTLFLAG_RD,
 		   &brsc_nq_entry_sets, 0, "# times entry_set was called");
-SYSCTL_INT(_net_brsc, OID_AUTO, enobufs, CTLFLAG_RD,
-		   &brsc_nq_enobufs, 0, "# times ENOBUFS was returned from nq");
+SYSCTL_INT(_net_brsc, OID_AUTO, enobufs1, CTLFLAG_RD,
+		   &brsc_nq_enobufs1, 0, "# times ENOBUFS1 was returned from nq");
+SYSCTL_INT(_net_brsc, OID_AUTO, enobufs2, CTLFLAG_RD,
+		   &brsc_nq_enobufs1, 0, "# times ENOBUFS2 was returned from nq");
 SYSCTL_INT(_net_brsc, OID_AUTO, eowned, CTLFLAG_RD,
 		   &brsc_nq_eowned, 0, "# times lock was acquired in enqueue");
 SYSCTL_INT(_net_brsc, OID_AUTO, nq_domain_eq, CTLFLAG_RD,
@@ -513,6 +516,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				panic("buf=%p already enqueue at %d prod=%d cons=%d",
 					  ents[j], i, br->br_prod_tail, BR_CONS_IDX(br));
 #endif
+	MPASS(count > 0);
 	atomic_add_int(&brsc_nqs, 1);
 	critical_enter();
 
@@ -542,7 +546,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
-			atomic_add_int(&brsc_nq_enobufs, 1);
+			atomic_add_int(&brsc_nq_enobufs1, 1);
 			return (ENOBUFS);
 		}
 		value = state.ps_value;
@@ -574,7 +578,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
-			atomic_add_int(&brsc_nq_enobufs, 1);
+			atomic_add_int(&brsc_nq_enobufs2, 1);
 			return (ENOBUFS);
 		}
 		prod_next = (pidx + count) & br->br_mask;
