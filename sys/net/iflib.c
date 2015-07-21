@@ -1743,8 +1743,12 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	}
 	qidx = count = 0;
 	mp = marr;
-	for (next = m; next->m_nextpkt != NULL; next = next->m_nextpkt)
+	next = m;
+	do {
 		count++;
+		next = next->m_nextpkt;
+	} while (next->m_nextpkt != NULL);
+
 	if (count > 16)
 		if ((mp = malloc(count*sizeof(struct mbuf *), M_IFLIB, M_NOWAIT)) == NULL) {
 			m_freem(m);
