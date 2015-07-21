@@ -109,6 +109,11 @@ static int brsc_drain_handled;
 static int brsc_nqs;
 static int brsc_nq_pendings;
 static int brsc_nq_entry_sets;
+static int brsc_nq_entry_putbacks;
+static int brsc_nq_entry_set_nulls;
+static int brsc_nq_entry_gets;
+static int brsc_nq_entry_advances;
+
 static int brsc_nq_enobufs1;
 static int brsc_nq_enobufs2;
 static int brsc_nq_eowned;
@@ -126,6 +131,14 @@ SYSCTL_INT(_net_brsc, OID_AUTO, nq_pendings, CTLFLAG_RD,
 		   &brsc_nq_pendings, 0, "# times pending was set in nq");
 SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_sets, CTLFLAG_RD,
 		   &brsc_nq_entry_sets, 0, "# times entry_set was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_gets, CTLFLAG_RD,
+		   &brsc_nq_entry_gets, 0, "# times entry_get was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_putbacks, CTLFLAG_RD,
+		   &brsc_nq_entry_putbacks, 0, "# times entry_putback was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_advances, CTLFLAG_RD,
+		   &brsc_nq_entry_advances, 0, "# times entry_advance was called");
+SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_set_nulls, CTLFLAG_RD,
+		   &brsc_nq_entry_set_nulls, 0, "# times entry_set was called with null");
 SYSCTL_INT(_net_brsc, OID_AUTO, enobufs1, CTLFLAG_RD,
 		   &brsc_nq_enobufs1, 0, "# times ENOBUFS1 was returned from nq");
 SYSCTL_INT(_net_brsc, OID_AUTO, enobufs2, CTLFLAG_RD,
@@ -230,6 +243,7 @@ brsc_entry_get(struct buf_ring_sc *br, int i)
 {
 	volatile void *ent;
 
+	atomic_add_int(&brsc_nq_entry_gets, 1);
 	if (br->br_flags & BR_FLAGS_ALIGNED)
 		ent = br->br_ring[i*ALIGN_SCALE].bre_ptr;
 	else
@@ -242,6 +256,9 @@ brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 {
 
 	atomic_add_int(&brsc_nq_entry_sets, 1);
+
+	if (buf == NULL)
+		atomic_add_int(&brsc_nq_entry_set_nulls, 1);
 
 	if (br->br_flags & BR_FLAGS_ALIGNED)
 		br->br_ring[i*ALIGN_SCALE].bre_ptr = buf;
@@ -721,6 +738,8 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 
 	advance_count = count;
 	KASSERT(count > 0, ("invalid advance count"));
+
+	atomic_add_int(&brsc_nq_entry_advances, 1);
 
 	cons = BR_CONS_IDX(br);
 	prod_tail = br->br_prod_tail;

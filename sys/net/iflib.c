@@ -309,6 +309,10 @@ static int iflib_rx_allocs;
 static int iflib_fl_refills;
 static int iflib_fl_refills_large;
 
+static int iflib_txq_drain_flushing;
+static int iflib_txq_drain_oactive;
+static int iflib_txq_drain_notready;
+static int iflib_txq_drain_encapfail;
 
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
@@ -1564,6 +1568,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		while ((count = buf_ring_sc_peek(br, (void **)mp, 16)) > 0)
 			for (i = 0; i < count; i++)
 				m_freem(mp[i]);
+		atomic_add_int(&iflib_txq_drain_flushing, 1);
 		return (0);
 	}
 	if (if_getdrvflags(ctx->ifc_sctx->isc_ifp) & IFF_DRV_OACTIVE) {
@@ -1571,6 +1576,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		mtx_lock(&txq->ift_mtx);
 		callout_stop(&txq->ift_timer);
 		mtx_unlock(&txq->ift_mtx);
+		atomic_add_int(&iflib_txq_drain_oactive, 1);
 		return (0);
 	}
 	sent = 0;
@@ -1580,11 +1586,13 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		for (i = 0; i < count; i++) {
 			iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 			if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
-				!LINK_ACTIVE(ctx))
+				!LINK_ACTIVE(ctx)) {
+				atomic_add_int(&iflib_txq_drain_notready, 1);
 				goto done;
-
+			}
 			if(iflib_encap(sc, &mp[i])) {
 				buf_ring_sc_putback(br, mp[i], i);
+				atomic_add_int(&iflib_txq_drain_encapfail, 1);
 				goto done;
 			}
 			sent++;
