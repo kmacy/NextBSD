@@ -266,6 +266,8 @@ brsc_entry_get(struct buf_ring_sc *br, int i)
 {
 	volatile void *ent;
 
+	MPASS(i >= 0 && i < br->br_size);
+
 	if (br->br_flags & BR_FLAGS_ALIGNED)
 		ent = br->br_ring[i*ALIGN_SCALE].bre_ptr;
 	else
@@ -277,6 +279,8 @@ static __inline void
 brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 {
 	volatile void *bufp;
+
+	MPASS(i >= 0 && i < br->br_size);
 
 	atomic_add_int(&brsc_nq_entry_sets, 1);
 
@@ -621,7 +625,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	done:
 	for (i = 0; i < count; i++) {
 		MPASS(ents[i] != NULL);
-		brsc_entry_set(br, (prod_head-(count-1))+i, ents[i]);
+		brsc_entry_set(br, (BR_INDEX(prod_head)-(count-1))+i, ents[i]);
 	}
 	/*
 	 * If there are other enqueues in progress
