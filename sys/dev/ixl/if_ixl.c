@@ -378,6 +378,7 @@ ixl_if_queues_alloc(if_shared_ctx_t sctx)
 	struct ixl_tx_buf *bufs;
 	int i, err;
 
+	MPASS(vsi->num_queues > 0);
 	/* Allocate queue structure memory */
 	if (!(vsi->queues =
 	    (struct ixl_queue *) malloc(sizeof(struct ixl_queue) *
@@ -675,7 +676,7 @@ ixl_attach(device_t dev)
 	}
 	device_printf(dev, "%s\n", ixl_fw_version_str(hw));
 
-        if (hw->aq.api_maj_ver == I40E_FW_API_VERSION_MAJOR &&
+	if (hw->aq.api_maj_ver == I40E_FW_API_VERSION_MAJOR &&
 	    hw->aq.api_min_ver > I40E_FW_API_VERSION_MINOR)
 		device_printf(dev, "The driver for the device detected "
 		    "a newer version of the NVM image than expected.\n"
