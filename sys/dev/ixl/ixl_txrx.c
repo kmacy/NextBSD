@@ -820,6 +820,7 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 	if (!eop) {
 		ri->iri_next_offset = 1;
 	} else {
+		rxr->rx_packets++;
 		/* capture data for dynamic ITR adjustment */
 		rxr->packets++;
 		if ((sctx->isc_ifp->if_capenable & IFCAP_RXCSUM) != 0)
