@@ -368,6 +368,17 @@ SYSCTL_INT(_net_iflib, OID_AUTO, encap_txd_encap_fail, CTLFLAG_RD,
 
 
 
+static int iflib_task_fn_rxs;
+static int iflib_rx_intr_enables;
+static int iflib_fast_intrs;
+
+SYSCTL_INT(_net_iflib, OID_AUTO, task_fn_rx, CTLFLAG_RD,
+		   &iflib_task_fn_rxs, 0, "# task_fn_rx calls");
+SYSCTL_INT(_net_iflib, OID_AUTO, rx_intr_enables, CTLFLAG_RD,
+		   &iflib_rx_intr_enables, 0, "# rx intr enables");
+SYSCTL_INT(_net_iflib, OID_AUTO, fast_intrs, CTLFLAG_RD,
+		   &iflib_fast_intrs, 0, "# fast_intr calls");
+
 
 
 
@@ -481,7 +492,7 @@ iflib_fast_intr(void *arg)
 	iflib_filter_info_t info = arg;
 	struct grouptask *gtask = info->ifi_task;
 
-
+	atomic_add_int(&iflib_fast_intrs, 1);
 	if (info->ifi_filter != NULL && info->ifi_filter(info->ifi_filter_arg) == FILTER_HANDLED)
 		return (FILTER_HANDLED);
 
@@ -1680,14 +1691,17 @@ _task_fn_rx(void *context, int pending)
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 	int more = 0;
 
+	atomic_add_int(&iflib_task_fn_rxs, 1);
 	if (!(if_getdrvflags(sctx->isc_ifp) & IFF_DRV_RUNNING))
 		return;
 
 	if ((more = iflib_rxeof(rxq, 8 /* XXX */)) == 0) {
 		if (ctx->ifc_flags & IFC_LEGACY)
 			IFDI_INTR_ENABLE(sctx);
-		else
+		else {
+			atomic_add_int(&iflib_rx_intr_enables, 1);
 			IFDI_RX_INTR_ENABLE(sctx, rxq->ifr_id);
+		}
 	}
 	if (more)
 		GROUPTASK_ENQUEUE(&rxq->ifr_task);
