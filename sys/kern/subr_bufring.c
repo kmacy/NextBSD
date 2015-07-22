@@ -236,21 +236,6 @@ static void buf_ring_sc_advance(struct buf_ring_sc *br, int count);
 
 
 static inline int
-brsc_get_avail(struct buf_ring_sc *br, int cidx, int pidx)
-{
-	int used;
-
-	if (pidx == cidx)
-		used = 0;
-	else if (pidx > cidx)
-		used = pidx - cidx;
-	else
-		used = br->br_size - cidx + pidx;
-
-	return (br->br_size - used);
-}
-
-static inline int
 brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
 {
 	int used;
@@ -263,6 +248,13 @@ brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
 		used = br->br_size - cidx + pidx;
 
 	return (used);
+}
+
+static inline int
+brsc_get_avail(struct buf_ring_sc *br, int cidx, int pidx)
+{
+
+	return (br->br_size - brsc_get_inuse(br, cidx, pidx));
 }
 
 /*
@@ -284,16 +276,20 @@ brsc_entry_get(struct buf_ring_sc *br, int i)
 static __inline void
 brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 {
+	caddr_t *bufp;
 
 	atomic_add_int(&brsc_nq_entry_sets, 1);
 
-	if (buf == NULL)
-		atomic_add_int(&brsc_nq_entry_set_nulls, 1);
-
 	if (br->br_flags & BR_FLAGS_ALIGNED)
-		br->br_ring[i*ALIGN_SCALE].bre_ptr = buf;
+		bufp = &br->br_ring[i*ALIGN_SCALE].bre_ptr;
 	else
-		br->br_ring[i].bre_ptr = buf;
+		bufp = &br->br_ring[i].bre_ptr;
+
+	if (buf == NULL) {
+		atomic_add_int(&brsc_nq_entry_set_nulls, 1);
+		MPASS(*bufp != NULL);
+	}
+	*bufp = buf;
 }
 
 struct buf_ring_sc *
@@ -623,8 +619,10 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next));
 	done:
-	for (i = 0; i < count; i++)
+	for (i = 0; i < count; i++) {
+		MPASS(ents[i] != NULL);
 		brsc_entry_set(br, (prod_head-(count-1))+i, ents[i]);
+	}
 	/*
 	 * If there are other enqueues in progress
 	 * that preceded us, we need to wait for them
@@ -708,6 +706,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 	for (i = 0; i < prod_avail; i++) {
 		atomic_add_int(&brsc_nq_entry_gets, 1);
 		ents[i] = brsc_entry_get(br, (cons + i) & br->br_mask);
+		MPASS(ents[i] != NULL);
 	}
 	return (prod_avail);
 }
