@@ -371,6 +371,11 @@ SYSCTL_INT(_net_iflib, OID_AUTO, encap_txd_encap_fail, CTLFLAG_RD,
 static int iflib_task_fn_rxs;
 static int iflib_rx_intr_enables;
 static int iflib_fast_intrs;
+static int iflib_rx_unavail;
+static int iflib_rx_ctx_inactive;
+static int iflib_rx_zero_len;
+static int iflib_rx_if_input;
+static int iflib_rx_mbuf_null;
 
 SYSCTL_INT(_net_iflib, OID_AUTO, task_fn_rx, CTLFLAG_RD,
 		   &iflib_task_fn_rxs, 0, "# task_fn_rx calls");
@@ -378,6 +383,16 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rx_intr_enables, CTLFLAG_RD,
 		   &iflib_rx_intr_enables, 0, "# rx intr enables");
 SYSCTL_INT(_net_iflib, OID_AUTO, fast_intrs, CTLFLAG_RD,
 		   &iflib_fast_intrs, 0, "# fast_intr calls");
+SYSCTL_INT(_net_iflib, OID_AUTO, rx_unavail, CTLFLAG_RD,
+		   &iflib_rx_unavail, 0, "# times rxeof called with no available data");
+SYSCTL_INT(_net_iflib, OID_AUTO, rx_ctx_inactive, CTLFLAG_RD,
+		   &iflib_rx_ctx_inactive, 0, "# times rxeof called with inactive context");
+SYSCTL_INT(_net_iflib, OID_AUTO, rx_zero_len, CTLFLAG_RD,
+		   &iflib_rx_zero_len, 0, "# times rxeof saw zero len mbuf");
+SYSCTL_INT(_net_iflib, OID_AUTO, rx_if_input, CTLFLAG_RD,
+		   &iflib_rx_if_input, 0, "# times rxeof called if_input");
+SYSCTL_INT(_net_iflib, OID_AUTO, rx_mbuf_null, CTLFLAG_RD,
+		   &iflib_rx_mbuf_null, 0, "# times rxeof got null mbuf");
 
 
 
@@ -1266,9 +1281,10 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	iflib_ctx_t ctx = rxq->ifr_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 	int avail, fl_cidx, cidx;
+	int *cidxp;
 	struct if_rxd_info ri;
 	iflib_dma_info_t di;
-	int qsid, err, budget_left = budget;
+	int qsid, err, budget_left;
 	iflib_txq_t txq;
 	iflib_fl_t fl;
 	struct lro_entry *queued;
@@ -1295,16 +1311,24 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 
 	ri.iri_qsidx = rxq->ifr_id;
 	if (sctx->isc_flags & IFLIB_HAS_CQ)
-		cidx  = rxq->ifr_cidx;
+		cidxp  = &rxq->ifr_cidx;
 	else
-		cidx = rxq->ifr_fl[0].ifl_cidx;
+		cidxp = &rxq->ifr_fl[0].ifl_cidx;
 
+	cidx = *cidxp;
 	mh = mt = NULL;
-	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0)
+	MPASS(budget > 0);
+
+	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0) {
+		atomic_add_int(&iflib_rx_unavail, 1);
 		return (false);
+	}
+	budget_left = budget;
 	while (__predict_true(budget_left-- && avail--)) {
-		if (__predict_false(!CTX_ACTIVE(ctx)))
+		if (__predict_false(!CTX_ACTIVE(ctx))) {
+			atomic_add_int(&iflib_rx_ctx_inactive, 1);
 			break;
+		}
 		di = rxq->ifr_ifdi;
 		bus_dmamap_sync(di->idi_tag, di->idi_map,
 		    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
@@ -1320,6 +1344,9 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		ri.iri_qidx = 0;
 		ri.iri_ifp = sctx->isc_ifp;
 		err = sctx->isc_rxd_pkt_get(sctx, &ri);
+
+		/* in lieu of handling correctly - make sure it isn't being unhandled */
+		MPASS(err == 0);
 
 		qidx = ri.iri_qidx;
 		if (++cidx == sctx->isc_nrxd)
@@ -1339,6 +1366,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		bus_dmamap_unload(rxq->ifr_desc_tag, fl->ifl_sds[fl_cidx].ifsd_map);
 
 		if (ri.iri_len == 0) {
+			atomic_add_int(&iflib_rx_zero_len, 1);
 			/*
 			 * XXX Note currently we don't free the initial pieces
 			 * of a multi-fragment packet
@@ -1353,13 +1381,14 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		if (++fl_cidx == fl->ifl_size)
 			fl_cidx = 0;
 		fl->ifl_cidx = fl_cidx;
-		__iflib_fl_refill_lt(ctx, fl, /* XXX em value */ 8);
 
-		if (avail == 0)
+		if (avail == 0 && budget_left)
 			avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
 
-		if (m == NULL)
+		if (m == NULL) {
+			atomic_add_int(&iflib_rx_mbuf_null, 1);
 			continue;
+		}
 	imm_pkt:
 		if (mh == NULL)
 			mh = mt = m;
@@ -1368,10 +1397,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 			mt = m;
 		}
 	}
-	if (sctx->isc_flags & IFLIB_HAS_CQ)
-		rxq->ifr_cidx = cidx;
-	else
-		rxq->ifr_fl[0].ifl_cidx = cidx;
+	__iflib_fl_refill_lt(ctx, fl, budget);
 
 	while (mh != NULL) {
 		m = mh;
@@ -1380,6 +1406,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		if (rxq->ifr_lc.lro_cnt != 0 &&
 			tcp_lro_rx(&rxq->ifr_lc, m, 0) == 0)
 			continue;
+		atomic_add_int(&iflib_rx_if_input, 1);
 		if_input(sctx->isc_ifp, m);
 	}
 	/*
@@ -1389,8 +1416,13 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		SLIST_REMOVE_HEAD(&rxq->ifr_lc.lro_active, next);
 		tcp_lro_flush(&rxq->ifr_lc, queued);
 	}
-
-	return sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
+#ifdef INVARIANTS
+	if ((sctx->isc_flags & IFLIB_HAS_CQ) == 0)
+		MPASS(cidx == *cidxp);
+#endif
+	if (sctx->isc_flags & IFLIB_HAS_CQ)
+		*cidxp = cidx;
+	return (sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx));
 }
 
 #define M_CSUM_FLAGS(m) ((m)->m_pkthdr.csum_flags)
@@ -1689,13 +1721,13 @@ _task_fn_rx(void *context, int pending)
 	iflib_rxq_t rxq = context;
 	iflib_ctx_t ctx = rxq->ifr_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
-	int more = 0;
+	bool more;
 
 	atomic_add_int(&iflib_task_fn_rxs, 1);
 	if (!(if_getdrvflags(sctx->isc_ifp) & IFF_DRV_RUNNING))
 		return;
 
-	if ((more = iflib_rxeof(rxq, 8 /* XXX */)) == 0) {
+	if ((more = iflib_rxeof(rxq, 8 /* XXX */)) == false) {
 		if (ctx->ifc_flags & IFC_LEGACY)
 			IFDI_INTR_ENABLE(sctx);
 		else {
