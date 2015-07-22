@@ -276,20 +276,20 @@ brsc_entry_get(struct buf_ring_sc *br, int i)
 static __inline void
 brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 {
-	caddr_t *bufp;
+	volatile void *bufp;
 
 	atomic_add_int(&brsc_nq_entry_sets, 1);
 
 	if (br->br_flags & BR_FLAGS_ALIGNED)
-		bufp = &br->br_ring[i*ALIGN_SCALE].bre_ptr;
+		bufp = (volatile void *)&br->br_ring[i*ALIGN_SCALE].bre_ptr;
 	else
-		bufp = &br->br_ring[i].bre_ptr;
+		bufp = (volatile void *)&br->br_ring[i].bre_ptr;
 
 	if (buf == NULL) {
 		atomic_add_int(&brsc_nq_entry_set_nulls, 1);
-		MPASS(*bufp != NULL);
+		MPASS(*(void * volatile *)bufp != NULL);
 	}
-	*bufp = buf;
+	*((void * volatile *)bufp) = buf;
 }
 
 struct buf_ring_sc *
