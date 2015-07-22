@@ -166,12 +166,14 @@ struct br_sc_entry_ {
 #define BR_RING_IDLE       (1<<29)
 #define BR_RING_MAX        (1<<28)
 #define BR_RING_MASK       (BR_RING_MAX-1)
-#define BR_RING_FLAGS_MASK       (~(BR_RING_MAX-1))
+#define BR_RING_FLAGS_MASK       (~(BR_RING_MASK))
 
-#define BR_INDEX(x) ((x) & BR_RING_MASK)
+#define BR_INDEX(br, x) ((x) & br->br_mask)
 #define BR_HANDOFF(br) ((br)->br_cons & (BR_RING_ABDICATING|BR_RING_IDLE))
 #define BR_STALLED(br) ((br)->br_cons & BR_RING_STALLED)
-#define BR_CONS_IDX(br) ((br)->br_cons & BR_RING_MASK)
+#define BR_CONS_IDX(br) ((br)->br_cons & br->br_mask)
+
+
 #define BR_RING_PENDING (1<<30)
 #define BR_RING_OWNED   (1<<31)
 
@@ -562,28 +564,30 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	rc = 0;
 
 	/*
-	 * If the current consumer abdicated we loop until the pending bit is
-	 * set and if we set it we're the next lock holder - or if the owner
+	 * If the current consumer abdicated and no one has set the pending bit yet
+	 * we loop until we set it we're the next lock holder - or if the owner
 	 * drops the lock before we can do that then the lock will be
 	 * re-acquired normally
 	 */
-	while (BR_HANDOFF(br) && (prod_head & BR_RING_OWNED) == BR_RING_OWNED && budget > 0 && domainvalid) {
+	while (BR_HANDOFF(br) && (prod_head & BR_RING_FLAGS_MASK) == BR_RING_OWNED && budget > 0 && domainvalid) {
 		prod_head = br->br_prod_head;
-		pidx = BR_INDEX(prod_head);
+		pidx = BR_INDEX(br, prod_head);
 		cons = br->br_cons;
-		cidx = BR_INDEX(cons);
+		cidx = BR_INDEX(br, cons);
 		avail = brsc_get_avail(br, cidx, pidx);
 
 		if (count > avail) {
-			if (pidx != BR_INDEX(atomic_load_acq_32(&br->br_prod_head)) ||
-			    cidx != BR_INDEX(atomic_load_acq_32(&br->br_cons)))
+			if (pidx != BR_INDEX(br, atomic_load_acq_32(&br->br_prod_head)) ||
+			    cidx != BR_INDEX(br, atomic_load_acq_32(&br->br_cons)))
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
 			atomic_add_int(&brsc_nq_enobufs1, 1);
 			return (ENOBUFS);
 		}
-		pidx = (pidx + count) & br->br_mask;
+
+		pidx = BR_INDEX(br, pidx + count);
+		/* set the pending bit and preserve the owned bit */
 		prod_next = pidx | BR_RING_PENDING | (prod_head & BR_RING_FLAGS_MASK);
 		if (atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next)) {
 			pending = true;
@@ -595,25 +599,29 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	do {
 		rc = 0;
 		prod_head = br->br_prod_head;
-		pidx = BR_INDEX(prod_head);
-		cons = br->br_cons;
-		cidx = BR_INDEX(cons);
+		pidx = BR_INDEX(br, prod_head);
+		cidx = BR_INDEX(br, br->br_cons);
 		avail = brsc_get_avail(br, cidx, pidx);
 
 		if (count > avail) {
 			/* ensure that we only return ENOBUFS
 			 * if the latest value matches what we read
 			 */
-			if (pidx != BR_INDEX(atomic_load_acq_32(&br->br_prod_head)) ||
-			    cidx != BR_INDEX(atomic_load_acq_32(&br->br_cons)))
+			if (pidx != BR_INDEX(br, atomic_load_acq_32(&br->br_prod_head)) ||
+			    cidx != BR_INDEX(br, atomic_load_acq_32(&br->br_cons)))
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
 			atomic_add_int(&brsc_nq_enobufs2, 1);
 			return (ENOBUFS);
 		}
-		prod_next = (pidx + count) & br->br_mask;
+		prod_next = BR_INDEX(br, pidx + count);
 
+		/*
+		 * If the ring is unowned, not pending, the budget is non-zero, and we're
+		 * in the right domain, try to acquire the lock. Otherwise leave the flags
+		 * as is and enqueue the buffer for another to send.
+		 */
 		if ((prod_head & BR_RING_FLAGS_MASK) == 0 && budget > 0 && domainvalid) {
 			prod_next |= BR_RING_OWNED;
 			atomic_add_int(&brsc_nq_eowned, 1);
@@ -625,7 +633,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	done:
 	for (i = 0; i < count; i++) {
 		MPASS(ents[i] != NULL);
-		brsc_entry_set(br, (BR_INDEX(prod_head)-(count-1))+i, ents[i]);
+		brsc_entry_set(br, (BR_INDEX(br, prod_head)-(count-1))+i, ents[i]);
 	}
 	/*
 	 * If there are other enqueues in progress
@@ -638,7 +646,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	/* ensure  that the ring update reaches memory before the new
 	 * value of prod_tail
 	 */
-	atomic_store_rel_32(&br->br_prod_tail, BR_INDEX(prod_next));
+	atomic_store_rel_32(&br->br_prod_tail, BR_INDEX(br, prod_next));
 
 	/* now that we've completed the enqueue if we know that we're
 	 * the next owner we need to wait for the current owner to clear
@@ -652,7 +660,8 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		rc = EOWNED;
 	}
 	if (rc == EOWNED) {
-		br->br_cons &= BR_RING_FLAGS_MASK;
+		/* clear the flags bits from cons */
+		br->br_cons &= ~BR_RING_FLAGS_MASK;
 		br->br_owner = curthread;
 		if (br->br_domain == PCPU_GET(domain))
 			sched_pin();
@@ -698,6 +707,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 
 	KASSERT(count > 0, ("peeking for zero entries"));
 	KASSERT((br->br_prod_head & BR_RING_OWNED) == BR_RING_OWNED, ("peeking without lock being held"));
+	MPASS(br->br_owner == curthread);
 	/*
 	 * for correctness prod_tail must be read before ring[cons]
 	 */
@@ -709,7 +719,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 	prod_avail = min(inuse, count);
 	for (i = 0; i < prod_avail; i++) {
 		atomic_add_int(&brsc_nq_entry_gets, 1);
-		ents[i] = brsc_entry_get(br, (cons + i) & br->br_mask);
+		ents[i] = brsc_entry_get(br, BR_INDEX(br, cons + i));
 		MPASS(ents[i] != NULL);
 	}
 	return (prod_avail);
@@ -749,16 +759,16 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 {
 	uint32_t cons, cons_next;
 	uint32_t prod_tail;
-	int i, advance_count;
+	int i;
 
-	advance_count = count;
 	KASSERT(count > 0, ("invalid advance count"));
+	MPASS(br->br_owner == curthread);
 
 	atomic_add_int(&brsc_nq_entry_advances, 1);
 
 	cons = BR_CONS_IDX(br);
 	prod_tail = br->br_prod_tail;
-	cons_next = (cons + advance_count) & br->br_mask;
+	cons_next = BR_INDEX(br, cons + count);
 
 	/*
 	 * Storing NULL here serves two purposes:
@@ -768,8 +778,8 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 	 * 2) it allows us to enforce global ordering of the cons
 	 *    update with an atomic_store_rel_32
 	 */
-	for (i = 0; i < advance_count; i++)
-		brsc_entry_set(br, (cons + i) & br->br_mask, NULL);
+	for (i = 0; i < count; i++)
+		brsc_entry_set(br, BR_INDEX(br, cons + i), NULL);
 
 	atomic_store_rel_32(&br->br_cons, cons_next);
 }
@@ -796,8 +806,7 @@ buf_ring_sc_count(struct buf_ring_sc *br)
 	 * understands that this is only a point in time snapshot
 	 */
 
-	return ((br->br_size + br->br_prod_tail - BR_INDEX(br->br_cons))
-	    & br->br_mask);
+	return (brsc_get_inuse(br, BR_INDEX(br, br->br_cons), br->br_prod_tail));
 }
 
 int
@@ -807,7 +816,7 @@ buf_ring_sc_empty(struct buf_ring_sc *br)
 	*  only a point in time snapshot
 	*/
 
-	return (BR_INDEX(br->br_cons) == br->br_prod_tail);
+	return (BR_INDEX(br, br->br_cons) == br->br_prod_tail);
 }
 
 int
@@ -816,7 +825,7 @@ buf_ring_sc_full(struct buf_ring_sc *br)
 	/* br_cons may be stale but the caller understands that this is
 	* only a point in time snapshot
 	*/
-	return (((br->br_prod_tail + 1) & br->br_mask) == BR_INDEX(br->br_cons));
+	return (((br->br_prod_tail + 1) & br->br_mask) == BR_INDEX(br, br->br_cons));
 }
 
 /*
