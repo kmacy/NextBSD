@@ -263,7 +263,6 @@ device		xl			# 3Com 3c90x (``Boomerang'', ``Cyclone'')
 
 # Pseudo devices.
 
-options		RANDOM_DUMMY
 device		loop			# Network loopback
 device		random			# Entropy device
 device		padlock_rng		# VIA Padlock RNG
