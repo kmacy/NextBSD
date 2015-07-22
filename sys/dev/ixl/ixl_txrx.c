@@ -614,8 +614,7 @@ ixl_isc_rxd_refill(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused,
 
 static void
 ixl_isc_rxd_flush(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx)
-{	
-	
+{
 	struct ixl_vsi		*vsi = DOWNCAST(sctx);
 	struct rx_ring		*rxr = &vsi->queues[rxqid].rxr;
 
@@ -631,9 +630,7 @@ ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx)
 	uint32_t status;
 	int cnt, i;
 
-	cnt = 0;
-	i = idx;
-	while (cnt < sctx->isc_nrxd) {
+	for (cnt = 0, i = idx; cnt < sctx->isc_nrxd;) {
 		cur = &rxr->rx_base[i];
 		qword = le64toh(cur->wb.qword1.status_error_len);
 		status = (qword & I40E_RXD_QW1_STATUS_MASK)
@@ -839,7 +836,6 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 		}
 		ri->iri_next_offset = 0;	
 	}
-
 	return (0);
 }
 
