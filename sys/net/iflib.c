@@ -903,11 +903,11 @@ done:
 static __inline void
 __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 {
-	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits;
+	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits - 1;
 #ifdef INVARIANTS
 	uint32_t delta = (fl)->ifl_pidx > (fl)->ifl_cidx ? ((fl)->ifl_size - ((fl)->ifl_pidx - (fl)->ifl_cidx)) : ((fl)->ifl_cidx - (fl)->ifl_pidx);
 
-	MPASS(fl->ifl_credits <= fl->ifl_size);
+	MPASS(fl->ifl_credits < fl->ifl_size);
 	MPASS(reclaimable == delta);
 #endif
 	if (reclaimable > 0)
@@ -983,9 +983,9 @@ iflib_fl_setup(iflib_fl_t fl)
 
 	/* Now replenish the mbufs */
 	MPASS(fl->ifl_credits == 0);
-	_iflib_fl_refill(ctx, fl, fl->ifl_size);
-	MPASS(fl->ifl_pidx == 0);
-	MPASS(fl->ifl_size == fl->ifl_credits);
+	_iflib_fl_refill(ctx, fl, fl->ifl_size-1);
+	MPASS(fl->ifl_pidx == fl->ifl_size-1);
+	MPASS(fl->ifl_size == fl->ifl_credits + 1);
 	/*
 	 * handle failure
 	 */
