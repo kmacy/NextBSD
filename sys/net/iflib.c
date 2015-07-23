@@ -189,6 +189,7 @@ struct iflib_txq {
 	uint32_t	ift_cleaned;
 	uint32_t	ift_stop_thres;
 	uint32_t	ift_cidx;
+	uint32_t	ift_cidx_processed;
 	uint32_t	ift_pidx;
 	uint32_t	ift_gen;
 	uint32_t	ift_db_pending;
@@ -700,7 +701,7 @@ iflib_txq_setup(iflib_txq_t txq)
 	txq->ift_qstatus = IFLIB_QUEUE_IDLE;
 
 	/* Reset indices */
-	txq->ift_pidx = txq->ift_cidx = txq->ift_npending = 0;
+	txq->ift_cidx_processed = txq->ift_pidx = txq->ift_cidx = txq->ift_npending = 0;
 	txq->ift_size = sctx->isc_ntxd;
 
 	/* Free any existing tx buffers. */
@@ -915,6 +916,7 @@ done:
 static __inline void
 __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 {
+	/* we avoid allowing pidx to catch up with cidx as it confuses ixl */
 	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits - 1;
 #ifdef INVARIANTS
 	uint32_t delta = fl->ifl_size - get_inuse(fl->ifl_size, fl->ifl_cidx, fl->ifl_pidx, fl->ifl_gen) - 1;
@@ -1316,8 +1318,8 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	if (sctx->isc_txd_credits_update != NULL) {
 		qsid = rxq->ifr_id;
 		txq = &ctx->ifc_txqs[qsid];
-		if (txq->ift_cidx != txq->ift_pidx &&
-			sctx->isc_txd_credits_update(sctx, qsid, txq->ift_cidx))
+		if ((txq->ift_cidx != txq->ift_pidx || (txq->ift_gen && txq->ift_cidx == txq->ift_pidx)) &&
+			sctx->isc_txd_credits_update(sctx, qsid, txq->ift_cidx_processed))
 			GROUPTASK_ENQUEUE(&txq->ift_task);
 	}
 
@@ -2893,6 +2895,10 @@ iflib_tx_credits_update(if_shared_ctx_t sctx, int txqid, int credits)
 {
 	iflib_ctx_t ctx = sctx->isc_ctx;
 	ctx->ifc_txqs[txqid].ift_processed += credits;
+	ctx->ifc_txqs[txqid].ift_cidx_processed += credits;
+
+	if (ctx->ifc_txqs[txqid].ift_cidx_processed >= ctx->ifc_txqs[txqid].ift_size)
+		ctx->ifc_txqs[txqid].ift_cidx_processed -= ctx->ifc_txqs[txqid].ift_size;
 }
 
 void
