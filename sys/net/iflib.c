@@ -1321,8 +1321,11 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	MPASS(budget > 0);
 
 	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0) {
+		printf("%s(%p, %d) fail avail=0 cidx=%d\n", __FUNCTION__, rxq, budget, cidx);
 		atomic_add_int(&iflib_rx_unavail, 1);
 		return (false);
+	} else {
+		printf("%s(%p, %d) avail=%d cidx=%d\n", __FUNCTION__, rxq, budget, avail, cidx);
 	}
 	for (budget_left = budget; (budget_left > 0) && (avail > 0); budget_left--, avail--) {
 		if (__predict_false(!CTX_ACTIVE(ctx))) {
