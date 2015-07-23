@@ -781,6 +781,10 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 		>> I40E_RXD_QW1_LENGTH_HBUF_SHIFT;
 	ptype = (qword & I40E_RXD_QW1_PTYPE_MASK)
 		    >> I40E_RXD_QW1_PTYPE_SHIFT;
+
+	/* we should never be called without a valid descriptor */
+	MPASS((status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT)) != 0);
+
 #ifdef DEV_NETMAP
 	if (netmap_rx_irq(ifp, que->me, &count)) {
 		IXL_RX_UNLOCK(rxr);
