@@ -2943,10 +2943,10 @@ iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt)
 		goto msi;
 	}
 #if IFLIB_DEBUG
-	queuemsgs = msgs - admincnt;
-#else
 	/* use only 1 qset in debug mode */
 	queuemsgs = min(msgs - admincnt, 1);
+#else
+	queuemsgs = msgs - admincnt;
 #endif
 
 	if (bus_get_cpus(dev, INTR_CPUS, &sctx->isc_cpus) == 0) {
