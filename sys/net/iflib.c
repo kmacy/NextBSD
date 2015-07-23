@@ -915,9 +915,9 @@ done:
 static __inline void
 __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 {
-	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits;
+	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits - 1;
 #ifdef INVARIANTS
-	uint32_t delta = fl->ifl_size - get_inuse(fl->ifl_size, fl->ifl_cidx, fl->ifl_pidx, fl->ifl_gen);
+	uint32_t delta = fl->ifl_size - get_inuse(fl->ifl_size, fl->ifl_cidx, fl->ifl_pidx, fl->ifl_gen) - 1;
 
 	MPASS(fl->ifl_credits <= fl->ifl_size);
 	MPASS(reclaimable == delta);
