@@ -174,8 +174,11 @@ struct br_sc_entry_ {
 #define BR_CONS_IDX(br) ((br)->br_cons & br->br_mask)
 
 
+#define BR_RING_GEN		(1<<29)
 #define BR_RING_PENDING (1<<30)
 #define BR_RING_OWNED   (1<<31)
+
+#define BR_GEN(br) (br->br_prod_head & BR_RING_GEN)
 
 #define BR_NODOMAIN 0xffffffff
 
@@ -238,14 +241,14 @@ static void buf_ring_sc_advance(struct buf_ring_sc *br, int count);
 
 
 static inline int
-brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
+brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx, int gen)
 {
 	int used;
 
-	if (pidx == cidx)
-		used = 0;
-	else if (pidx > cidx)
-		used = pidx - cidx;
+	if (gen == 1 && pidx == cidx)
+		used = br->br_size;
+	else if (pidx >= cidx)
+		used = pidx - cidx; /* encompasses gen == 0 && pidx == cidx */
 	else
 		used = br->br_size - cidx + pidx;
 
@@ -253,10 +256,10 @@ brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx)
 }
 
 static inline int
-brsc_get_avail(struct buf_ring_sc *br, int cidx, int pidx)
+brsc_get_avail(struct buf_ring_sc *br, int cidx, int pidx, int gen)
 {
 
-	return (br->br_size - brsc_get_inuse(br, cidx, pidx));
+	return (br->br_size - brsc_get_inuse(br, cidx, pidx, gen));
 }
 
 /*
@@ -296,6 +299,13 @@ brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 		MPASS(*(void * volatile *)bufp != NULL);
 	}
 	*((void * volatile *)bufp) = buf;
+}
+
+static inline void
+brsc_gen_clear(struct buf_ring_sc *br)
+{
+
+	atomic_clear_acq_int(&br->br_prod_head, BR_RING_GEN);
 }
 
 struct buf_ring_sc *
@@ -378,6 +388,7 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 {
 	uint32_t cidx = BR_CONS_IDX(br);
 	uint32_t pidx = br->br_prod_tail;
+	uint32_t gen = BR_GEN(br);
 	uint32_t n;
 	int inuse, prod_avail;
 	br_state state;
@@ -388,8 +399,8 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	MPASS(br->br_prod_head & BR_RING_OWNED);
 	MPASS(br->br_owner == curthread);
 	state = BR_IDLE;
-	while (cidx != pidx) {
-		inuse = brsc_get_inuse(br, cidx, pidx);
+	while (cidx != pidx || (gen && (pidx == cidx))) {
+		inuse = brsc_get_inuse(br, cidx, pidx, gen);
 		prod_avail = min(inuse, budget);
 		atomic_add_int(&brsc_drain_handled, 1);
 		n = br->br_drain(br, prod_avail, br->br_sc);
@@ -408,6 +419,7 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 				state = BR_IDLE;
 			break;
 		}
+		gen = BR_GEN(br);
 		pidx = br->br_prod_tail;
 		cidx = BR_CONS_IDX(br);
 	}
@@ -542,7 +554,7 @@ int
 buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 {
 	uint32_t prod_head, prod_next, cons;
-	uint32_t pidx, cidx;
+	uint32_t pidx, cidx, pidx_next;
 	int pending, rc, avail, domainvalid;
 #ifdef DEBUG_BUFRING
 	int i, j;
@@ -574,7 +586,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		pidx = BR_INDEX(br, prod_head);
 		cons = br->br_cons;
 		cidx = BR_INDEX(br, cons);
-		avail = brsc_get_avail(br, cidx, pidx);
+		avail = brsc_get_avail(br, cidx, pidx, BR_GEN(br));
 
 		if (count > avail) {
 			if (pidx != BR_INDEX(br, atomic_load_acq_32(&br->br_prod_head)) ||
@@ -586,9 +598,12 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 			return (ENOBUFS);
 		}
 
-		pidx = BR_INDEX(br, pidx + count);
+		pidx_next = BR_INDEX(br, pidx + count);
 		/* set the pending bit and preserve the owned bit */
-		prod_next = pidx | BR_RING_PENDING | (prod_head & BR_RING_FLAGS_MASK);
+		prod_next = pidx_next | BR_RING_PENDING | (prod_head & BR_RING_FLAGS_MASK);
+		/* we wrapped set the gen bit to indicate that cidx==pidx => ring full */
+		if (pidx_next < pidx)
+			prod_next |= BR_RING_GEN;
 		if (atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next)) {
 			pending = true;
 			atomic_add_int(&brsc_nq_pendings, 1);
@@ -601,7 +616,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		prod_head = br->br_prod_head;
 		pidx = BR_INDEX(br, prod_head);
 		cidx = BR_INDEX(br, br->br_cons);
-		avail = brsc_get_avail(br, cidx, pidx);
+		avail = brsc_get_avail(br, cidx, pidx, BR_GEN(br));
 
 		if (count > avail) {
 			/* ensure that we only return ENOBUFS
@@ -615,20 +630,22 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 			atomic_add_int(&brsc_nq_enobufs2, 1);
 			return (ENOBUFS);
 		}
-		prod_next = BR_INDEX(br, pidx + count);
+		prod_next = pidx_next = BR_INDEX(br, pidx + count);
+		/* preserve flags */
+		prod_next |= (prod_head & BR_RING_FLAGS_MASK);
 
+		/* we wrapped - set the gen bit to indicate that cidx==pidx => ring full */
+		if (pidx_next < pidx)
+			prod_next |= BR_RING_GEN;
 		/*
 		 * If the ring is unowned, not pending, the budget is non-zero, and we're
-		 * in the right domain, try to acquire the lock. Otherwise leave the flags
-		 * as is and enqueue the buffer for another to send.
+		 * in the right domain, try to acquire the lock.
 		 */
 		if ((prod_head & BR_RING_FLAGS_MASK) == 0 && budget > 0 && domainvalid) {
 			prod_next |= BR_RING_OWNED;
 			atomic_add_int(&brsc_nq_eowned, 1);
 			rc = EOWNED;
-		} else
-			prod_next |= (prod_head & BR_RING_FLAGS_MASK);
-
+		}
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next));
 	done:
 	for (i = 0; i < count; i++) {
@@ -713,7 +730,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 	 */
 	cons = BR_CONS_IDX(br);
 	prod_tail = ORDERED_LOAD_32(&br->br_prod_tail);
-	if ((inuse = brsc_get_inuse(br, cons, prod_tail)) == 0)
+	if ((inuse = brsc_get_inuse(br, cons, prod_tail, BR_GEN(br))) == 0)
 		return (0);
 
 	prod_avail = min(inuse, count);
@@ -782,6 +799,8 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 		brsc_entry_set(br, BR_INDEX(br, cons + i), NULL);
 
 	atomic_store_rel_32(&br->br_cons, cons_next);
+	if (cons_next < cons)
+		brsc_gen_clear(br);
 }
 
 /*
@@ -806,7 +825,7 @@ buf_ring_sc_count(struct buf_ring_sc *br)
 	 * understands that this is only a point in time snapshot
 	 */
 
-	return (brsc_get_inuse(br, BR_INDEX(br, br->br_cons), br->br_prod_tail));
+	return (brsc_get_inuse(br, BR_INDEX(br, br->br_cons), br->br_prod_tail, BR_GEN(br)));
 }
 
 int
