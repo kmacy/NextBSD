@@ -395,6 +395,7 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rx_mbuf_null, CTLFLAG_RD,
 		   &iflib_rx_mbuf_null, 0, "# times rxeof got null mbuf");
 
 
+#define IFLIB_DEBUG 1
 
 
 static void iflib_tx_structures_free(if_shared_ctx_t sctx);
@@ -1323,8 +1324,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		atomic_add_int(&iflib_rx_unavail, 1);
 		return (false);
 	}
-	budget_left = budget;
-	while (__predict_true(budget_left-- && avail--)) {
+	for (budget_left = budget; (budget_left > 0) && (avail > 0); budget_left--, avail--) {
 		if (__predict_false(!CTX_ACTIVE(ctx))) {
 			atomic_add_int(&iflib_rx_ctx_inactive, 1);
 			break;
@@ -2942,7 +2942,13 @@ iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt)
 		ctx->ifc_msix_mem = NULL;
 		goto msi;
 	}
+#if IFLIB_DEBUG
 	queuemsgs = msgs - admincnt;
+#else
+	/* use only 1 qset in debug mode */
+	queuemsgs = min(msgs - admincnt, 1);
+#endif
+
 	if (bus_get_cpus(dev, INTR_CPUS, &sctx->isc_cpus) == 0) {
 		queues = imin(CPU_COUNT(&sctx->isc_cpus), queuemsgs);
 		device_printf(dev, "pxm cpus: %d queue msgs: %d admincnt: %d\n",
