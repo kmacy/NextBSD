@@ -760,7 +760,8 @@ static int
 ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 {
 	struct ixl_vsi		*vsi = DOWNCAST(sctx);
-	struct rx_ring		*rxr = &vsi->queues[ri->iri_qsidx].rxr;
+	struct ixl_queue	*que = &vsi->queues[ri->iri_qsidx];
+	struct rx_ring		*rxr = &que->rxr;
 	union i40e_rx_desc	*cur;
 	u32		status, error;
 	u16		hlen, plen, vtag;
