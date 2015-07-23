@@ -2959,7 +2959,8 @@ iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt)
 	} else {
 		device_printf(dev, "Unable to fetch CPU list\n");
 		/* Figure out a reasonable auto config value */
-		queues = (mp_ncpus > queuemsgs) ? queuemsgs : mp_ncpus;
+		queues = min(queuemsgs, mp_ncpus);
+		device_printf(dev, "using %d queues\n", queues);
 	}
 #ifdef  RSS
 	/* If we're doing RSS, clamp at the number of RSS buckets */
