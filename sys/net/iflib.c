@@ -190,6 +190,7 @@ struct iflib_txq {
 	uint32_t	ift_stop_thres;
 	uint32_t	ift_cidx;
 	uint32_t	ift_pidx;
+	uint32_t	ift_gen;
 	uint32_t	ift_db_pending;
 	uint32_t	ift_npending;
 	uint32_t	ift_tqid;
@@ -221,6 +222,7 @@ struct iflib_txq {
 struct iflib_fl {
 	uint32_t	ifl_cidx;
 	uint32_t	ifl_pidx;
+	uint32_t	ifl_gen;
 	uint32_t	ifl_size;
 	uint32_t	ifl_credits;
 	uint32_t	ifl_buf_size;
@@ -236,24 +238,25 @@ struct iflib_fl {
 };
 
 static inline int
-iflib_txq_avail(iflib_txq_t txq)
+get_inuse(int size, int cidx, int pidx, int gen)
 {
-	int avail, used;
+	int used;
 
-	if (txq->ift_pidx == txq->ift_cidx)
+	if (pidx > cidx)
+		used = pidx - cidx;
+	else if (pidx < cidx)
+		used = size - cidx + pidx;
+	else if (gen == 0 && pidx == cidx)
 		used = 0;
-	else if (txq->ift_pidx > txq->ift_cidx)
-		used = txq->ift_pidx - txq->ift_cidx;
+	else if (gen == 1 && pidx == cidx)
+		used = size;
 	else
-		used = txq->ift_size  - txq->ift_cidx + txq->ift_pidx;
+		panic("bad state");
 
-	avail = txq->ift_size - used;
-
-	return (avail);
+	return (used);
 }
 
-/* XXX check this */
-#define TXQ_AVAIL(txq) iflib_txq_avail(txq)
+#define TXQ_AVAIL(txq) (txq->ift_size - get_inuse(txq->ift_size, txq->ift_cidx, txq->ift_pidx, txq->ift_gen))
 
 typedef struct iflib_global_context {
 	struct taskqgroup	*igc_io_tqg;		/* per-cpu taskqueues for io */
@@ -270,6 +273,7 @@ struct iflib_rxq {
 				     * these are the cq cidx and pidx otherwise
 					 * these are unused
 					 */
+	uint32_t	ifr_gen;
 	uint64_t	ifr_rx_irq;
 	uint16_t	ifr_id;
 	int			ifr_lro_enabled;
@@ -376,6 +380,7 @@ static int iflib_rx_ctx_inactive;
 static int iflib_rx_zero_len;
 static int iflib_rx_if_input;
 static int iflib_rx_mbuf_null;
+static int iflib_rxd_flush;
 
 SYSCTL_INT(_net_iflib, OID_AUTO, task_fn_rx, CTLFLAG_RD,
 		   &iflib_task_fn_rxs, 0, "# task_fn_rx calls");
@@ -393,6 +398,8 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rx_if_input, CTLFLAG_RD,
 		   &iflib_rx_if_input, 0, "# times rxeof called if_input");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_mbuf_null, CTLFLAG_RD,
 		   &iflib_rx_mbuf_null, 0, "# times rxeof got null mbuf");
+SYSCTL_INT(_net_iflib, OID_AUTO, rxd_flush, CTLFLAG_RD,
+		   &iflib_rxd_flush, 0, "# times rxd_flush called");
 
 
 #define IFLIB_DEBUG 1
@@ -814,7 +821,14 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	MPASS(n > 0);
 	MPASS(fl->ifl_credits >= 0);
 	MPASS(fl->ifl_credits + n <= fl->ifl_size);
-
+#ifdef INVARIANTS
+	if (pidx < fl->ifl_cidx)
+		MPASS(pidx + n <= fl->ifl_cidx);
+	if (pidx == fl->ifl_cidx)
+		MPASS(fl->ifl_gen == 0);
+	if (pidx > fl->ifl_cidx)
+		MPASS(n <= fl->ifl_size - pidx + fl->ifl_cidx);
+#endif
 	atomic_add_int(&iflib_fl_refills, 1);
 	if (n > 8)
 		atomic_add_int(&iflib_fl_refills_large, 1);
@@ -881,6 +895,7 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 		MPASS(fl->ifl_credits <= fl->ifl_size);
 		if (++fl->ifl_pidx == fl->ifl_size) {
 			fl->ifl_pidx = 0;
+			fl->ifl_gen = 1;
 			rxsd = fl->ifl_sds;
 		}
 		if (n == 0 || i == 256) {
@@ -893,22 +908,19 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 #if !defined(__i386__) && !defined(__amd64__)
 done:
 #endif
-#if IFLIB_DEBUG
-	printf("rxd_flush(%p, rxq_id=%d, fl_id=%d, pidx=%d)\n",
-		   sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
-#endif
+	atomic_add_int(&iflib_rxd_flush, 1);
 	sctx->isc_rxd_flush(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
 }
 
 static __inline void
 __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 {
-	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits - 1;
+	uint32_t reclaimable = fl->ifl_size - fl->ifl_credits;
 #ifdef INVARIANTS
-	uint32_t delta = (fl)->ifl_pidx > (fl)->ifl_cidx ? ((fl)->ifl_size - ((fl)->ifl_pidx - (fl)->ifl_cidx)) : ((fl)->ifl_cidx - (fl)->ifl_pidx);
+	uint32_t delta = fl->ifl_size - get_inuse(fl->ifl_size, fl->ifl_cidx, fl->ifl_pidx, fl->ifl_gen);
 
-	MPASS(fl->ifl_credits < fl->ifl_size);
-	MPASS(reclaimable == delta-1);
+	MPASS(fl->ifl_credits <= fl->ifl_size);
+	MPASS(reclaimable == delta);
 #endif
 	if (reclaimable > 0)
 		_iflib_fl_refill(ctx, fl, min(max, reclaimable));
@@ -983,9 +995,10 @@ iflib_fl_setup(iflib_fl_t fl)
 
 	/* Now replenish the mbufs */
 	MPASS(fl->ifl_credits == 0);
-	_iflib_fl_refill(ctx, fl, fl->ifl_size-1);
-	MPASS(fl->ifl_pidx == fl->ifl_size-1);
-	MPASS(fl->ifl_size == fl->ifl_credits + 1);
+	_iflib_fl_refill(ctx, fl, fl->ifl_size);
+	MPASS(fl->ifl_pidx == fl->ifl_size);
+	MPASS(fl->ifl_size == fl->ifl_credits);
+	MPASS(fl->ifl_gen == 1);
 	/*
 	 * handle failure
 	 */
@@ -1011,7 +1024,7 @@ iflib_rx_sds_free(iflib_rxq_t rxq)
 
 		free(rxq->ifr_fl, M_DEVBUF);
 		rxq->ifr_fl = NULL;
-		rxq->ifr_cidx = rxq->ifr_pidx = 0;
+		rxq->ifr_gen = rxq->ifr_cidx = rxq->ifr_pidx = 0;
 	}
 
 	if (rxq->ifr_desc_tag != NULL) {
@@ -1285,8 +1298,8 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 {
 	iflib_ctx_t ctx = rxq->ifr_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
-	int avail, fl_cidx, cidx;
-	int *cidxp;
+	int avail, fl_cidx, cidx, gen, fl_gen;
+	int *cidxp, *genp;
 	struct if_rxd_info ri;
 	iflib_dma_info_t di;
 	int qsid, err, budget_left;
@@ -1315,21 +1328,21 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 #endif /* DEV_NETMAP */
 
 	ri.iri_qsidx = rxq->ifr_id;
-	if (sctx->isc_flags & IFLIB_HAS_CQ)
+	if (sctx->isc_flags & IFLIB_HAS_CQ) {
 		cidxp  = &rxq->ifr_cidx;
-	else
+		genp =  &rxq->ifr_gen;
+	} else {
 		cidxp = &rxq->ifr_fl[0].ifl_cidx;
-
+		genp = &rxq->ifr_fl[0].ifl_gen;
+	}
 	cidx = *cidxp;
+	gen = *genp;
 	mh = mt = NULL;
 	MPASS(budget > 0);
 
 	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0) {
-		printf("%s(%p, %d) fail avail=0 cidx=%d\n", __FUNCTION__, rxq, budget, cidx);
 		atomic_add_int(&iflib_rx_unavail, 1);
 		return (false);
-	} else {
-		printf("%s(%p, %d) avail=%d cidx=%d\n", __FUNCTION__, rxq, budget, avail, cidx);
 	}
 	for (budget_left = budget; (budget_left > 0) && (avail > 0); budget_left--, avail--) {
 		if (__predict_false(!CTX_ACTIVE(ctx))) {
@@ -1356,8 +1369,10 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		MPASS(err == 0);
 
 		qidx = ri.iri_qidx;
-		if (++cidx == sctx->isc_nrxd)
+		if (++cidx == sctx->isc_nrxd) {
 			cidx = 0;
+			gen = 0;
+		}
 		if (sctx->isc_flags & IFLIB_HAS_CQ) {
 			if (ri.iri_m != NULL) {
 				m = ri.iri_m;
@@ -1370,6 +1385,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		}
 		fl = &rxq->ifr_fl[qidx];
 		fl_cidx = fl->ifl_cidx;
+		fl_gen = fl->ifl_gen;
 		bus_dmamap_unload(rxq->ifr_desc_tag, fl->ifl_sds[fl_cidx].ifsd_map);
 
 		if (ri.iri_len == 0) {
@@ -1379,15 +1395,21 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 			 * of a multi-fragment packet
 			 */
 			iflib_recycle_rx_buf(fl);
-			if (++fl_cidx == fl->ifl_size)
+			if (++fl_cidx == fl->ifl_size) {
 				fl_cidx = 0;
+				fl_gen = 0;
+			}
 			fl->ifl_cidx = fl_cidx;
+			fl->ifl_gen = fl_gen;
 			continue;
 		}
 		m = iflib_rxd_pkt_get(fl, &ri);
-		if (++fl_cidx == fl->ifl_size)
+		if (++fl_cidx == fl->ifl_size) {
 			fl_cidx = 0;
+			fl_gen = 0;
+		}
 		fl->ifl_cidx = fl_cidx;
+		fl->ifl_gen = fl_gen;
 
 		if (avail == 0 && budget_left)
 			avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
@@ -1573,10 +1595,11 @@ static void
 iflib_tx_desc_free(iflib_txq_t txq, int n)
 {
 	iflib_sd_t txsd;
-	uint32_t qsize, cidx, mask;
+	uint32_t qsize, cidx, mask, gen;
 	struct mbuf *m;
 
 	cidx = txq->ift_cidx;
+	gen = txq->ift_gen;
 	qsize = txq->ift_ctx->ifc_sctx->isc_ntxd;
 	mask = qsize-1;
 	txsd = &txq->ift_sds[cidx];
@@ -1601,10 +1624,12 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 		++txsd;
 		if (++cidx == qsize) {
 			cidx = 0;
+			gen = 0;
 			txsd = txq->ift_sds;
 		}
 	}
 	txq->ift_cidx = cidx;
+	txq->ift_gen = gen;
 }
 
 static __inline int
@@ -2599,7 +2624,7 @@ fail:
 	rxq = ctx->ifc_rxqs;
 	for (i = 0; i < q; ++i, rxq++) {
 		iflib_rx_sds_free(rxq);
-		rxq->ifr_cidx = rxq->ifr_pidx = 0;
+		rxq->ifr_gen = rxq->ifr_cidx = rxq->ifr_pidx = 0;
 	}
 	return (err);
 }
