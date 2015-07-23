@@ -893,6 +893,10 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 #if !defined(__i386__) && !defined(__amd64__)
 done:
 #endif
+#if IFLIB_DEBUG
+	printf("rxd_flush(%p, rxq_id=%d, fl_id=%d, pidx=%d)\n",
+		   sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
+#endif
 	sctx->isc_rxd_flush(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
 }
 
