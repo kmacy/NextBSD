@@ -2250,6 +2250,7 @@ ixl_initialize_vsi(struct ixl_vsi *vsi)
 		rctx.fc_ena = 0;
 		rctx.prefena = 1;
 
+		MPASS(sctx->isc_nrxd == DEFAULT_RING);
 		err = i40e_clear_lan_rx_queue_context(hw, i);
 		if (err) {
 			device_printf(dev,
