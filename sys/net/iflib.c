@@ -908,7 +908,7 @@ __iflib_fl_refill_lt(iflib_ctx_t ctx, iflib_fl_t fl, int max)
 	uint32_t delta = (fl)->ifl_pidx > (fl)->ifl_cidx ? ((fl)->ifl_size - ((fl)->ifl_pidx - (fl)->ifl_cidx)) : ((fl)->ifl_cidx - (fl)->ifl_pidx);
 
 	MPASS(fl->ifl_credits < fl->ifl_size);
-	MPASS(reclaimable == delta);
+	MPASS(reclaimable == delta-1);
 #endif
 	if (reclaimable > 0)
 		_iflib_fl_refill(ctx, fl, min(max, reclaimable));
