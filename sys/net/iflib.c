@@ -996,7 +996,7 @@ iflib_fl_setup(iflib_fl_t fl)
 	/* Now replenish the mbufs */
 	MPASS(fl->ifl_credits == 0);
 	_iflib_fl_refill(ctx, fl, fl->ifl_size);
-	MPASS(fl->ifl_pidx == fl->ifl_size);
+	MPASS(fl->ifl_pidx == 0);
 	MPASS(fl->ifl_size == fl->ifl_credits);
 	MPASS(fl->ifl_gen == 1);
 	/*
