@@ -43,8 +43,13 @@ struct buf_ring_sc_stats_v0 {
 };
 
 struct buf_ring_sc_consumer {
+
+	/* driver 'drain' function to remove from sw queue and place on hw queue */
 	int (*brsc_drain) (struct buf_ring_sc *br, int avail, void *sc);
+
+	/* allow draining to continue in another context */
 	void (*brsc_deferred) (struct buf_ring_sc *br, void *sc);
+
 	void *brsc_sc;
 	int brsc_domain;
 	int brsc_flags;
