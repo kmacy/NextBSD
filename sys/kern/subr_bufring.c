@@ -102,9 +102,13 @@ buf_ring_free(struct buf_ring *br, struct malloc_type *type)
 #define BR_ALIGN_ENTRIES 0
 #endif
 
-
+#ifndef BRSC_DEBUG_COUNTERS
+#ifdef INVARIANTS
 #define BRSC_DEBUG_COUNTERS 1
-
+#else
+#define BRSC_DEBUG_COUNTERS 0
+#endif /* !INVARIANTS */
+#endif
 
 #if BRSC_DEBUG_COUNTERS
 static SYSCTL_NODE(_net, OID_AUTO, brsc, CTLFLAG_RD, 0,
