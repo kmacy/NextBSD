@@ -627,6 +627,9 @@ ixl_attach(device_t dev)
 	sctx->isc_rx_maxsize = PAGE_SIZE*4;
 	sctx->isc_rx_nsegments = 1;
 	sctx->isc_rx_maxsegsize = PAGE_SIZE*4;
+	sctx->isc_ntxd = ixl_ringsz;
+	sctx->isc_nrxd = ixl_ringsz;
+
 	ixl_txrx_init(sctx);
 
 	/* Setup OS specific network interface */
@@ -2250,7 +2253,6 @@ ixl_initialize_vsi(struct ixl_vsi *vsi)
 		rctx.fc_ena = 0;
 		rctx.prefena = 1;
 
-		MPASS(sctx->isc_nrxd == DEFAULT_RING);
 		err = i40e_clear_lan_rx_queue_context(hw, i);
 		if (err) {
 			device_printf(dev,
@@ -2332,9 +2334,6 @@ ixl_setup_stations(struct ixl_pf *pf)
 	vsi->hw = &pf->hw;
 	vsi->id = 0;
 	vsi->num_vlans = 0;
-
-	sctx->isc_ntxd = ixl_ringsz;
-	sctx->isc_nrxd = ixl_ringsz;
 
 	tsize = roundup2((ixl_ringsz * sizeof(struct i40e_tx_desc)) +
 					 sizeof(u32), DBA_ALIGN);

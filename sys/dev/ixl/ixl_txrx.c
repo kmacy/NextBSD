@@ -143,7 +143,6 @@ ixl_isc_txd_encap(if_shared_ctx_t sctx, if_pkt_info_t pi)
 	u32			cmd, off;
 
 	cmd = off = 0;
-
 	
         /*
          * Important to capture the first descriptor
