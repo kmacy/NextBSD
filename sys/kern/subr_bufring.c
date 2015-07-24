@@ -658,7 +658,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 	 * to complete
 	 * re-ordering of reads would not effect correctness
 	 */
-	while (br->br_prod_tail != prod_head)
+	while (br->br_prod_tail != BR_INDEX(br, prod_head))
 		cpu_spinwait();
 	/* ensure  that the ring update reaches memory before the new
 	 * value of prod_tail
@@ -798,9 +798,12 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 	for (i = 0; i < count; i++)
 		brsc_entry_set(br, BR_INDEX(br, cons + i), NULL);
 
-	atomic_store_rel_32(&br->br_cons, cons_next);
-	if (cons_next < cons)
+	if (cons_next < cons) {
+		MPASS(cons_next <= prod_tail);
 		brsc_gen_clear(br);
+	}
+	atomic_store_rel_32(&br->br_cons, cons_next);
+
 }
 
 /*
@@ -835,7 +838,7 @@ buf_ring_sc_empty(struct buf_ring_sc *br)
 	*  only a point in time snapshot
 	*/
 
-	return (BR_INDEX(br, br->br_cons) == br->br_prod_tail);
+	return ((BR_GEN(br) == 0) && BR_INDEX(br, br->br_cons) == br->br_prod_tail);
 }
 
 int
@@ -844,7 +847,7 @@ buf_ring_sc_full(struct buf_ring_sc *br)
 	/* br_cons may be stale but the caller understands that this is
 	* only a point in time snapshot
 	*/
-	return (((br->br_prod_tail + 1) & br->br_mask) == BR_INDEX(br, br->br_cons));
+	return (BR_GEN(br) && (BR_INDEX(br, br->br_cons) == br->br_prod_tail));
 }
 
 /*
