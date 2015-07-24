@@ -102,6 +102,11 @@ buf_ring_free(struct buf_ring *br, struct malloc_type *type)
 #define BR_ALIGN_ENTRIES 0
 #endif
 
+
+#define BRSC_DEBUG_COUNTERS 1
+
+
+#if BRSC_DEBUG_COUNTERS
 static SYSCTL_NODE(_net, OID_AUTO, brsc, CTLFLAG_RD, 0,
                    "buf_ring_stats");
 
@@ -143,7 +148,7 @@ SYSCTL_INT(_net_brsc, OID_AUTO, nq_entry_set_nulls, CTLFLAG_RD,
 SYSCTL_INT(_net_brsc, OID_AUTO, enobufs1, CTLFLAG_RD,
 		   &brsc_nq_enobufs1, 0, "# times ENOBUFS1 was returned from nq");
 SYSCTL_INT(_net_brsc, OID_AUTO, enobufs2, CTLFLAG_RD,
-		   &brsc_nq_enobufs1, 0, "# times ENOBUFS2 was returned from nq");
+		   &brsc_nq_enobufs2, 0, "# times ENOBUFS2 was returned from nq");
 SYSCTL_INT(_net_brsc, OID_AUTO, eowned, CTLFLAG_RD,
 		   &brsc_nq_eowned, 0, "# times lock was acquired in enqueue");
 SYSCTL_INT(_net_brsc, OID_AUTO, nq_domain_eq, CTLFLAG_RD,
@@ -152,6 +157,10 @@ SYSCTL_INT(_net_brsc, OID_AUTO, deferred, CTLFLAG_RD,
 		   &brsc_deferred, 0, "# times deferred");
 
 
+#define DBG_COUNTER_INC(name) atomic_add_int(&(brsc_ ## name), 1)
+#else
+#define DBG_COUNTER_INC(name)
+#endif
 
 struct br_sc_entry_ {
 	volatile void *bre_ptr;
@@ -287,7 +296,7 @@ brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 
 	MPASS(i >= 0 && i < br->br_size);
 
-	atomic_add_int(&brsc_nq_entry_sets, 1);
+	DBG_COUNTER_INC(nq_entry_sets);
 
 	if (br->br_flags & BR_FLAGS_ALIGNED)
 		bufp = (volatile void *)&br->br_ring[i*ALIGN_SCALE].bre_ptr;
@@ -295,7 +304,7 @@ brsc_entry_set(struct buf_ring_sc *br, int i, void *buf)
 		bufp = (volatile void *)&br->br_ring[i].bre_ptr;
 
 	if (buf == NULL) {
-		atomic_add_int(&brsc_nq_entry_set_nulls, 1);
+		DBG_COUNTER_INC(nq_entry_set_nulls);
 		MPASS(*(void * volatile *)bufp != NULL);
 	}
 	*((void * volatile *)bufp) = buf;
@@ -393,7 +402,7 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	int inuse, prod_avail;
 	br_state state;
 
-	atomic_add_int(&brsc_drains, 1);
+	DBG_COUNTER_INC(drains);
 
 	KASSERT(budget > 0, ("calling drain with invalid budget"));
 	MPASS(br->br_prod_head & BR_RING_OWNED);
@@ -402,7 +411,7 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	while (cidx != pidx || (gen && (pidx == cidx))) {
 		inuse = brsc_get_inuse(br, cidx, pidx, gen);
 		prod_avail = min(inuse, budget);
-		atomic_add_int(&brsc_drain_handled, 1);
+		DBG_COUNTER_INC(drain_handled);
 		n = br->br_drain(br, prod_avail, br->br_sc);
 		KASSERT(n <= prod_avail, ("drain handler return invalid count"));
 		if (n == 0) {
@@ -566,7 +575,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 					  ents[j], i, br->br_prod_tail, BR_CONS_IDX(br));
 #endif
 	MPASS(count > 0);
-	atomic_add_int(&brsc_nqs, 1);
+	DBG_COUNTER_INC(nqs);
 	critical_enter();
 
 	if (br->br_domain == BR_NODOMAIN || br->br_domain == PCPU_GET(domain))
@@ -594,7 +603,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
-			atomic_add_int(&brsc_nq_enobufs1, 1);
+			DBG_COUNTER_INC(nq_enobufs1);
 			return (ENOBUFS);
 		}
 
@@ -606,7 +615,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 			prod_next |= BR_RING_GEN;
 		if (atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next)) {
 			pending = true;
-			atomic_add_int(&brsc_nq_pendings, 1);
+			DBG_COUNTER_INC(nq_pendings);
 			goto done;
 		}
 		prod_head = br->br_prod_head;
@@ -627,7 +636,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 				continue;
 			critical_exit();
 			counter_u64_add(br->br_drops, 1);
-			atomic_add_int(&brsc_nq_enobufs2, 1);
+			DBG_COUNTER_INC(nq_enobufs2);
 			return (ENOBUFS);
 		}
 		prod_next = pidx_next = BR_INDEX(br, pidx + count);
@@ -643,7 +652,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		 */
 		if ((prod_head & BR_RING_FLAGS_MASK) == 0 && budget > 0 && domainvalid) {
 			prod_next |= BR_RING_OWNED;
-			atomic_add_int(&brsc_nq_eowned, 1);
+			DBG_COUNTER_INC(nq_eowned);
 			rc = EOWNED;
 		}
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next));
@@ -673,7 +682,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		while ((br->br_prod_head & BR_RING_OWNED) == BR_RING_OWNED)
 			cpu_spinwait();
 		atomic_set_acq_32(&br->br_prod_head, BR_RING_OWNED);
-		atomic_add_int(&brsc_nq_eowned, 1);
+		DBG_COUNTER_INC(nq_eowned);
 		rc = EOWNED;
 	}
 	if (rc == EOWNED) {
@@ -698,7 +707,7 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		if (br->br_domain == PCPU_GET(domain))
 			sched_unpin();
 		if (buf_ring_sc_unlock(br, state) == 0 && state == BR_ABDICATED) {
-			atomic_add_int(&brsc_deferred, 1);
+			DBG_COUNTER_INC(deferred);
 			br->br_deferred(br, br->br_sc); /* consumer's re-drive mechanism */
 		}
 	}
@@ -735,7 +744,7 @@ buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count)
 
 	prod_avail = min(inuse, count);
 	for (i = 0; i < prod_avail; i++) {
-		atomic_add_int(&brsc_nq_entry_gets, 1);
+		DBG_COUNTER_INC(nq_entry_gets);
 		ents[i] = brsc_entry_get(br, BR_INDEX(br, cons + i));
 		MPASS(ents[i] != NULL);
 	}
@@ -781,7 +790,7 @@ buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 	KASSERT(count > 0, ("invalid advance count"));
 	MPASS(br->br_owner == curthread);
 
-	atomic_add_int(&brsc_nq_entry_advances, 1);
+	DBG_COUNTER_INC(nq_entry_advances);
 
 	cons = BR_CONS_IDX(br);
 	prod_tail = br->br_prod_tail;
