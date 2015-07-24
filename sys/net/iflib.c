@@ -1465,7 +1465,6 @@ iflib_txd_db_check(iflib_ctx_t ctx, iflib_txq_t txq, int ring)
 	if_shared_ctx_t sctx;
 	uint32_t dbval;
 	iflib_sd_t txsd;
-	struct if_pkt_info pi;
 
 	if (ring || ++txq->ift_db_pending >= 32) {
 		sctx = ctx->ifc_sctx;
@@ -1474,13 +1473,20 @@ iflib_txd_db_check(iflib_ctx_t ctx, iflib_txq_t txq, int ring)
 		/*
 		 * Flush deferred buffers first
 		 */
+#ifdef notyet
+		/* XXX only do this on cards like T3 that can batch packets in a descriptor
+		 * and only do this if pidx != cidx
+		 */
 		if (__predict_false(txsd->ifsd_m != NULL)) {
+			struct if_pkt_info pi;
+
 			pi.ipi_m = NULL;
 			pi.ipi_qsidx = txq->ift_id;
 			pi.ipi_pidx = txq->ift_pidx;
 			sctx->isc_txd_encap(sctx, &pi);
 			txq->ift_pidx = pi.ipi_new_pidx;
 		}
+#endif
 		dbval = txq->ift_npending ? txq->ift_npending : txq->ift_pidx;
 		wmb();
 		sctx->isc_txd_flush(sctx, txq->ift_id, dbval);
@@ -1641,6 +1647,7 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 	if_shared_ctx_t sctx = txq->ift_ctx->ifc_sctx;
 
 	KASSERT(thresh >= 0, ("invalid threshold to reclaim"));
+	MPASS(thresh + MAX_TX_DESC(txq->ift_ctx) < txq->ift_size);
 
 	reclaim = DESC_RECLAIMABLE(txq);
 	/*
@@ -1651,7 +1658,7 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 		sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx);
 
 	reclaim = DESC_RECLAIMABLE(txq);
-	if (reclaim <= thresh)
+	if (reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
 		return (0);
 
 	iflib_tx_desc_free(txq, reclaim);
@@ -2340,6 +2347,8 @@ _iflib_assert(if_shared_ctx_t sctx)
 	MPASS(sctx->isc_rxd_pkt_get);
 	MPASS(sctx->isc_rxd_refill);
 	MPASS(sctx->isc_rxd_flush);
+	MPASS(sctx->isc_ntxd > 2*sctx->isc_tx_nsegments);
+	MPASS(sctx->isc_nrxd);
 }
 
 int
