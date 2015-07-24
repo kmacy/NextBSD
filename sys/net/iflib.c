@@ -414,7 +414,7 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rxd_flush, CTLFLAG_RD,
 #define DBG_COUNTER_INC(name)
 #endif
 
-#define IFLIB_DEBUG 1
+#define IFLIB_DEBUG 0
 
 
 static void iflib_tx_structures_free(if_shared_ctx_t sctx);
