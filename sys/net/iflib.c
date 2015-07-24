@@ -324,6 +324,16 @@ TASKQGROUP_DEFINE(if_io_tqg, mp_ncpus, 1);
 TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 
 
+#ifndef IFLIB_DEBUG_COUNTERS
+#ifdef INVARIANTS
+#define IFLIB_DEBUG_COUNTERS 1
+#else
+#define IFLIB_DEBUG_COUNTERS 0
+#endif /* !INVARIANTS */
+#endif
+
+#if IFLIB_DEBUG_COUNTERS
+
 static SYSCTL_NODE(_net, OID_AUTO, iflib, CTLFLAG_RD, 0,
                    "iflib driver parameters");
 static int iflib_tx_frees;
@@ -370,9 +380,6 @@ SYSCTL_INT(_net_iflib, OID_AUTO, encap_txq_avail_fail, CTLFLAG_RD,
 SYSCTL_INT(_net_iflib, OID_AUTO, encap_txd_encap_fail, CTLFLAG_RD,
 		   &iflib_encap_txd_encap_fail, 0, "# driver encap failures");
 
-
-
-
 static int iflib_task_fn_rxs;
 static int iflib_rx_intr_enables;
 static int iflib_fast_intrs;
@@ -402,6 +409,10 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rx_mbuf_null, CTLFLAG_RD,
 SYSCTL_INT(_net_iflib, OID_AUTO, rxd_flush, CTLFLAG_RD,
 		   &iflib_rxd_flush, 0, "# times rxd_flush called");
 
+#define DBG_COUNTER_INC(name) atomic_add_int(&(iflib_ ## name), 1)
+#else
+#define DBG_COUNTER_INC(name)
+#endif
 
 #define IFLIB_DEBUG 1
 
@@ -516,7 +527,7 @@ iflib_fast_intr(void *arg)
 	iflib_filter_info_t info = arg;
 	struct grouptask *gtask = info->ifi_task;
 
-	atomic_add_int(&iflib_fast_intrs, 1);
+	DBG_COUNTER_INC(fast_intrs);
 	if (info->ifi_filter != NULL && info->ifi_filter(info->ifi_filter_arg) == FILTER_HANDLED)
 		return (FILTER_HANDLED);
 
@@ -675,7 +686,7 @@ iflib_txsd_free(iflib_ctx_t ctx, iflib_txq_t txq, iflib_sd_t txsd)
 	bus_dmamap_unload(txq->ift_desc_tag,
 					  txsd->ifsd_map);
 	m_freem(txsd->ifsd_m);
-	atomic_add_int(&iflib_tx_frees, 1);
+	DBG_COUNTER_INC(tx_frees);
 	txsd->ifsd_m = NULL;
 }
 
@@ -830,9 +841,9 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 	if (pidx > fl->ifl_cidx)
 		MPASS(n <= fl->ifl_size - pidx + fl->ifl_cidx);
 #endif
-	atomic_add_int(&iflib_fl_refills, 1);
+	DBG_COUNTER_INC(fl_refills);
 	if (n > 8)
-		atomic_add_int(&iflib_fl_refills_large, 1);
+		DBG_COUNTER_INC(fl_refills_large);
 
 	while (n--) {
 		/*
@@ -845,7 +856,7 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 			uma_zfree(fl->ifl_zone, cl);
 			break;
 		}
-		atomic_add_int(&iflib_rx_allocs, 1);
+		DBG_COUNTER_INC(rx_allocs);
 #ifdef notyet
 		if ((rxsd->ifsd_flags & RX_SW_DESC_MAP_CREATED) == 0) {
 			int err;
@@ -909,7 +920,7 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 #if !defined(__i386__) && !defined(__amd64__)
 done:
 #endif
-	atomic_add_int(&iflib_rxd_flush, 1);
+	DBG_COUNTER_INC(rxd_flush);
 	sctx->isc_rxd_flush(sctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
 }
 
@@ -1343,12 +1354,12 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	MPASS(budget > 0);
 
 	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0) {
-		atomic_add_int(&iflib_rx_unavail, 1);
+		DBG_COUNTER_INC(rx_unavail);
 		return (false);
 	}
 	for (budget_left = budget; (budget_left > 0) && (avail > 0); budget_left--, avail--) {
 		if (__predict_false(!CTX_ACTIVE(ctx))) {
-			atomic_add_int(&iflib_rx_ctx_inactive, 1);
+			DBG_COUNTER_INC(rx_ctx_inactive);
 			break;
 		}
 		di = rxq->ifr_ifdi;
@@ -1391,7 +1402,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		bus_dmamap_unload(rxq->ifr_desc_tag, fl->ifl_sds[fl_cidx].ifsd_map);
 
 		if (ri.iri_len == 0) {
-			atomic_add_int(&iflib_rx_zero_len, 1);
+			DBG_COUNTER_INC(rx_zero_len);
 			/*
 			 * XXX Note currently we don't free the initial pieces
 			 * of a multi-fragment packet
@@ -1417,7 +1428,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 			avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
 
 		if (m == NULL) {
-			atomic_add_int(&iflib_rx_mbuf_null, 1);
+			DBG_COUNTER_INC(rx_mbuf_null);
 			continue;
 		}
 	imm_pkt:
@@ -1437,7 +1448,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		if (rxq->ifr_lc.lro_cnt != 0 &&
 			tcp_lro_rx(&rxq->ifr_lc, m, 0) == 0)
 			continue;
-		atomic_add_int(&iflib_rx_if_input, 1);
+		DBG_COUNTER_INC(rx_if_input);
 		if_input(sctx->isc_ifp, m);
 	}
 	/*
@@ -1523,7 +1534,7 @@ retry:
 				if (m == NULL) {
 					txq->ift_mbuf_defrag_failed++;
 					m_freem(*m_headp);
-					atomic_add_int(&iflib_tx_frees, 1);
+					DBG_COUNTER_INC(tx_frees);
 					*m_headp = NULL;
 					err = ENOBUFS;
 				} else {
@@ -1538,11 +1549,11 @@ retry:
 		default:
 			txq->ift_no_tx_dma_setup++;
 			m_freem(*m_headp);
-			atomic_add_int(&iflib_tx_frees, 1);
+			DBG_COUNTER_INC(tx_frees);
 			*m_headp = NULL;
 			break;
 		}
-		atomic_add_int(&iflib_encap_load_mbuf_fail, 1);
+		DBG_COUNTER_INC(encap_load_mbuf_fail);
 		return (err);
 	}
 
@@ -1554,7 +1565,7 @@ retry:
 	if (nsegs > TXQ_AVAIL(txq)) {
 		txq->ift_no_desc_avail++;
 		bus_dmamap_unload(txq->ift_desc_tag, map);
-		atomic_add_int(&iflib_encap_txq_avail_fail, 1);
+		DBG_COUNTER_INC(encap_txq_avail_fail);
 		return (ENOBUFS);
 	}
 	m_head = *m_headp;
@@ -1585,7 +1596,7 @@ retry:
 		txq->ift_npending += pi.ipi_ndescs;
 		iflib_txd_db_check(ctx, txq, 0);
 	} else {
-		atomic_add_int(&iflib_encap_txd_encap_fail, 1);
+		DBG_COUNTER_INC(encap_txd_encap_fail);
 	}
 	return (err);
 }
@@ -1625,7 +1636,7 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 				m = txsd->ifsd_m;
 				txsd->ifsd_m = m->m_nextpkt;
 				m_freem(m);
-				atomic_add_int(&iflib_tx_frees, 1);
+				DBG_COUNTER_INC(tx_frees);
 			}
 		}
 
@@ -1701,7 +1712,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		while ((count = buf_ring_sc_peek(br, (void **)mp, 16)) > 0)
 			for (i = 0; i < count; i++)
 				m_freem(mp[i]);
-		atomic_add_int(&iflib_txq_drain_flushing, 1);
+		DBG_COUNTER_INC(txq_drain_flushing);
 		return (0);
 	}
 	if (if_getdrvflags(ctx->ifc_sctx->isc_ifp) & IFF_DRV_OACTIVE) {
@@ -1709,7 +1720,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		mtx_lock(&txq->ift_mtx);
 		callout_stop(&txq->ift_timer);
 		mtx_unlock(&txq->ift_mtx);
-		atomic_add_int(&iflib_txq_drain_oactive, 1);
+		DBG_COUNTER_INC(txq_drain_oactive);
 		return (0);
 	}
 	sent = 0;
@@ -1720,12 +1731,12 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 			iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 			if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
 				!LINK_ACTIVE(ctx)) {
-				atomic_add_int(&iflib_txq_drain_notready, 1);
+				DBG_COUNTER_INC(txq_drain_notready);
 				goto done;
 			}
 			if(iflib_encap(sc, &mp[i])) {
 				buf_ring_sc_putback(br, mp[i], i);
-				atomic_add_int(&iflib_txq_drain_encapfail, 1);
+				DBG_COUNTER_INC(txq_drain_encapfail);
 				goto done;
 			}
 			sent++;
@@ -1764,7 +1775,7 @@ _task_fn_rx(void *context, int pending)
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 	bool more;
 
-	atomic_add_int(&iflib_task_fn_rxs, 1);
+	DBG_COUNTER_INC(task_fn_rxs);
 	if (!(if_getdrvflags(sctx->isc_ifp) & IFF_DRV_RUNNING))
 		return;
 
@@ -1772,7 +1783,7 @@ _task_fn_rx(void *context, int pending)
 		if (ctx->ifc_flags & IFC_LEGACY)
 			IFDI_INTR_ENABLE(sctx);
 		else {
-			atomic_add_int(&iflib_rx_intr_enables, 1);
+			DBG_COUNTER_INC(rx_intr_enables);
 			IFDI_RX_INTR_ENABLE(sctx, rxq->ifr_id);
 		}
 	}
@@ -1878,10 +1889,10 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	struct mbuf *marr[16], **mp, *next, *tnext;
 	int err, i, count, qidx;
 
-	atomic_add_int(&iflib_tx_seen, 1);
+	DBG_COUNTER_INC(tx_seen);
 
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0 || !LINK_ACTIVE(ctx)) {
-		atomic_add_int(&iflib_tx_frees, 1);
+		DBG_COUNTER_INC(tx_frees);
 		m_freem(m);
 		return (0);
 	}
@@ -1897,7 +1908,7 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 		if ((mp = malloc(count*sizeof(struct mbuf *), M_IFLIB, M_NOWAIT)) == NULL) {
 			m_freem(m);
 			/* XXX simplify for now */
-			atomic_add_int(&iflib_tx_frees, 1);
+			DBG_COUNTER_INC(tx_frees);
 			return (ENOBUFS);
 		}
 	for (tnext = next = m, i = 0; next != NULL; i++) {
