@@ -391,6 +391,10 @@
 	sponsor="&scaleengine;">The &man.fstyp.8; utility has been
 	updated to be able to detect &man.zfs.8; and &man.geli.8;
 	filesystems.</para>
+
+      <para revision="285550">The &man.w.1; utility has been updated
+	to display the full IPv6 remote address of the host from which
+	a user is connected.</para>
     </sect2>
 
     <sect2 xml:id="userland-contrib">
@@ -799,7 +803,16 @@
       <para revision="281495" contrib="sponsor" sponsor="&ff;">The
 	<literal>PAE_TABLES</literal> kernel configuration option has
 	been added for &os;/&arch.i386;, which instructs &man.pmap.9;
-	to use <acronym>PAE</acronym> format for page tables.</para>
+	to use <acronym>PAE</acronym> format for page tables with
+	32-bit physical addresses.  Unlike the <literal>PAE</literal>
+	option, <literal>PAE_TABLES</literal> preserves kernel binary
+	interface (<acronym>KBI</acronym>) compatibility with
+	non-<literal>PAE</literal> kernels, allowing
+	non-<literal>PAE</literal> kernel modules and drivers to work
+	with a <literal>PAE_TABLES</literal>-enabled kernel.
+	Additionally, system limits are tuned for 4GB maximum
+	<acronym>RAM</acronym>, avoiding kernel virtual address space
+	(<acronym>KVA</acronym>) exhaustion.</para>
 
       <para revision="282215">The <literal>SIFTR</literal> kernel
 	configuration has been added, allowing building &man.siftr.4;
