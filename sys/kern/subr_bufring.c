@@ -98,9 +98,6 @@ buf_ring_free(struct buf_ring *br, struct malloc_type *type)
 /*
  * buf_ring_sc definitions follow
  */
-#ifndef BR_ALIGN_ENTRIES
-#define BR_ALIGN_ENTRIES 0
-#endif
 
 #ifndef BRSC_DEBUG_COUNTERS
 #ifdef INVARIANTS
@@ -168,9 +165,6 @@ SYSCTL_INT(_net_brsc, OID_AUTO, deferred, CTLFLAG_RD,
 
 struct br_sc_entry_ {
 	volatile void *bre_ptr;
-#if BR_ALIGN_ENTRIES
-	char pad[CACHE_LINE_SIZE-sizeof(void*)];
-#endif
 };
 
 
@@ -329,10 +323,8 @@ buf_ring_sc_alloc(int count, struct malloc_type *type, int flags,
 	int alloc_count = count;
 
 	KASSERT(powerof2(count), ("buf ring must be size power of 2"));
-#if BR_ALIGN_ENTRIES == 0
 	if (brsc->brsc_flags & BR_FLAGS_ALIGNED)
 		alloc_count = count*ALIGN_SCALE;
-#endif
 	br = malloc(sizeof(struct buf_ring) + alloc_count*sizeof(caddr_t),
 	    type, flags|M_ZERO);
 	if (br == NULL)
