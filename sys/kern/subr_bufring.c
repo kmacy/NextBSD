@@ -560,9 +560,9 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 {
 	uint32_t prod_head, prod_next, cons;
 	uint32_t pidx, cidx, pidx_next;
-	int pending, rc, avail, domainvalid;
+	int i, pending, rc, avail, domainvalid;
 #ifdef DEBUG_BUFRING
-	int i, j;
+	int j;
 	for (i = BR_CONS_IDX(br); i != ORDERED_LOAD_32(&br->br_prod_tail);
 	     i = ((i + 1) & br->br_mask))
 		for (j = 0; j < count; j++)
