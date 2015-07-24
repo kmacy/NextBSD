@@ -1501,7 +1501,7 @@ iflib_txd_db_check(iflib_ctx_t ctx, iflib_txq_t txq, int ring)
 		dbval = txq->ift_npending ? txq->ift_npending : txq->ift_pidx;
 		wmb();
 		sctx->isc_txd_flush(sctx, txq->ift_id, dbval);
-		txq->ift_npending = 0;
+		txq->ift_db_pending = txq->ift_npending = 0;
 	}
 }
 
@@ -1744,6 +1744,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 			if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
 			if (mp[i]->m_flags & M_MCAST)
 				if_inc_counter(ifp, IFCOUNTER_OMCASTS, 1);
+			iflib_txd_db_check(ctx, txq, 0);
 			if_etherbpfmtap(ifp, mp[i]);
 		}
 		avail -= count;
