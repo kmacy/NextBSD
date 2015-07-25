@@ -830,7 +830,6 @@ taskqgroup_cpu_create(struct taskqgroup *qgroup, int idx)
 	taskqueue_start_threads(&qcpu->tgc_taskq, 1, PI_SOFT,
 	    "%s_%d", qgroup->tqg_name, idx);
 	qcpu->tgc_cpu = idx * qgroup->tqg_stride;
-	printf("created taskqgroup on %d\n", idx);
 }
 
 static void
