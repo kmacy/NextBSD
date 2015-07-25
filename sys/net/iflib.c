@@ -204,6 +204,7 @@ struct iflib_txq {
 	bus_dma_tag_t		    ift_desc_tag;
 	bus_dma_segment_t	ift_segs[IFLIB_MAX_TX_SEGS];
 	struct callout	ift_timer;
+	struct callout	ift_db_check;
 
 	struct mtx              ift_mtx;
 #define MTX_NAME_LEN 16
@@ -306,6 +307,12 @@ static int enable_msix = 1;
 #define SCTX_LOCK(sctx) CTX_LOCK((sctx)->isc_ctx)
 #define SCTX_UNLOCK(sctx) CTX_UNLOCK((sctx)->isc_ctx)
 
+
+#define TX_LOCK(txq)	mtx_lock(&txq->ift_mtx)
+#define TX_TRY_LOCK(txq)	mtx_trylock(&txq->ift_mtx)
+#define TX_UNLOCK(txq) 	mtx_unlock(&txq->ift_mtx)
+
+
 /* Our boot-time initialization hook */
 static int	iflib_module_event_handler(module_t, int, void *);
 
@@ -330,10 +337,16 @@ TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 #endif /* !INVARIANTS */
 #endif
 
-#if IFLIB_DEBUG_COUNTERS
-
 static SYSCTL_NODE(_net, OID_AUTO, iflib, CTLFLAG_RD, 0,
                    "iflib driver parameters");
+
+static int iflib_min_tx_latency;
+
+SYSCTL_INT(_net_iflib, OID_AUTO, min_tx_latency, CTLFLAG_RW,
+		   &iflib_min_tx_latency, 0, "minimize transmit latency at the possibel expense of throughput");
+
+#if IFLIB_DEBUG_COUNTERS
+
 static int iflib_tx_frees;
 static int iflib_tx_seen;
 static int iflib_rx_allocs;
@@ -974,7 +987,7 @@ iflib_fl_bufs_free(iflib_fl_t fl)
 				   M_NOWAIT, MT_DATA, 0);
 			uma_zfree(zone_mbuf, d->ifsd_m);
 			uma_zfree(fl->ifl_zone, d->ifsd_cl);
-		}				
+		}
 		d->ifsd_cl = NULL;
 		d->ifsd_m = NULL;
 		if (++cidx == fl->ifl_size)
@@ -1125,9 +1138,10 @@ iflib_init_locked(iflib_ctx_t ctx)
 
 	IFDI_INTR_DISABLE(sctx);
 	for (i = 0; i < sctx->isc_nqsets; i++, txq++) {
-		mtx_lock(&txq->ift_mtx);
+		TX_LOCK(txq);
 		callout_stop(&txq->ift_timer);
-		mtx_unlock(&txq->ift_mtx);
+		callout_stop(&txq->ift_db_check);
+		TX_UNLOCK(txq);
 	}
 	IFDI_INIT(sctx);
 	if_setdrvflagbits(sctx->isc_ifp, IFF_DRV_RUNNING, 0);
@@ -1311,8 +1325,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	int *cidxp, *genp;
 	struct if_rxd_info ri;
 	iflib_dma_info_t di;
-	int qsid, err, budget_left;
-	iflib_txq_t txq;
+	int err, budget_left;
 	iflib_fl_t fl;
 	struct ifnet *ifp;
 	struct lro_entry *queued;
@@ -1322,14 +1335,6 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	 * acks in interrupt context
 	 */
 	struct mbuf *m, *mh, *mt;
-
-	if (sctx->isc_txd_credits_update != NULL) {
-		qsid = rxq->ifr_id;
-		txq = &ctx->ifc_txqs[qsid];
-		if ((txq->ift_cidx != txq->ift_pidx || (txq->ift_gen && txq->ift_cidx == txq->ift_pidx)) &&
-			sctx->isc_txd_credits_update(sctx, qsid, txq->ift_cidx_processed))
-			GROUPTASK_ENQUEUE(&txq->ift_task);
-	}
 
 #ifdef DEV_NETMAP
 	if (netmap_rx_irq(ifp, rxq->ifr_id, &processed)) {
@@ -1472,18 +1477,16 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 static __inline void
 iflib_txd_db_check(iflib_ctx_t ctx, iflib_txq_t txq, int ring)
 {
-	if_shared_ctx_t sctx;
-	uint32_t dbval;
-	iflib_sd_t txsd;
+	if_shared_ctx_t sctx = ctx->ifc_sctx;
+	uint32_t dbval, dbval_prev;
 
 	if (ring || ++txq->ift_db_pending >= 32) {
-		sctx = ctx->ifc_sctx;
-		txsd = &txq->ift_sds[txq->ift_pidx];
+#ifdef notyet
+		iflib_sd_t txsd = &txq->ift_sds[txq->ift_pidx];
 
 		/*
 		 * Flush deferred buffers first
 		 */
-#ifdef notyet
 		/* XXX only do this on cards like T3 that can batch packets in a descriptor
 		 * and only do this if pidx != cidx
 		 */
@@ -1497,10 +1500,30 @@ iflib_txd_db_check(iflib_ctx_t ctx, iflib_txq_t txq, int ring)
 			txq->ift_pidx = pi.ipi_new_pidx;
 		}
 #endif
+		dbval_prev = txq->ift_npending ? txq->ift_npending : txq->ift_pidx;
+		/* the lock will only ever be contended in the !min_latency case */
+		if (TX_TRY_LOCK(txq) == 0)
+			return;
 		dbval = txq->ift_npending ? txq->ift_npending : txq->ift_pidx;
-		sctx->isc_txd_flush(sctx, txq->ift_id, dbval);
-		txq->ift_db_pending = txq->ift_npending = 0;
+		if (dbval == dbval_prev) {
+			sctx->isc_txd_flush(sctx, txq->ift_id, dbval);
+			txq->ift_db_pending = txq->ift_npending = 0;
+		}
+		TX_UNLOCK(txq);
 	}
+}
+
+static void
+iflib_txd_deferred_db_check(void * arg)
+{
+	iflib_txq_t txq = arg;
+	iflib_ctx_t ctx = txq->ift_ctx;
+	if_shared_ctx_t sctx = ctx->ifc_sctx;
+	uint32_t dbval;
+
+	dbval = txq->ift_npending ? txq->ift_npending : txq->ift_pidx;
+	sctx->isc_txd_flush(sctx, txq->ift_id, dbval);
+	txq->ift_db_pending = txq->ift_npending = 0;
 }
 
 static int
@@ -1606,6 +1629,21 @@ retry:
 #define DESC_RECLAIMABLE(q) ((int)((q)->ift_processed - (q)->ift_cleaned - (q)->ift_ctx->ifc_sctx->isc_tx_nsegments))
 #define RECLAIM_THRESH(ctx) ((ctx)->ifc_sctx->isc_tx_reclaim_thresh)
 #define MAX_TX_DESC(ctx) ((ctx)->ifc_sctx->isc_tx_nsegments)
+
+
+
+/* if there are more than TXQ_MIN_OCCUPANCY packets pending we consider deferring
+ * doorbell writes
+ */
+#define TXQ_MIN_OCCUPANCY 16
+
+static inline int
+iflib_txq_min_occupancy(iflib_txq_t txq)
+{
+
+	return (get_inuse(txq->ift_size, txq->ift_cidx, txq->ift_pidx, txq->ift_gen) < TXQ_MIN_OCCUPANCY + MAX_TX_DESC(txq->ift_ctx));
+}
+
 
 static void
 iflib_tx_desc_free(iflib_txq_t txq, int n)
@@ -1714,9 +1752,10 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 	}
 	if (if_getdrvflags(ctx->ifc_sctx->isc_ifp) & IFF_DRV_OACTIVE) {
 		txq->ift_qstatus = IFLIB_QUEUE_IDLE;
-		mtx_lock(&txq->ift_mtx);
+		TX_LOCK(txq);
 		callout_stop(&txq->ift_timer);
-		mtx_unlock(&txq->ift_mtx);
+		callout_stop(&txq->ift_db_check);
+		TX_UNLOCK(txq);
 		DBG_COUNTER_INC(txq_drain_oactive);
 		return (0);
 	}
@@ -1729,7 +1768,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 			if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
 				!LINK_ACTIVE(ctx)) {
 				DBG_COUNTER_INC(txq_drain_notready);
-				goto done;
+				goto skip_db;
 			}
 			if(iflib_encap(sc, &mp[i])) {
 				buf_ring_sc_putback(br, mp[i], i);
@@ -1747,9 +1786,13 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		avail -= count;
 	}
 done:
-	if (txq->ift_db_pending)
-		iflib_txd_db_check(ctx, txq, 1);
 
+	if ((iflib_min_tx_latency || iflib_txq_min_occupancy(txq)) && txq->ift_db_pending)
+		iflib_txd_db_check(ctx, txq, 1);
+	else if (txq->ift_db_pending && (callout_pending(&txq->ift_db_check) == 0))
+		callout_reset_on(&txq->ift_db_check, 1, iflib_txd_deferred_db_check,
+		    txq, txq->ift_db_check.c_cpu);
+skip_db:
 	return (sent);
 }
 
@@ -1802,9 +1845,9 @@ _task_fn_admin(void *context, int pending)
 
 	CTX_LOCK(ctx);
 	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++) {
-		mtx_lock(&txq->ift_mtx);
+		TX_LOCK(txq);
 		callout_stop(&txq->ift_timer);
-		mtx_unlock(&txq->ift_mtx);
+		TX_UNLOCK(txq);
 	}
 	IFDI_UPDATE_ADMIN_STATUS(sctx);
 	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++)
@@ -2230,9 +2273,10 @@ iflib_device_detach(device_t dev)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
 	IFDI_DETACH(sctx);
-	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++)
+	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++) {
 		callout_drain(&txq->ift_timer);
-
+		callout_drain(&txq->ift_db_check);
+	}
 #ifdef DEV_NETMAP
 	netmap_detach(ifp);
 #endif /* DEV_NETMAP */
@@ -2494,6 +2538,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)
 		txq->ift_id = i;
 		/* XXX fix this */
 		txq->ift_timer.c_cpu = i % mp_ncpus;
+		txq->ift_db_check.c_cpu = i % mp_ncpus;
 		txq->ift_nbr = nbuf_rings;
 		txq->ift_ifdi = &qset->ifq_ifdi[0];
 
@@ -2509,6 +2554,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)
 		    device_get_nameunit(dev), txq->ift_id);
 		mtx_init(&txq->ift_mtx, txq->ift_mtx_name, NULL, MTX_DEF);
 		callout_init_mtx(&txq->ift_timer, &txq->ift_mtx, 0);
+		callout_init_mtx(&txq->ift_db_check, &txq->ift_mtx, 0);
 
 		/* Allocate a buf ring */
 		brsc.brsc_sc = txq;
