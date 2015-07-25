@@ -1498,7 +1498,6 @@ iflib_txd_db_check(iflib_ctx_t ctx, iflib_txq_t txq, int ring)
 		}
 #endif
 		dbval = txq->ift_npending ? txq->ift_npending : txq->ift_pidx;
-		wmb();
 		sctx->isc_txd_flush(sctx, txq->ift_id, dbval);
 		txq->ift_db_pending = txq->ift_npending = 0;
 	}
@@ -1593,7 +1592,6 @@ retry:
 		txq->ift_in_use += ndesc;
 		txq->ift_pidx = pi.ipi_new_pidx;
 		txq->ift_npending += pi.ipi_ndescs;
-		iflib_txd_db_check(ctx, txq, 0);
 	} else {
 		DBG_COUNTER_INC(encap_txd_encap_fail);
 	}
