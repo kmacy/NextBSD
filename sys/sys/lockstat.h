@@ -108,7 +108,19 @@ extern int lockstat_enabled;
 } while (0)
 
 struct lock_object;
-uint64_t lockstat_nsecs(struct lock_object *);
+extern int lockstat_enabled;
+
+uint64_t
+_lockstat_nsecs(struct lock_object *);
+
+
+static inline uint64_t
+lockstat_nsecs(struct lock_object *lo)
+{
+	if (__predict_false(lockstat_enabled))
+		return (_lockstat_nsecs(lo));
+	return (0);
+}
 
 #else /* !KDTRACE_HOOKS */
 
