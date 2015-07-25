@@ -330,6 +330,8 @@ TASKQGROUP_DEFINE(if_io_tqg, mp_ncpus, 1);
 TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 
 
+#define IFLIB_DEBUG_COUNTERS 1
+
 #ifndef IFLIB_DEBUG_COUNTERS
 #ifdef INVARIANTS
 #define IFLIB_DEBUG_COUNTERS 1
@@ -347,19 +349,16 @@ SYSCTL_INT(_net_iflib, OID_AUTO, min_tx_latency, CTLFLAG_RW,
 		   &iflib_min_tx_latency, 0, "minimize transmit latency at the possibel expense of throughput");
 
 
-static int iflib_tx_frees;
-
-SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
-		   &iflib_tx_frees, 0, "# tx frees");
-
-
 #if IFLIB_DEBUG_COUNTERS
 
 static int iflib_tx_seen;
 static int iflib_rx_allocs;
 static int iflib_fl_refills;
 static int iflib_fl_refills_large;
+static int iflib_tx_frees;
 
+SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
+		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_allocs, CTLFLAG_RD,
