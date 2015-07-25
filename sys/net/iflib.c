@@ -419,6 +419,27 @@ static void iflib_tx_structures_free(if_shared_ctx_t sctx);
 static void iflib_rx_structures_free(if_shared_ctx_t sctx);
 
 
+static void *
+if_dbg_malloc(unsigned long size, struct malloc_type *type, int flags)
+{
+	caddr_t p, ptmp;
+	char buf[4] = {0, 0, 0, 0};
+	int i;
+
+	ptmp = p = malloc(size, type, flags);
+
+	if ((flags & M_ZERO) == 0)
+		return (p);
+
+	for (i = 0; i < size; i += 4, ptmp += 4) {
+		if (bcmp(buf, ptmp, 4) != 0)
+			panic("received non-zero memory from malloc");
+	}
+	return (p);
+}
+
+#define malloc if_dbg_malloc
+
 
 #if defined(__i386__) || defined(__amd64__)
 static __inline void
