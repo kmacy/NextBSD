@@ -93,8 +93,8 @@ options		ALT_BREAK_TO_DEBUGGER
 # Make an SMP-capable kernel by default
 options 	SMP			# Symmetric MultiProcessor Kernel
 
-options		RSS
-options		PCBGROUP
+#options		RSS
+#options		PCBGROUP
 
 
 # CPU frequency control
