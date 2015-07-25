@@ -329,9 +329,6 @@ MODULE_VERSION(iflib, 1);
 TASKQGROUP_DEFINE(if_io_tqg, mp_ncpus, 1);
 TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 
-
-#define IFLIB_DEBUG_COUNTERS 1
-
 #ifndef IFLIB_DEBUG_COUNTERS
 #ifdef INVARIANTS
 #define IFLIB_DEBUG_COUNTERS 1
