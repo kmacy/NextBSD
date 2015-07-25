@@ -48,6 +48,7 @@
 #include <net/if_var.h>
 #include <net/if_types.h>
 #include <net/if_media.h>
+#include <net/bpf.h>
 #include <net/ethernet.h>
 
 #include <netinet/in.h>
@@ -345,9 +346,15 @@ static int iflib_min_tx_latency;
 SYSCTL_INT(_net_iflib, OID_AUTO, min_tx_latency, CTLFLAG_RW,
 		   &iflib_min_tx_latency, 0, "minimize transmit latency at the possibel expense of throughput");
 
-#if IFLIB_DEBUG_COUNTERS
 
 static int iflib_tx_frees;
+
+SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
+		   &iflib_tx_frees, 0, "# tx frees");
+
+
+#if IFLIB_DEBUG_COUNTERS
+
 static int iflib_tx_seen;
 static int iflib_rx_allocs;
 static int iflib_fl_refills;
@@ -355,8 +362,6 @@ static int iflib_fl_refills_large;
 
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
-SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
-		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_allocs, CTLFLAG_RD,
 		   &iflib_rx_allocs, 0, "# rx allocations");
 SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills, CTLFLAG_RD,
@@ -1644,7 +1649,6 @@ iflib_txq_min_occupancy(iflib_txq_t txq)
 	return (get_inuse(txq->ift_size, txq->ift_cidx, txq->ift_pidx, txq->ift_gen) < TXQ_MIN_OCCUPANCY + MAX_TX_DESC(txq->ift_ctx));
 }
 
-
 static void
 iflib_tx_desc_free(iflib_txq_t txq, int n)
 {
@@ -1741,7 +1745,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 	iflib_ctx_t ctx = txq->ift_ctx;
 	if_t ifp = ctx->ifc_sctx->isc_ifp;
 	struct mbuf *mp[16];
-	int i, count, sent;
+	int i, count, pkt_sent, bytes_sent, mcast_sent;
 
 	if (ctx->ifc_flags & IFC_QFLUSH) {
 		while ((count = buf_ring_sc_peek(br, (void **)mp, 16)) > 0)
@@ -1759,29 +1763,28 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		DBG_COUNTER_INC(txq_drain_oactive);
 		return (0);
 	}
-	sent = 0;
+	mcast_sent = bytes_sent = pkt_sent = 0;
 	while (avail) {
 		count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, 16));
 		KASSERT(count <= MIN(avail, 16), ("invalid count returned"));
+		iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
+		if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
+			!LINK_ACTIVE(ctx)) {
+			DBG_COUNTER_INC(txq_drain_notready);
+			goto skip_db;
+		}
 		for (i = 0; i < count; i++) {
-			iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
-			if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
-				!LINK_ACTIVE(ctx)) {
-				DBG_COUNTER_INC(txq_drain_notready);
-				goto skip_db;
-			}
 			if(iflib_encap(sc, &mp[i])) {
 				buf_ring_sc_putback(br, mp[i], i);
 				DBG_COUNTER_INC(txq_drain_encapfail);
 				goto done;
 			}
-			sent++;
-			if_inc_counter(ifp, IFCOUNTER_OBYTES, mp[i]->m_pkthdr.len);
-			if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
+			pkt_sent++;
+			bytes_sent += mp[i]->m_pkthdr.len;
 			if (mp[i]->m_flags & M_MCAST)
-				if_inc_counter(ifp, IFCOUNTER_OMCASTS, 1);
+				mcast_sent++;
 			iflib_txd_db_check(ctx, txq, 0);
-			if_etherbpfmtap(ifp, mp[i]);
+			ETHER_BPF_MTAP(ifp, mp[i]);
 		}
 		avail -= count;
 	}
@@ -1793,7 +1796,12 @@ done:
 		callout_reset_on(&txq->ift_db_check, 1, iflib_txd_deferred_db_check,
 		    txq, txq->ift_db_check.c_cpu);
 skip_db:
-	return (sent);
+	if_inc_counter(ifp, IFCOUNTER_OBYTES, bytes_sent);
+	if_inc_counter(ifp, IFCOUNTER_OPACKETS, pkt_sent);
+	if (mcast_sent)
+		if_inc_counter(ifp, IFCOUNTER_OMCASTS, mcast_sent);
+
+	return (pkt_sent);
 }
 
 static void
@@ -2958,6 +2966,7 @@ void
 iflib_tx_credits_update(if_shared_ctx_t sctx, int txqid, int credits)
 {
 	iflib_ctx_t ctx = sctx->isc_ctx;
+
 	ctx->ifc_txqs[txqid].ift_processed += credits;
 	ctx->ifc_txqs[txqid].ift_cidx_processed += credits;
 
