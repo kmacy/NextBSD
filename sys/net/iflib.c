@@ -1605,11 +1605,9 @@ retry:
 		bus_dmamap_sync(txq->ift_ifdi->idi_tag, txq->ift_ifdi->idi_map,
 						BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 
-		if (pi.ipi_m != NULL) {
-			if (txsd->ifsd_m != NULL)
-				pi.ipi_m->m_nextpkt = txsd->ifsd_m;
-			txsd->ifsd_m = pi.ipi_m;
-		}
+		MPASS(pi.ipi_m != NULL);
+		MPASS(txsd->ifsd_m == NULL);
+		txsd->ifsd_m = pi.ipi_m;
 
 		if (pi.ipi_new_pidx >= pi.ipi_pidx)
 			ndesc = pi.ipi_new_pidx - pi.ipi_pidx;
@@ -1665,17 +1663,16 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 		prefetch(txq->ift_sds[(cidx + 1) & mask].ifsd_m);
 		prefetch(txq->ift_sds[(cidx + 2) & mask].ifsd_m);
 
-		if (txsd->ifsd_m != NULL) {
-			if (txsd->ifsd_flags & TX_SW_DESC_MAPPED) {
-				bus_dmamap_unload(txq->ift_desc_tag, txsd->ifsd_map);
-				txsd->ifsd_flags &= ~TX_SW_DESC_MAPPED;
-			}
-			while (txsd->ifsd_m) {
-				m = txsd->ifsd_m;
-				txsd->ifsd_m = m->m_nextpkt;
-				m_freem(m);
-				DBG_COUNTER_INC(tx_frees);
-			}
+		MPASS(txsd->ifsd_m != NULL);
+		if (txsd->ifsd_flags & TX_SW_DESC_MAPPED) {
+			bus_dmamap_unload(txq->ift_desc_tag, txsd->ifsd_map);
+			txsd->ifsd_flags &= ~TX_SW_DESC_MAPPED;
+		}
+		while (txsd->ifsd_m) {
+			m = txsd->ifsd_m;
+			txsd->ifsd_m = m->m_nextpkt;
+			m_freem(m);
+			DBG_COUNTER_INC(tx_frees);
 		}
 
 		++txsd;
