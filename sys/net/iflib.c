@@ -1224,7 +1224,7 @@ static struct mbuf *
 iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 {
 	iflib_sd_t sd_next, sd = &fl->ifl_sds[fl->ifl_cidx];
-	uint32_t flags = M_EXT;
+	uint32_t flags = 0;
 	caddr_t cl;
 	struct mbuf *m;
 	int cidx_next, len = ri->iri_len;
@@ -1233,25 +1233,21 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 	MPASS(sd->ifsd_m != NULL);
 
 	fl->ifl_credits--;
+	m = sd->ifsd_m;
+	sd->ifsd_m = NULL;
+	if (sd->ifsd_mh == NULL)
+		flags |= M_PKTHDR;
+
 	/* SYNC ? */
-
 	if (ri->iri_len <= IFLIB_RX_COPY_THRESH) {
-		m = sd->ifsd_m;
-		sd->ifsd_m = NULL;
-
-		flags = (sd->ifsd_mh == NULL) ? M_PKTHDR : 0;
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
-		cl = mtod(m, void *);
-		memcpy(cl, sd->ifsd_cl, ri->iri_len);
+		memcpy(m->m_data, sd->ifsd_cl, ri->iri_len);
 	} else {
 		bus_dmamap_unload(fl->ifl_rxq->ifr_desc_tag, sd->ifsd_map);
 		cl = sd->ifsd_cl;
-		m = sd->ifsd_m;
 		sd->ifsd_cl = NULL;
-		sd->ifsd_m = NULL;
 
-		if (sd->ifsd_mh == NULL)
-			flags |= M_PKTHDR;
+		flags |= M_EXT;
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		m_cljset(m, cl, fl->ifl_cltype);
 	}
