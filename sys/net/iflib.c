@@ -1591,6 +1591,8 @@ retry:
 		txq->ift_no_desc_avail++;
 		bus_dmamap_unload(txq->ift_desc_tag, map);
 		DBG_COUNTER_INC(encap_txq_avail_fail);
+		if (txq->ift_task.gt_task.ta_pending == 0)
+			GROUPTASK_ENQUEUE(&txq->ift_task);
 		return (ENOBUFS);
 	}
 	m_head = *m_headp;
@@ -1703,8 +1705,8 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 	 * Add some rate-limiting check so that that
 	 * this isn't called every time
 	 */
-	if (sctx->isc_txd_credits_update != NULL && reclaim <= thresh)
-		sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx);
+	if (sctx->isc_txd_credits_update != NULL && reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
+		sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx_processed);
 
 	reclaim = DESC_RECLAIMABLE(txq);
 	if (reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
