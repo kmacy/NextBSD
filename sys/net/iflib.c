@@ -1215,6 +1215,7 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 	int cidx_next, len = ri->iri_len;
 
 	MPASS(sd->ifsd_cl != NULL);
+	MPASS(sd->ifsd_m != NULL);
 
 	fl->ifl_credits--;
 	/* SYNC ? */
@@ -1223,11 +1224,17 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 		m = sd->ifsd_m;
 		sd->ifsd_m = NULL;
 
+		flags = (sd->ifsd_mh == NULL) ? M_PKTHDR : 0;
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		cl = mtod(m, void *);
 		memcpy(cl, sd->ifsd_cl, ri->iri_len);
+		m->m_len = ri->iri_len;
 
-		m->m_pkthdr.len = m->m_len = ri->iri_len;
+		if (flags) {
+			m->m_pkthdr.len = m->m_len;
+		} else {
+			sd->ifsd_mh->m_pkthdr.len += m->m_len;
+		}
 		if (ri->iri_pad) {
 			m->m_data += ri->iri_pad;
 			len -= ri->iri_pad;
@@ -1236,8 +1243,6 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 		bus_dmamap_unload(fl->ifl_rxq->ifr_desc_tag, sd->ifsd_map);
 		cl = sd->ifsd_cl;
 		m = sd->ifsd_m;
-		MPASS(cl != NULL);
-		MPASS(m	!= NULL);
 		sd->ifsd_cl = NULL;
 		sd->ifsd_m = NULL;
 
