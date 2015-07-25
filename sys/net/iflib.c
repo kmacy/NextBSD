@@ -1666,7 +1666,6 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 		prefetch(txq->ift_sds[(cidx + 1) & mask].ifsd_m);
 		prefetch(txq->ift_sds[(cidx + 2) & mask].ifsd_m);
 
-		MPASS(txsd->ifsd_m != NULL);
 		if (txsd->ifsd_m != NULL) {
 			if (txsd->ifsd_flags & TX_SW_DESC_MAPPED) {
 				bus_dmamap_unload(txq->ift_desc_tag, txsd->ifsd_map);
@@ -1678,13 +1677,13 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 				m_freem(m);
 				DBG_COUNTER_INC(tx_frees);
 			}
+		}
 
-			++txsd;
-			if (++cidx == qsize) {
-				cidx = 0;
-				gen = 0;
-				txsd = txq->ift_sds;
-			}
+		++txsd;
+		if (++cidx == qsize) {
+			cidx = 0;
+			gen = 0;
+			txsd = txq->ift_sds;
 		}
 	}
 	txq->ift_cidx = cidx;
@@ -1702,8 +1701,7 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 
 	reclaim = DESC_RECLAIMABLE(txq);
 	/*
-	 * Add some rate-limiting check so that that
-	 * this isn't called every time
+	 * Need a rate-limiting check so that this isn't called every time
 	 */
 	if (sctx->isc_txd_credits_update != NULL && reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
 		sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx_processed);
