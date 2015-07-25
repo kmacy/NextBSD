@@ -1637,7 +1637,7 @@ retry:
 /* if there are more than TXQ_MIN_OCCUPANCY packets pending we consider deferring
  * doorbell writes
  */
-#define TXQ_MIN_OCCUPANCY 16
+#define TXQ_MIN_OCCUPANCY 8
 
 static inline int
 iflib_txq_min_occupancy(iflib_txq_t txq)
@@ -1671,6 +1671,7 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 			while (txsd->ifsd_m) {
 				m = txsd->ifsd_m;
 				txsd->ifsd_m = m->m_nextpkt;
+				m->m_nextpkt = NULL;
 				m_freem(m);
 				DBG_COUNTER_INC(tx_frees);
 			}
@@ -1931,7 +1932,7 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 {
 	iflib_ctx_t	ctx = if_getsoftc(ifp);
 	iflib_txq_t txq;
-	struct mbuf *marr[16], **mp, *next, *tnext;
+	struct mbuf *marr[16], **mp, *next;
 	int err, i, count, qidx;
 
 	DBG_COUNTER_INC(tx_seen);
@@ -1951,16 +1952,16 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 
 	if (count > 16)
 		if ((mp = malloc(count*sizeof(struct mbuf *), M_IFLIB, M_NOWAIT)) == NULL) {
+			/* XXX check nextpkt */
 			m_freem(m);
 			/* XXX simplify for now */
 			DBG_COUNTER_INC(tx_frees);
 			return (ENOBUFS);
 		}
-	for (tnext = next = m, i = 0; next != NULL; i++) {
+	for (next = m, i = 0; next != NULL; i++) {
 		mp[i] = next;
-		tnext = next;
-		next = tnext->m_nextpkt;
-		tnext->m_nextpkt = NULL;
+		next = next->m_nextpkt;
+		mp[i]->m_nextpkt = NULL;
 	}
 	if ((NQSETS(ctx) > 1) && M_HASHTYPE_GET(m))
 		qidx = QIDX(ctx, m);
