@@ -1222,10 +1222,11 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 	if (ri->iri_len <= IFLIB_RX_COPY_THRESH) {
 		m = sd->ifsd_m;
 		sd->ifsd_m = NULL;
+
+		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		cl = mtod(m, void *);
 		memcpy(cl, sd->ifsd_cl, ri->iri_len);
 
-		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		m->m_pkthdr.len = m->m_len = ri->iri_len;
 		if (ri->iri_pad) {
 			m->m_data += ri->iri_pad;
