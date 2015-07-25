@@ -306,8 +306,6 @@ static int enable_msix = 1;
 #define SCTX_LOCK(sctx) CTX_LOCK((sctx)->isc_ctx)
 #define SCTX_UNLOCK(sctx) CTX_UNLOCK((sctx)->isc_ctx)
 
-static int iflib_recycle_enable;
-
 /* Our boot-time initialization hook */
 static int	iflib_module_event_handler(module_t, int, void *);
 
@@ -849,11 +847,13 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 		/*
 		 * We allocate an uninitialized mbuf + cluster, mbuf is
 		 * initialized after rx.
+		 *
+		 * If the cluster is still set then we know a minimum sized packet was received
 		 */
-		if ((cl = m_cljget(NULL, M_NOWAIT, fl->ifl_buf_size)) == NULL)
+		if ((cl = rxsd->ifsd_cl) == NULL &&
+			(cl = rxsd->ifsd_cl = m_cljget(NULL, M_NOWAIT, fl->ifl_buf_size)) == NULL)
 			break;
 		if ((m = m_gethdr(M_NOWAIT, MT_NOINIT)) == NULL) {
-			uma_zfree(fl->ifl_zone, cl);
 			break;
 		}
 		DBG_COUNTER_INC(rx_allocs);
@@ -893,10 +893,8 @@ _iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
 		phys_addr = pmap_kextract((vm_offset_t)cl);
 #endif
 		rxsd->ifsd_flags |= RX_SW_DESC_INUSE;
-#ifdef INVARIANTS
-		MPASS(rxsd->ifsd_cl == NULL);
+
 		MPASS(rxsd->ifsd_m == NULL);
-#endif
 		rxsd->ifsd_cl = cl;
 		rxsd->ifsd_m = m;
 		fl->ifl_phys_addrs[i] = phys_addr;
@@ -1161,22 +1159,6 @@ iflib_stop(iflib_ctx_t ctx)
 	IFDI_STOP(sctx);
 }
 
-static int
-iflib_recycle_rx_buf(iflib_fl_t fl)
-{
-#if 0
-	/* XXX just reassign */
-	if ((err = IFDI_RECYCLE_RX_BUF(sctx, rxq, idx)) != 0)
-		return (err);
-
-	rxq->ifr_sds[rxq->ifr_pidx] = rxq->ifr_sds[idx];
-	rxq->ifr_credits++;
-	if (++rxq->ifr_pidx == rxq->ifr_size)
-		rxq->ifr_pidx = 0;
-#endif
-	return (0);
-}
-
 /*
  * Internal service routines
  */
@@ -1216,29 +1198,27 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 	fl->ifl_credits--;
 	/* SYNC ? */
 
-	if (iflib_recycle_enable && ri->iri_len <= IFLIB_RX_COPY_THRESH) {
-		panic(" not all cases handled");
-		if ((m = m_gethdr(M_NOWAIT, MT_DATA)) == NULL)
-			goto skip_recycle;
+	if (ri->iri_len <= IFLIB_RX_COPY_THRESH) {
+		m = sd->ifsd_m;
+		sd->ifsd_m = NULL;
 		cl = mtod(m, void *);
 		memcpy(cl, sd->ifsd_cl, ri->iri_len);
-		iflib_recycle_rx_buf(fl);
+
+		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		m->m_pkthdr.len = m->m_len = ri->iri_len;
 		if (ri->iri_pad) {
 			m->m_data += ri->iri_pad;
 			len -= ri->iri_pad;
 		}
 	} else {
-	skip_recycle:
 		bus_dmamap_unload(fl->ifl_rxq->ifr_desc_tag, sd->ifsd_map);
 		cl = sd->ifsd_cl;
 		m = sd->ifsd_m;
 		MPASS(cl != NULL);
 		MPASS(m	!= NULL);
-#ifdef INVARIANTS
 		sd->ifsd_cl = NULL;
 		sd->ifsd_m = NULL;
-#endif
+
 		if (sd->ifsd_mh == NULL)
 			flags |= M_PKTHDR;
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
@@ -1253,7 +1233,7 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 			m->m_pkthdr.len = len;
 		else
 			sd->ifsd_mh->m_pkthdr.len += len;
-		}
+	}
 
 	if (sd->ifsd_mh != NULL && 	ri->iri_next_offset != 0) {
 		/* We're in the middle of a packet and thus
@@ -1318,6 +1298,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	int qsid, err, budget_left;
 	iflib_txq_t txq;
 	iflib_fl_t fl;
+	struct ifnet *ifp;
 	struct lro_entry *queued;
 	int8_t qidx;
 	/*
@@ -1403,11 +1384,12 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 
 		if (ri.iri_len == 0) {
 			DBG_COUNTER_INC(rx_zero_len);
+			m_freem(fl->ifl_sds[fl_cidx].ifsd_m);
+			fl->ifl_sds[fl_cidx].ifsd_m = NULL;
 			/*
 			 * XXX Note currently we don't free the initial pieces
 			 * of a multi-fragment packet
 			 */
-			iflib_recycle_rx_buf(fl);
 			if (++fl_cidx == fl->ifl_size) {
 				fl_cidx = 0;
 				fl_gen = 0;
@@ -1441,6 +1423,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	}
 	__iflib_fl_refill_lt(ctx, fl, budget);
 
+	ifp = sctx->isc_ifp;
 	while (mh != NULL) {
 		m = mh;
 		mh = mh->m_nextpkt;
@@ -1449,7 +1432,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 			tcp_lro_rx(&rxq->ifr_lc, m, 0) == 0)
 			continue;
 		DBG_COUNTER_INC(rx_if_input);
-		if_input(sctx->isc_ifp, m);
+		ifp->if_input(ifp, m);
 	}
 	/*
 	 * Flush any outstanding LRO work
@@ -2478,7 +2461,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)
 		 i++, txconf++, rxconf++, qset++, txq++, rxq++) {
 		/* Set up some basics */
 
-		if ((ifdip = malloc(sizeof(struct iflib_dma_info) * nqs, M_DEVBUF, M_WAITOK)) == NULL) {
+		if ((ifdip = malloc(sizeof(struct iflib_dma_info) * nqs, M_DEVBUF, M_WAITOK|M_ZERO)) == NULL) {
 			device_printf(dev, "failed to allocate iflib_dma_info\n");
 			err = ENOMEM;
 			goto fail;
