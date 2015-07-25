@@ -1228,17 +1228,6 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		cl = mtod(m, void *);
 		memcpy(cl, sd->ifsd_cl, ri->iri_len);
-		m->m_len = ri->iri_len;
-
-		if (flags) {
-			m->m_pkthdr.len = m->m_len;
-		} else {
-			sd->ifsd_mh->m_pkthdr.len += m->m_len;
-		}
-		if (ri->iri_pad) {
-			m->m_data += ri->iri_pad;
-			len -= ri->iri_pad;
-		}
 	} else {
 		bus_dmamap_unload(fl->ifl_rxq->ifr_desc_tag, sd->ifsd_map);
 		cl = sd->ifsd_cl;
@@ -1250,17 +1239,17 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 			flags |= M_PKTHDR;
 		m_init(m, fl->ifl_zone, fl->ifl_buf_size, M_NOWAIT, MT_DATA, flags);
 		m_cljset(m, cl, fl->ifl_cltype);
-
-		if (ri->iri_pad) {
-			m->m_data += ri->iri_pad;
-			len -= ri->iri_pad;
-		}
-		m->m_len = len;
-		if (sd->ifsd_mh == NULL)
-			m->m_pkthdr.len = len;
-		else
-			sd->ifsd_mh->m_pkthdr.len += len;
 	}
+
+	if (ri->iri_pad) {
+		m->m_data += ri->iri_pad;
+		len -= ri->iri_pad;
+	}
+	m->m_len = len;
+	if (sd->ifsd_mh == NULL)
+		m->m_pkthdr.len = len;
+	else
+		sd->ifsd_mh->m_pkthdr.len += len;
 
 	if (sd->ifsd_mh != NULL && 	ri->iri_next_offset != 0) {
 		/* We're in the middle of a packet and thus
