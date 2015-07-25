@@ -983,7 +983,8 @@ ixl_if_init(if_shared_ctx_t sctx)
 	bcopy(IF_LLADDR(sctx->isc_ifp), tmpaddr,
 	      I40E_ETH_LENGTH_OF_ADDRESS);
 	if (!cmp_etheraddr(hw->mac.addr, tmpaddr) && 
-	    i40e_validate_mac_addr(tmpaddr)) {
+	    (i40e_validate_mac_addr(tmpaddr) == I40E_SUCCESS)) {
+		ixl_del_filter(vsi, hw->mac.addr, IXL_VLAN_ANY);
 		bcopy(tmpaddr, hw->mac.addr,
 		    I40E_ETH_LENGTH_OF_ADDRESS);
 		ret = i40e_aq_mac_address_write(hw,
@@ -993,6 +994,8 @@ ixl_if_init(if_shared_ctx_t sctx)
 			device_printf(dev, "LLA address"
 			 "change failed!!\n");
 			return;
+		} else {
+			ixl_add_filter(vsi, hw->mac.addr, IXL_VLAN_ANY);
 		}
 	}
 

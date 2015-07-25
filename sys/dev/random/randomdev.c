@@ -64,6 +64,9 @@ __FBSDID("$FreeBSD$");
 
 #define	RANDOM_UNIT	0
 
+/* Return the largest number >= x that is a multiple of m */
+#define CEIL_TO_MULTIPLE(x, m) ((((x) + (m) - 1)/(m))*(m))
+
 static d_read_t randomdev_read;
 static d_write_t randomdev_write;
 static d_poll_t randomdev_poll;
@@ -160,22 +163,28 @@ int
 read_random_uio(struct uio *uio, bool nonblock)
 {
 	uint8_t *random_buf;
-	int error;
+	int error, spamcount;
 	ssize_t read_len, total_read, c;
 
 	random_buf = malloc(PAGE_SIZE, M_ENTROPY, M_WAITOK);
 	random_alg_context.ra_pre_read();
-	/* (Un)Blocking logic */
 	error = 0;
+	spamcount = 0;
+	/* (Un)Blocking logic */
 	while (!random_alg_context.ra_seeded()) {
 		if (nonblock) {
 			error = EWOULDBLOCK;
 			break;
 		}
-		tsleep(&random_alg_context, 0, "randseed", hz/10);
 		/* keep tapping away at the pre-read until we seed/unblock. */
 		random_alg_context.ra_pre_read();
-		printf("random: %s unblock wait\n", __func__);
+		/* Only bother the console every 10 seconds or so */
+		if (spamcount == 0)
+			printf("random: %s unblock wait\n", __func__);
+		spamcount = (spamcount + 1)%100;
+		error = tsleep(&random_alg_context, PCATCH, "randseed", hz/10);
+		if (error == ERESTART || error == EINTR)
+			break;
 	}
 	if (error == 0) {
 #if !defined(RANDOM_DUMMY)
@@ -191,15 +200,15 @@ read_random_uio(struct uio *uio, bool nonblock)
 			 * which is what the underlying generator is expecting.
 			 * See the random_buf size requirements in the Yarrow/Fortuna code.
 			 */
-			read_len += RANDOM_BLOCKSIZE;
-			read_len -= read_len % RANDOM_BLOCKSIZE;
+			read_len = CEIL_TO_MULTIPLE(read_len, RANDOM_BLOCKSIZE);
+			/* Work in chunks page-sized or less */
 			read_len = MIN(read_len, PAGE_SIZE);
 			random_alg_context.ra_read(random_buf, read_len);
 			c = MIN(uio->uio_resid, read_len);
 			error = uiomove(random_buf, c, uio);
 			total_read += c;
 		}
-		if (total_read != uio->uio_resid && (error == ERESTART || error == EINTR) )
+		if (total_read != uio->uio_resid && (error == ERESTART || error == EINTR))
 			/* Return partial read, not error. */
 			error = 0;
 	}
@@ -217,7 +226,7 @@ read_random_uio(struct uio *uio, bool nonblock)
 u_int
 read_random(void *random_buf, u_int len)
 {
-	u_int read_len, total_read, c;
+	u_int read_len;
 	uint8_t local_buf[len + RANDOM_BLOCKSIZE];
 
 	KASSERT(random_buf != NULL, ("No suitable random buffer in %s", __func__));
@@ -228,22 +237,16 @@ read_random(void *random_buf, u_int len)
 		/* XXX: FIX!! Next line as an atomic operation? */
 		read_rate += (len + sizeof(uint32_t))/sizeof(uint32_t);
 #endif
-		read_len = len;
-		/*
-		 * Belt-and-braces.
-		 * Round up the read length to a crypto block size multiple,
-		 * which is what the underlying generator is expecting.
-		 */
-		read_len += RANDOM_BLOCKSIZE;
-		read_len -= read_len % RANDOM_BLOCKSIZE;
-		total_read = 0;
-		while (read_len) {
-			c = MIN(read_len, PAGE_SIZE);
-			random_alg_context.ra_read(&local_buf[total_read], c);
-			read_len -= c;
-			total_read += c;
+		if (len > 0) {
+			/*
+			 * Belt-and-braces.
+			 * Round up the read length to a crypto block size multiple,
+			 * which is what the underlying generator is expecting.
+			 */
+			read_len = CEIL_TO_MULTIPLE(len, RANDOM_BLOCKSIZE);
+			random_alg_context.ra_read(local_buf, read_len);
+			memcpy(random_buf, local_buf, len);
 		}
-		memcpy(random_buf, local_buf, len);
 	} else
 		len = 0;
 	return (len);
