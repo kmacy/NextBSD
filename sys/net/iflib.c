@@ -1609,11 +1609,12 @@ retry:
 		MPASS(txsd->ifsd_m == NULL);
 		txsd->ifsd_m = pi.ipi_m;
 
-		if (pi.ipi_new_pidx >= pi.ipi_pidx)
+		if (pi.ipi_new_pidx >= pi.ipi_pidx) {
 			ndesc = pi.ipi_new_pidx - pi.ipi_pidx;
-		else
+		} else {
 			ndesc = pi.ipi_new_pidx - pi.ipi_pidx + sctx->isc_ntxd;
-
+			txq->ift_gen = 1;
+		}
 		txq->ift_in_use += ndesc;
 		txq->ift_pidx = pi.ipi_new_pidx;
 		txq->ift_npending += pi.ipi_ndescs;
@@ -1664,22 +1665,24 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 		prefetch(txq->ift_sds[(cidx + 2) & mask].ifsd_m);
 
 		MPASS(txsd->ifsd_m != NULL);
-		if (txsd->ifsd_flags & TX_SW_DESC_MAPPED) {
-			bus_dmamap_unload(txq->ift_desc_tag, txsd->ifsd_map);
-			txsd->ifsd_flags &= ~TX_SW_DESC_MAPPED;
-		}
-		while (txsd->ifsd_m) {
-			m = txsd->ifsd_m;
-			txsd->ifsd_m = m->m_nextpkt;
-			m_freem(m);
-			DBG_COUNTER_INC(tx_frees);
-		}
+		if (txsd->ifsd_m != NULL) {
+			if (txsd->ifsd_flags & TX_SW_DESC_MAPPED) {
+				bus_dmamap_unload(txq->ift_desc_tag, txsd->ifsd_map);
+				txsd->ifsd_flags &= ~TX_SW_DESC_MAPPED;
+			}
+			while (txsd->ifsd_m) {
+				m = txsd->ifsd_m;
+				txsd->ifsd_m = m->m_nextpkt;
+				m_freem(m);
+				DBG_COUNTER_INC(tx_frees);
+			}
 
-		++txsd;
-		if (++cidx == qsize) {
-			cidx = 0;
-			gen = 0;
-			txsd = txq->ift_sds;
+			++txsd;
+			if (++cidx == qsize) {
+				cidx = 0;
+				gen = 0;
+				txsd = txq->ift_sds;
+			}
 		}
 	}
 	txq->ift_cidx = cidx;
