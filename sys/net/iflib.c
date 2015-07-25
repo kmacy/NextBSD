@@ -418,7 +418,7 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rxd_flush, CTLFLAG_RD,
 static void iflib_tx_structures_free(if_shared_ctx_t sctx);
 static void iflib_rx_structures_free(if_shared_ctx_t sctx);
 
-
+#if IFLIB_DEBUG
 static void *
 if_dbg_malloc(unsigned long size, struct malloc_type *type, int flags)
 {
@@ -439,7 +439,7 @@ if_dbg_malloc(unsigned long size, struct malloc_type *type, int flags)
 }
 
 #define malloc if_dbg_malloc
-
+#endif
 
 #if defined(__i386__) || defined(__amd64__)
 static __inline void
