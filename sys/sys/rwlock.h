@@ -190,19 +190,13 @@ static inline void
 __rw_runlock(volatile uintptr_t *c, const char *file, int line)
 {
 	struct rwlock *rw;
-	uintptr_t v, readers;
+	uintptr_t v;
 	struct thread *td = curthread;
 
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
-	readers = RW_READERS(v);
 
-	if (readers > 1 && atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)) {
-		td->td_locks--;
-		td->td_rw_rlocks--;
-		return;
-	}
-	if (readers == 1 && !(v & RW_LOCK_WAITERS) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, RW_UNLOCKED)) {
+	if (!(v & RW_LOCK_WAITERS) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)) {
 		td->td_locks--;
 		td->td_rw_rlocks--;
 		return;
