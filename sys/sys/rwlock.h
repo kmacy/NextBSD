@@ -179,6 +179,26 @@ __rw_rlock(volatile uintptr_t *c, const char *file, int line)
 	__rw_rlock_hard(c, file, line);
 }
 
+
+static inline void
+__rw_runlock(volatile uintptr_t *c, const char *file, int line)
+{
+	struct rwlock *rw;
+	uintptr_t v;
+
+	rw = rwlock2rw(c);
+	v = rw->rw_lock;
+
+	if (!(v & RW_LOCK_WAITERS)) {
+		if (RW_READERS(v) > 1 &&
+			(atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)))
+			return;
+		if (RW_READERS(v) == 1 && atomic_cmpset_rel_ptr(&rw->rw_lock, v, RW_UNLOCKED))
+			return;
+	}
+	_rw_runlock_cookie(c, file, line);
+}
+
 /*
  * Top-level macros to provide lock cookie once the actual rwlock is passed.
  * They will also prevent passing a malformed object to the rwlock KPI by
@@ -203,7 +223,7 @@ __rw_rlock(volatile uintptr_t *c, const char *file, int line)
 #define	_rw_try_rlock(rw, f, l)						\
 	__rw_try_rlock(&(rw)->rw_lock, f, l)
 #define	_rw_runlock(rw, f, l)						\
-	_rw_runlock_cookie(&(rw)->rw_lock, f, l)
+	__rw_runlock(&(rw)->rw_lock, f, l)
 #define	_rw_wlock_hard(rw, t, f, l)					\
 	__rw_wlock_hard(&(rw)->rw_lock, t, f, l)
 #define	_rw_wunlock_hard(rw, t, f, l)					\
