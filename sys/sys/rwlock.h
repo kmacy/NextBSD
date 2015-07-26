@@ -37,6 +37,7 @@
 #ifdef _KERNEL
 #include <sys/pcpu.h>
 #include <machine/atomic.h>
+#include <sys/proc.h>
 #endif
 
 /*
@@ -118,6 +119,25 @@
 } while (0)
 
 /*
+ * Return the rwlock address when the lock cookie address is provided.
+ * This functionality assumes that struct rwlock* have a member named rw_lock.
+ */
+#define	rwlock2rw(c)	(__containerof(c, struct rwlock, rw_lock))
+
+/*
+ * Determines whether a new reader can acquire a lock.  Succeeds if the
+ * reader already owns a read lock and the lock is locked for read to
+ * prevent deadlock from reader recursion.  Also succeeds if the lock
+ * is unlocked and has no writer waiters or spinners.  Failing otherwise
+ * prioritizes writers before readers.
+ */
+#define	RW_CAN_READ(_rw)						\
+    ((curthread->td_rw_rlocks && (_rw) & RW_LOCK_READ) || ((_rw) &	\
+    (RW_LOCK_READ | RW_LOCK_WRITE_WAITERS | RW_LOCK_WRITE_SPINNER)) ==	\
+    RW_LOCK_READ)
+
+
+/*
  * Function prototypes.  Routines that start with _ are not part of the
  * external API and should not be called directly.  Wrapper macros should
  * be used instead.
@@ -130,7 +150,7 @@ int	_rw_wowned(const volatile uintptr_t *c);
 void	_rw_wlock_cookie(volatile uintptr_t *c, const char *file, int line);
 int	__rw_try_wlock(volatile uintptr_t *c, const char *file, int line);
 void	_rw_wunlock_cookie(volatile uintptr_t *c, const char *file, int line);
-void	__rw_rlock(volatile uintptr_t *c, const char *file, int line);
+void	__rw_rlock_hard(volatile uintptr_t *c, const char *file, int line);
 int	__rw_try_rlock(volatile uintptr_t *c, const char *file, int line);
 void	_rw_runlock_cookie(volatile uintptr_t *c, const char *file, int line);
 void	__rw_wlock_hard(volatile uintptr_t *c, uintptr_t tid, const char *file,
@@ -143,6 +163,21 @@ void	__rw_downgrade(volatile uintptr_t *c, const char *file, int line);
 void	__rw_assert(const volatile uintptr_t *c, int what, const char *file,
 	    int line);
 #endif
+
+
+static inline void
+__rw_rlock(volatile uintptr_t *c, const char *file, int line)
+{
+	struct rwlock *rw;
+	uintptr_t v;
+
+	rw = rwlock2rw(c);
+	v = rw->rw_lock;
+
+	if (RW_CAN_READ(v)  && atomic_cmpset_acq_ptr(&rw->rw_lock, v, v + RW_ONE_READER))
+		return;
+	__rw_rlock_hard(c, file, line);
+}
 
 /*
  * Top-level macros to provide lock cookie once the actual rwlock is passed.
