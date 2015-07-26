@@ -1308,8 +1308,6 @@ iflib_rxd_pkt_get(iflib_fl_t fl, if_rxd_info_t ri)
 	M_HASHTYPE_SET(m, ri->iri_rsstype);
 	m->m_pkthdr.csum_flags = ri->iri_csum_flags;
 	m->m_pkthdr.csum_data = ri->iri_csum_data;
-	if_inc_counter(ri->iri_ifp, IFCOUNTER_IBYTES, m->m_pkthdr.len);
-	if_inc_counter(ri->iri_ifp, IFCOUNTER_IPACKETS, 1);
 	return (m);
 }
 
@@ -1322,7 +1320,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	int *cidxp, *genp;
 	struct if_rxd_info ri;
 	iflib_dma_info_t di;
-	int err, budget_left;
+	int err, budget_left, rx_bytes, rx_pkts;
 	iflib_fl_t fl;
 	struct ifnet *ifp;
 	struct lro_entry *queued;
@@ -1351,7 +1349,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	gen = *genp;
 	mh = mt = NULL;
 	MPASS(budget > 0);
-
+	rx_pkts	= rx_bytes = 0;
 	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0) {
 		DBG_COUNTER_INC(rx_unavail);
 		return (false);
@@ -1446,12 +1444,17 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		m = mh;
 		mh = mh->m_nextpkt;
 		m->m_nextpkt = NULL;
+		rx_bytes += m->m_pkthdr.len;
+		rx_pkts++;
 		if (rxq->ifr_lc.lro_cnt != 0 &&
 			tcp_lro_rx(&rxq->ifr_lc, m, 0) == 0)
 			continue;
 		DBG_COUNTER_INC(rx_if_input);
 		ifp->if_input(ifp, m);
 	}
+	if_inc_counter(ifp, IFCOUNTER_IBYTES, rx_bytes);
+	if_inc_counter(ifp, IFCOUNTER_IPACKETS, rx_pkts);
+
 	/*
 	 * Flush any outstanding LRO work
 	 */
