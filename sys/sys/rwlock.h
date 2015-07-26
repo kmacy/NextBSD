@@ -131,10 +131,12 @@
  * is unlocked and has no writer waiters or spinners.  Failing otherwise
  * prioritizes writers before readers.
  */
-#define	RW_CAN_READ(_rw)						\
-    ((curthread->td_rw_rlocks && (_rw) & RW_LOCK_READ) || ((_rw) &	\
+#define	RW_CAN_READ_TD(td, _rw)										\
+    ((td->td_rw_rlocks && (_rw) & RW_LOCK_READ) || ((_rw) &	\
     (RW_LOCK_READ | RW_LOCK_WRITE_WAITERS | RW_LOCK_WRITE_SPINNER)) ==	\
     RW_LOCK_READ)
+
+#define RW_CAN_READ(_rw) RW_CAN_READ_TD(curthread, _rw)
 
 
 /*
@@ -170,13 +172,14 @@ __rw_rlock(volatile uintptr_t *c, const char *file, int line)
 {
 	struct rwlock *rw;
 	uintptr_t v;
+	struct thread *td = curthread;
 
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
 
-	if (RW_CAN_READ(v)  && atomic_cmpset_acq_ptr(&rw->rw_lock, v, v + RW_ONE_READER)) {
-		curthread->td_locks++;
-		curthread->td_rw_rlocks++;
+	if (RW_CAN_READ_TD(td, v)  && atomic_cmpset_acq_ptr(&rw->rw_lock, v, v + RW_ONE_READER)) {
+		td->td_locks++;
+		td->td_rw_rlocks++;
 		return;
 	}
 	__rw_rlock_hard(c, file, line);
@@ -187,22 +190,24 @@ static inline void
 __rw_runlock(volatile uintptr_t *c, const char *file, int line)
 {
 	struct rwlock *rw;
-	uintptr_t v;
+	uintptr_t v, readers;
+	struct thread *td = curthread;
 
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
+	readers = RW_READERS(v);
 
-	if (RW_READERS(v) > 1) {
-		if (atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER))
-			goto owned;
-	} else if (!(v & RW_LOCK_WAITERS) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, RW_UNLOCKED))
-		goto owned;
-
+	if (readers > 1 && atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)) {
+		td->td_locks--;
+		td->td_rw_rlocks--;
+		return;
+	}
+	if (readers == 1 && !(v & RW_LOCK_WAITERS) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, RW_UNLOCKED)) {
+		td->td_locks--;
+		td->td_rw_rlocks--;
+		return;
+	}
 	_rw_runlock_cookie(c, file, line);
-	return;
-owned:
-	curthread->td_locks--;
-	curthread->td_rw_rlocks--;
 }
 
 /*
