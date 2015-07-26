@@ -174,8 +174,11 @@ __rw_rlock(volatile uintptr_t *c, const char *file, int line)
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
 
-	if (RW_CAN_READ(v)  && atomic_cmpset_acq_ptr(&rw->rw_lock, v, v + RW_ONE_READER))
+	if (RW_CAN_READ(v)  && atomic_cmpset_acq_ptr(&rw->rw_lock, v, v + RW_ONE_READER)) {
+		curthread->td_locks++;
+		curthread->td_rw_rlocks++;
 		return;
+	}
 	__rw_rlock_hard(c, file, line);
 }
 
@@ -189,14 +192,17 @@ __rw_runlock(volatile uintptr_t *c, const char *file, int line)
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
 
-	if (!(v & RW_LOCK_WAITERS)) {
-		if (RW_READERS(v) > 1 &&
-			(atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)))
-			return;
-		if (RW_READERS(v) == 1 && atomic_cmpset_rel_ptr(&rw->rw_lock, v, RW_UNLOCKED))
-			return;
-	}
+	if (RW_READERS(v) > 1) {
+		if (atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER))
+			goto owned;
+	} else if (!(v & RW_LOCK_WAITERS) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, RW_UNLOCKED))
+		goto owned;
+
 	_rw_runlock_cookie(c, file, line);
+	return;
+owned:
+	curthread->td_locks--;
+	curthread->td_rw_rlocks--;
 }
 
 /*
