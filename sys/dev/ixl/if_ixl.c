@@ -206,6 +206,9 @@ static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 #endif
 
 static int      ixl_if_attach(if_shared_ctx_t);
+static int      ixl_if_interface_setup(if_shared_ctx_t);
+static int      ixl_if_attach_post(if_shared_ctx_t);
+static void     ixl_if_attach_cleanup(if_shared_ctx_t);
 static int      ixl_if_detach(if_shared_ctx_t);
 
 static void		ixl_if_init(if_shared_ctx_t sctx);
@@ -263,6 +266,9 @@ MODULE_DEPEND(ixl, iflib, 1, 1, 1);
 
 static device_method_t ixl_if_methods[] = {
 	DEVMETHOD(ifdi_attach, ixl_if_attach),
+	DEVMETHOD(ifdi_interface_setup, ixl_if_interface_setup),
+	DEVMETHOD(ifdi_attach_post, ixl_if_attach_post),
+	DEVMETHOD(ifdi_attach_cleanup, ixl_if_attach_cleanup),
 	DEVMETHOD(ifdi_detach, ixl_if_detach),
 	DEVMETHOD(ifdi_init, ixl_if_init),
 	DEVMETHOD(ifdi_stop, ixl_if_stop),
@@ -538,12 +544,7 @@ ixl_if_attach(if_shared_ctx_t sctx)
 	struct ixl_pf	*pf;
 	struct i40e_hw	*hw;
 	struct ixl_vsi *vsi;
-	u16		bus;
 	int             error = 0;
-#ifdef PCI_IOV
-	nvlist_t	*pf_schema, *vf_schema;
-	int		iov_error;
-#endif
 
 	INIT_DEBUGOUT("ixl_attach: begin");
 
@@ -745,15 +746,58 @@ ixl_if_attach(if_shared_ctx_t sctx)
 	bcopy(hw->mac.addr, hw->mac.perm_addr, ETHER_ADDR_LEN);
 	i40e_get_port_mac_addr(hw, hw->mac.port_addr);
 
+	/* Initialize mac filter list for VSI */
+	SLIST_INIT(&vsi->ftl);
+
+	return (0);
+
+err_mac_hmc:
+	i40e_shutdown_lan_hmc(hw);
+err_get_cap:
+	i40e_shutdown_adminq(hw);
+err_out:
+	ixl_free_pci_resources(pf);
+	ixl_free_vsi(vsi);
+	return (error);
+}
+
+static void
+ixl_if_attach_cleanup(if_shared_ctx_t sctx)
+{
+	struct ixl_pf	*pf;
+	struct i40e_hw	*hw;
+	struct ixl_vsi *vsi;
+
+	vsi = DOWNCAST(sctx);
+	pf = vsi->back;
+	hw = &pf->hw;
+
+	i40e_shutdown_lan_hmc(hw);
+	i40e_shutdown_adminq(hw);
+	ixl_free_pci_resources(pf);
+	ixl_free_vsi(vsi);
+}
+
+static int
+ixl_if_interface_setup(if_shared_ctx_t sctx)
+{
+	device_t dev;
+	struct ixl_pf	*pf;
+	struct i40e_hw	*hw;
+	struct ixl_vsi *vsi;
+	int             error = 0;
+
+	vsi = DOWNCAST(sctx);
+	dev = sctx->isc_dev;
+	pf = device_get_softc(dev);
+	hw = &pf->hw;
+
 	/* Set up VSI and queues */
 	if (ixl_setup_stations(pf) != 0) { 
 		device_printf(dev, "setup stations failed!\n");
 		error = ENOMEM;
-		goto err_mac_hmc;
+		goto err;
 	}
-
-	/* Initialize mac filter list for VSI */
-	SLIST_INIT(&vsi->ftl);
 
 	/* Set up interrupt routing here */
 	if (pf->msix > 1)
@@ -761,15 +805,17 @@ ixl_if_attach(if_shared_ctx_t sctx)
 	else
 		error = ixl_assign_vsi_legacy(pf);
 	if (error) 
-		goto err_mac_hmc;
+		goto err;
 
 	if (((hw->aq.fw_maj_ver == 4) && (hw->aq.fw_min_ver < 33)) ||
 	    (hw->aq.fw_maj_ver < 4)) {
 		i40e_msec_delay(75);
 		error = i40e_aq_set_link_restart_an(hw, TRUE, NULL);
-		if (error)
+		if (error) {
 			device_printf(dev, "link restart failed, aq_err=%d\n",
-			    pf->hw.aq.asq_last_status);
+						  pf->hw.aq.asq_last_status);
+			goto err;
+		}
 	}
 
 	/* Determine link state */
@@ -781,8 +827,31 @@ ixl_if_attach(if_shared_ctx_t sctx)
 	if (ixl_setup_interface(dev, vsi) != 0) {
 		device_printf(dev, "interface setup failed!\n");
 		error = EIO;
-		goto err_mac_hmc;
 	}
+err:
+	return (error);
+}
+
+static int
+ixl_if_attach_post(if_shared_ctx_t sctx)
+{
+	device_t dev;
+	struct ixl_pf	*pf;
+	struct i40e_hw	*hw;
+	struct ixl_vsi *vsi;
+	int             error = 0;
+	u16		bus;
+#ifdef PCI_IOV
+	nvlist_t	*pf_schema, *vf_schema;
+	int		iov_error;
+#endif
+
+	INIT_DEBUGOUT("ixl_attach: begin");
+
+	dev = sctx->isc_dev;
+	vsi = DOWNCAST(sctx);
+	pf = device_get_softc(dev);
+	hw = &pf->hw;
 
 	error = ixl_switch_config(pf);
 	if (error) {
@@ -825,18 +894,13 @@ ixl_if_attach(if_shared_ctx_t sctx)
 			    iov_error);
 	}
 #endif
-
 #ifdef DEV_NETMAP
 	ixl_netmap_attach(vsi);
 #endif /* DEV_NETMAP */
 	INIT_DEBUGOUT("ixl_attach: end");
-	return (0);
-
 err_mac_hmc:
 	i40e_shutdown_lan_hmc(hw);
-err_get_cap:
 	i40e_shutdown_adminq(hw);
-err_out:
 	ixl_free_pci_resources(pf);
 	ixl_free_vsi(vsi);
 	return (error);

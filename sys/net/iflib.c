@@ -2255,7 +2255,17 @@ iflib_device_attach(device_t dev)
 		return (err);
 
 	sctx = device_get_softc(dev);
-	return (IFDI_ATTACH(sctx));
+	if ((err = IFDI_ATTACH(sctx)) != 0)
+		return (err);
+	if ((err = IFDI_INTERFACE_SETUP(sctx)) != 0)
+		goto fail;
+	if ((err = IFDI_ATTACH_POST(sctx)) != 0)
+		goto fail;
+
+	return (0);
+fail:
+	IFDI_ATTACH_CLEANUP(sctx);
+	return (err);
 }
 
 int
