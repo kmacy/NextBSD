@@ -166,6 +166,7 @@ typedef enum {
 
 #define IFLIB_HAS_CQ 0x1
 
+int iflib_device_attach(device_t);
 int iflib_device_detach(device_t);
 int iflib_device_suspend(device_t);
 int iflib_device_resume(device_t);

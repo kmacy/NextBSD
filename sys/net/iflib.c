@@ -2246,6 +2246,19 @@ iflib_led_func(void *arg, int onoff)
  **********************************************************************/
 
 int
+iflib_device_attach(device_t dev)
+{
+	int err;
+	if_shared_ctx_t sctx;
+
+	if ((err = DEVICE_REGISTER(dev)) != 0)
+		return (err);
+
+	sctx = device_get_softc(dev);
+	return (IFDI_ATTACH(sctx));
+}
+
+int
 iflib_device_detach(device_t dev)
 {
 	if_shared_ctx_t sctx = device_get_softc(dev);
@@ -2461,6 +2474,7 @@ iflib_register(device_t dev, driver_t *driver)
 
 	return (0);
 }
+
 
 int
 iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)

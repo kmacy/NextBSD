@@ -98,7 +98,7 @@ static char    *ixl_strings[] = {
  *  Function prototypes
  *********************************************************************/
 static int      ixl_probe(device_t);
-static int      ixl_attach(device_t);
+static int      ixl_register(device_t);
 static int	ixl_get_hw_capabilities(struct ixl_pf *);
 static void     ixl_update_link_status(struct ixl_pf *);
 static int      ixl_allocate_pci_resources(struct ixl_pf *);
@@ -205,6 +205,7 @@ static void	ixl_reset_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 #endif
 
+static int      ixl_if_attach(if_shared_ctx_t);
 static int      ixl_if_detach(if_shared_ctx_t);
 
 static void		ixl_if_init(if_shared_ctx_t sctx);
@@ -236,7 +237,8 @@ static void ixl_if_vlan_unregister(if_shared_ctx_t sctx, u16 vtag);
 static device_method_t ixl_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe, ixl_probe),
-	DEVMETHOD(device_attach, ixl_attach),
+	DEVMETHOD(device_probe, ixl_register),
+	DEVMETHOD(device_attach, iflib_device_attach),
 	DEVMETHOD(device_detach, iflib_device_detach),
 	DEVMETHOD(device_shutdown, iflib_device_suspend),
 #ifdef PCI_IOV
@@ -260,6 +262,7 @@ MODULE_DEPEND(ixl, iflib, 1, 1, 1);
 
 
 static device_method_t ixl_if_methods[] = {
+	DEVMETHOD(ifdi_attach, ixl_if_attach),
 	DEVMETHOD(ifdi_detach, ixl_if_detach),
 	DEVMETHOD(ifdi_init, ixl_if_init),
 	DEVMETHOD(ifdi_stop, ixl_if_stop),
@@ -480,6 +483,44 @@ ixl_probe(device_t dev)
 	return (ENXIO);
 }
 
+static int
+ixl_register(device_t dev)
+{
+	struct ixl_pf	*pf;
+	struct i40e_hw	*hw;
+	int             error = 0;
+	if_shared_ctx_t sctx;
+
+	/* Allocate, clear, and link in our primary soft structure */
+	pf = device_get_softc(dev);
+	sctx = UPCAST(pf);
+	sctx->isc_dev = dev;
+	hw = &pf->hw;
+
+	sctx->isc_q_align = PAGE_SIZE;/* max(DBA_ALIGN, PAGE_SIZE) */
+
+	sctx->isc_tx_maxsize = IXL_TSO_SIZE;
+	sctx->isc_tx_nsegments = IXL_MAX_TX_SEGS;
+	sctx->isc_tx_maxsegsize = PAGE_SIZE*4;
+
+	sctx->isc_rx_maxsize = PAGE_SIZE*4;
+	sctx->isc_rx_nsegments = 1;
+	sctx->isc_rx_maxsegsize = PAGE_SIZE*4;
+	sctx->isc_ntxd = ixl_ringsz;
+	sctx->isc_nrxd = ixl_ringsz;
+
+	ixl_txrx_init(sctx);
+
+	/* Setup OS specific network interface */
+	if ((error = iflib_register(dev, &ixl_if_driver)) != 0) {
+		/* ixl specific teardown */
+		return (error);
+	}
+
+	return (0);
+}
+
+
 /*********************************************************************
  *  Device initialization routine
  *
@@ -491,14 +532,14 @@ ixl_probe(device_t dev)
  *********************************************************************/
 
 static int
-ixl_attach(device_t dev)
+ixl_if_attach(if_shared_ctx_t sctx)
 {
+	device_t dev;
 	struct ixl_pf	*pf;
 	struct i40e_hw	*hw;
 	struct ixl_vsi *vsi;
 	u16		bus;
 	int             error = 0;
-	if_shared_ctx_t sctx;
 #ifdef PCI_IOV
 	nvlist_t	*pf_schema, *vf_schema;
 	int		iov_error;
@@ -506,10 +547,8 @@ ixl_attach(device_t dev)
 
 	INIT_DEBUGOUT("ixl_attach: begin");
 
-	/* Allocate, clear, and link in our primary soft structure */
+	dev = sctx->isc_dev;
 	pf = device_get_softc(dev);
-	sctx = UPCAST(pf);
-	sctx->isc_dev = dev;
 	hw = &pf->hw;
 
 	/*
@@ -617,26 +656,6 @@ ixl_attach(device_t dev)
 	pf->vc_debug_lvl = 1;
 	hw->back = &pf->osdep;
 	pf->osdep.dev = dev;
-
-	sctx->isc_q_align = PAGE_SIZE;/* max(DBA_ALIGN, PAGE_SIZE) */
-
-	sctx->isc_tx_maxsize = IXL_TSO_SIZE;
-	sctx->isc_tx_nsegments = IXL_MAX_TX_SEGS;
-	sctx->isc_tx_maxsegsize = PAGE_SIZE*4;
-
-	sctx->isc_rx_maxsize = PAGE_SIZE*4;
-	sctx->isc_rx_nsegments = 1;
-	sctx->isc_rx_maxsegsize = PAGE_SIZE*4;
-	sctx->isc_ntxd = ixl_ringsz;
-	sctx->isc_nrxd = ixl_ringsz;
-
-	ixl_txrx_init(sctx);
-
-	/* Setup OS specific network interface */
-	if ((error = iflib_register(dev, &ixl_if_driver)) != 0) {
-		/* ixl specific teardown */
-		return (error);
-	}
 
 	/* Do PCI setup - map BAR0, etc */
 	if (ixl_allocate_pci_resources(pf)) {

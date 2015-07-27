@@ -96,6 +96,10 @@ CODE {
 # bus interfaces
 #
 
+METHOD int attach {
+	if_shared_ctx_t _ctx;
+};
+
 METHOD int detach {
 	if_shared_ctx_t _ctx;
 };
