@@ -116,7 +116,7 @@ FileName	({QString}|{AString})
 #include "lexxer.h"
 #include "mig_machine.h"
 
-
+#pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
 #undef yywrap
 #define yywrap() 1
 #define	PortSize	(sizeof (mach_port_t) * NBBY)
