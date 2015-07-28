@@ -2259,16 +2259,6 @@ iflib_device_attach(device_t dev)
 	sctx = device_get_softc(dev);
 	if ((err = IFDI_ATTACH(sctx)) != 0)
 		return (err);
-	/* Get memory for the station queues */
-	if ((err = iflib_queues_alloc(sctx))) {
-		device_printf(dev, "Unable to allocate queue memory\n");
-		goto fail;
-	}
-
-	if ((err = iflib_qset_structures_setup(sctx))) {
-		device_printf(dev, "qset structure setup failed %d\n", err);
-		goto fail_queues;
-	}
 	/*
 	** Now setup MSI or MSI/X, should
 	** return us the number of supported
@@ -2280,6 +2270,17 @@ iflib_device_attach(device_t dev)
 		sctx->isc_intr = IFLIB_INTR_LEGACY;
 		msix = 0;
 	}
+	/* Get memory for the station queues */
+	if ((err = iflib_queues_alloc(sctx))) {
+		device_printf(dev, "Unable to allocate queue memory\n");
+		goto fail;
+	}
+
+	if ((err = iflib_qset_structures_setup(sctx))) {
+		device_printf(dev, "qset structure setup failed %d\n", err);
+		goto fail_queues;
+	}
+
 	if (msix > 1 && (err = IFDI_MSIX_INTR_ASSIGN(sctx, msix)) != 0)
 		goto fail_intr_free;
 	else {
@@ -2843,7 +2844,8 @@ iflib_irq_alloc_generic(if_shared_ctx_t sctx, if_irq_t irq, int rid,
 	int tqrid;
 	void *q;
 	int err;
-		info = &ctx->ifc_filter_info;
+
+	info = &ctx->ifc_filter_info;
 
 	switch (type) {
 	case IFLIB_INTR_TX:
