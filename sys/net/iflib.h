@@ -123,6 +123,7 @@ struct if_shared_ctx {
 	void (*isc_rxd_refill) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs, uint16_t count);
 	void (*isc_rxd_flush) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx);
 
+	int (*isc_legacy_intr) (void *);
 	iflib_ctx_t isc_ctx;
 	device_t isc_dev;
 	if_t isc_ifp;
@@ -143,6 +144,11 @@ struct if_shared_ctx {
 	int isc_rx_nsegments;
 	int isc_rx_process_limit;
 	uint16_t isc_max_frame_size;
+
+	uint32_t *isc_qsizes;
+	int isc_nqs;
+	int isc_msix_bar;
+	int isc_admin_intrcnt;
 
 	int isc_pause_frames;
 	int isc_watchdog_events;
@@ -166,24 +172,14 @@ typedef enum {
 
 #define IFLIB_HAS_CQ 0x1
 
+int iflib_register(device_t dev, driver_t *driver);
+
+
 int iflib_device_attach(device_t);
 int iflib_device_detach(device_t);
 int iflib_device_suspend(device_t);
 int iflib_device_resume(device_t);
 
-int iflib_register(device_t dev, driver_t *driver);
-void iflib_hwaddr_set(if_shared_ctx_t ctx, uint8_t addr[ETH_ADDR_LEN]);
-
-/*
- * By convention queue 0 is the tx completion queue,
- * queue 1 is the rx completion queue, and the following
- * queues are synced by the driver as it sees fit.
- */
-int iflib_queues_alloc(if_shared_ctx_t ctx, uint32_t *qsizes, uint8_t nqs);
-
-int iflib_qset_structures_setup(if_shared_ctx_t);
-
-int iflib_qset_addr_get(if_shared_ctx_t, int qidx, caddr_t *vaddrs, uint64_t *paddrs, int nqs);
 
 int iflib_irq_alloc(if_shared_ctx_t, if_irq_t, int, driver_filter_t, void *filter_arg, driver_intr_t, void *arg, char *name);
 int iflib_irq_alloc_generic(if_shared_ctx_t ctx, if_irq_t irq, int rid,
@@ -193,29 +189,24 @@ void iflib_softirq_alloc_generic(if_shared_ctx_t sctx, int rid, iflib_intr_type_
 
 void iflib_irq_free(if_shared_ctx_t sctx, if_irq_t irq);
 
-int iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str);
-void iflib_led_create(if_shared_ctx_t sctx);
-
-void iflib_init(if_shared_ctx_t sctx);
 
 void iflib_tx_intr_deferred(if_shared_ctx_t sctx, int txqid);
 void iflib_rx_intr_deferred(if_shared_ctx_t sctx, int rxqid);
 void iflib_admin_intr_deferred(if_shared_ctx_t sctx);
 
+
 void iflib_link_state_change(if_shared_ctx_t sctx, int linkstate);
 
-int iflib_tx_cidx_get(if_shared_ctx_t sctx, int txqid);
-void iflib_tx_credits_update(if_shared_ctx_t sctx, int txqid, int credits);
 
-void iflib_add_int_delay_sysctl(if_shared_ctx_t, const char *, const char *,
-								if_int_delay_info_t, int, int);
-void iflib_taskqgroup_attach(struct grouptask *gtask, void *uniq, char *name);
+
+
 
 struct mtx *iflib_sctx_lock_get(if_shared_ctx_t);
 struct mtx *iflib_qset_lock_get(if_shared_ctx_t, uint16_t);
 
-uint64_t iflib_get_counter_default(if_shared_ctx_t, ift_counter);
+void iflib_led_create(if_shared_ctx_t sctx);
 
-int iflib_msix_init(if_shared_ctx_t sctx, int rid, int admincnt);
+void iflib_add_int_delay_sysctl(if_shared_ctx_t, const char *, const char *,
+								if_int_delay_info_t, int, int);
 
 #endif /*  __IFLIB_H_ */

@@ -102,6 +102,7 @@ METHOD int attach {
 
 METHOD int interface_setup {
 	if_shared_ctx_t _ctx;
+	uint8_t *mac;
 };
 
 METHOD int attach_post {
@@ -131,6 +132,9 @@ METHOD int resume {
 
 METHOD int queues_alloc {
 	if_shared_ctx_t _ctx;
+	caddr_t *_vaddrs;
+	uint64_t *_paddrs;
+	int nqs;
 };
 
 METHOD void queues_free {
@@ -150,8 +154,13 @@ METHOD void stop {
 };
 
 #
-# interrupt manipulation
+# interrupt setup and manipulation
 #
+
+METHOD int msix_intr_assign {
+	if_shared_ctx_t _sctx;
+	int msix;
+};
 
 METHOD void intr_enable {
 	if_shared_ctx_t _ctx;
@@ -209,6 +218,10 @@ METHOD int media_change {
 	if_shared_ctx_t _ctx;
 };
 
+METHOD uint64_t get_counter {
+	if_shared_ctx_t _sctx;
+	ift_counter cnt;
+};
 
 #
 # optional methods
@@ -258,7 +271,4 @@ METHOD int sysctl_int_delay {
 	if_int_delay_info_t _iidi;
 } DEFAULT null_sysctl_int_delay;
 
-METHOD uint64_t get_counter {
-	if_shared_ctx_t _sctx;
-	ift_counter cnt;
-} DEFAULT iflib_get_counter_default;
+

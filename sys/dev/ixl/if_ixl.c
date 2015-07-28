@@ -103,12 +103,8 @@ static int	ixl_get_hw_capabilities(struct ixl_pf *);
 static void     ixl_update_link_status(struct ixl_pf *);
 static int      ixl_allocate_pci_resources(struct ixl_pf *);
 static u16	ixl_get_bus_info(struct i40e_hw *, device_t);
-static int	ixl_setup_stations(struct ixl_pf *);
 static int	ixl_switch_config(struct ixl_pf *);
 static int	ixl_initialize_vsi(struct ixl_vsi *);
-static int	ixl_assign_vsi_msix(struct ixl_pf *);
-static int	ixl_assign_vsi_legacy(struct ixl_pf *);
-static int	ixl_init_msix(struct ixl_pf *);
 static void	ixl_configure_msix(struct ixl_pf *);
 static void	ixl_configure_itr(struct ixl_pf *);
 static void	ixl_configure_legacy(struct ixl_pf *);
@@ -206,9 +202,11 @@ static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 #endif
 
 static int      ixl_if_attach(if_shared_ctx_t);
-static int      ixl_if_interface_setup(if_shared_ctx_t);
+static int      ixl_if_interface_setup(if_shared_ctx_t, uint8_t *mac);
 static int      ixl_if_attach_post(if_shared_ctx_t);
 static void     ixl_if_attach_cleanup(if_shared_ctx_t);
+static int		ixl_if_msix_intr_assign(if_shared_ctx_t, int);
+
 static int      ixl_if_detach(if_shared_ctx_t);
 
 static void		ixl_if_init(if_shared_ctx_t sctx);
@@ -220,7 +218,7 @@ static void		ixl_if_rx_intr_enable(if_shared_ctx_t sctx, uint16_t rxqid);
 
 
 static void	ixl_if_multi_set(if_shared_ctx_t);
-static int	ixl_if_queues_alloc(if_shared_ctx_t);
+static int	ixl_if_queues_alloc(if_shared_ctx_t, caddr_t *, uint64_t *, int);
 static void ixl_if_queues_free(if_shared_ctx_t sctx);
 static void	ixl_if_update_admin_status(if_shared_ctx_t);
 static int	ixl_if_mtu_set(if_shared_ctx_t, uint32_t);
@@ -240,7 +238,7 @@ static void ixl_if_vlan_unregister(if_shared_ctx_t sctx, u16 vtag);
 static device_method_t ixl_methods[] = {
 	/* Device interface */
 	DEVMETHOD(device_probe, ixl_probe),
-	DEVMETHOD(device_probe, ixl_register),
+	DEVMETHOD(device_register, ixl_register),
 	DEVMETHOD(device_attach, iflib_device_attach),
 	DEVMETHOD(device_detach, iflib_device_detach),
 	DEVMETHOD(device_shutdown, iflib_device_suspend),
@@ -272,6 +270,7 @@ static device_method_t ixl_if_methods[] = {
 	DEVMETHOD(ifdi_detach, ixl_if_detach),
 	DEVMETHOD(ifdi_init, ixl_if_init),
 	DEVMETHOD(ifdi_stop, ixl_if_stop),
+	DEVMETHOD(ifdi_msix_intr_assign, ixl_if_msix_intr_assign),
 	DEVMETHOD(ifdi_intr_disable, ixl_if_intr_disable),
 	DEVMETHOD(ifdi_intr_enable, ixl_if_intr_enable),
 	DEVMETHOD(ifdi_rx_intr_enable, ixl_if_rx_intr_enable),
@@ -380,14 +379,15 @@ static char *ixl_fc_string[6] = {
 };
 
 static int
-ixl_if_queues_alloc(if_shared_ctx_t sctx)
+ixl_if_queues_alloc(if_shared_ctx_t sctx, caddr_t *vaddrs, uint64_t *paddrs, int nqs)
 {
 	struct ixl_vsi *vsi = DOWNCAST(sctx);
 	struct ixl_queue *que;
 	struct ixl_tx_buf *bufs;
-	int i, err;
+	int i;
 
 	MPASS(vsi->num_queues > 0);
+	MPASS(nqs == 2);
 	/* Allocate queue structure memory */
 	if (!(vsi->queues =
 	    (struct ixl_queue *) malloc(sizeof(struct ixl_queue) *
@@ -402,22 +402,24 @@ ixl_if_queues_alloc(if_shared_ctx_t sctx)
 	}
 	
 	for (i = 0, que = vsi->queues; i < vsi->num_queues; i++, que++) {
-		uint64_t paddrs[2];
-		caddr_t vaddrs[2];
+		struct tx_ring		*txr = &que->txr;
+		struct rx_ring 		*rxr = &que->rxr;
+
 		que->me = i;
+		que->vsi = vsi;
+		vsi->active_queues |= (u64)1 << que->me;
 
 		/* get the virtual and physical address of the hardware queues */
-		err = iflib_qset_addr_get(sctx, i, vaddrs, paddrs, 2);
-		KASSERT(err == 0, ("failed to fetch {v,p}addrs for HW queues"));
-
-		que->txr.tx_base = (struct i40e_tx_desc *)vaddrs[0];
-		que->txr.tx_paddr = paddrs[0];
-		que->rxr.rx_base = (union i40e_rx_desc *)vaddrs[1];
-		que->rxr.rx_paddr = paddrs[1];
-		que->txr.que = que->rxr.que = que;
-		que->txr.tx_buffers = bufs + i*sctx->isc_ntxd;
+		txr->tail = I40E_QTX_TAIL(que->me);
+		txr->tx_base = (struct i40e_tx_desc *)vaddrs[i*2];
+		txr->tx_paddr = paddrs[i*2];
+		txr->tx_buffers = bufs + i*sctx->isc_ntxd;
+		rxr->tail = I40E_QRX_TAIL(que->me);
+		rxr->rx_base = (union i40e_rx_desc *)vaddrs[i*2 + 1];
+		rxr->rx_paddr = paddrs[i*2 + 1];
+		txr->que = rxr->que = que;
 	}
-	/* XXX */
+
 	device_printf(sctx->isc_dev, "allocated for %d queues\n", vsi->num_queues);
 	return (0);
 }
@@ -514,8 +516,19 @@ ixl_register(device_t dev)
 	sctx->isc_rx_maxsegsize = PAGE_SIZE*4;
 	sctx->isc_ntxd = ixl_ringsz;
 	sctx->isc_nrxd = ixl_ringsz;
+	sctx->isc_qsizes = malloc(2*sizeof(uint32_t), M_DEVBUF, M_WAITOK);
 
+	sctx->isc_qsizes[0] = roundup2((ixl_ringsz * sizeof(struct i40e_tx_desc)) +
+					 sizeof(u32), DBA_ALIGN);
+	sctx->isc_qsizes[1] = roundup2(ixl_ringsz *
+					 sizeof(union i40e_rx_desc), DBA_ALIGN);
+
+	sctx->isc_nqs = 2;
 	ixl_txrx_init(sctx);
+
+	sctx->isc_msix_bar = PCIR_BAR(IXL_BAR);;
+	sctx->isc_admin_intrcnt = 1;
+	sctx->isc_legacy_intr = ixl_intr;
 
 	/* Setup OS specific network interface */
 	if ((error = iflib_register(dev, &ixl_if_driver)) != 0) {
@@ -551,6 +564,10 @@ ixl_if_attach(if_shared_ctx_t sctx)
 	dev = sctx->isc_dev;
 	pf = device_get_softc(dev);
 	hw = &pf->hw;
+
+#ifdef PCI_IOV
+	TASK_INIT(&pf->vflr_task, 0, ixl_handle_vflr, pf);
+#endif
 
 	/*
 	** Note this assumes we have a single embedded VSI,
@@ -748,7 +765,7 @@ ixl_if_attach(if_shared_ctx_t sctx)
 
 	/* Initialize mac filter list for VSI */
 	SLIST_INIT(&vsi->ftl);
-
+	device_printf(dev, "%s success!\n", __FUNC__);
 	return (0);
 
 err_mac_hmc:
@@ -779,7 +796,7 @@ ixl_if_attach_cleanup(if_shared_ctx_t sctx)
 }
 
 static int
-ixl_if_interface_setup(if_shared_ctx_t sctx)
+ixl_if_interface_setup(if_shared_ctx_t sctx, uint8_t *mac)
 {
 	device_t dev;
 	struct ixl_pf	*pf;
@@ -791,21 +808,6 @@ ixl_if_interface_setup(if_shared_ctx_t sctx)
 	dev = sctx->isc_dev;
 	pf = device_get_softc(dev);
 	hw = &pf->hw;
-
-	/* Set up VSI and queues */
-	if (ixl_setup_stations(pf) != 0) { 
-		device_printf(dev, "setup stations failed!\n");
-		error = ENOMEM;
-		goto err;
-	}
-
-	/* Set up interrupt routing here */
-	if (pf->msix > 1)
-		error = ixl_assign_vsi_msix(pf);
-	else
-		error = ixl_assign_vsi_legacy(pf);
-	if (error) 
-		goto err;
 
 	if (((hw->aq.fw_maj_ver == 4) && (hw->aq.fw_min_ver < 33)) ||
 	    (hw->aq.fw_maj_ver < 4)) {
@@ -821,13 +823,14 @@ ixl_if_interface_setup(if_shared_ctx_t sctx)
 	/* Determine link state */
 	i40e_aq_get_link_info(hw, TRUE, NULL, NULL);
 	i40e_get_link_status(hw, &pf->link_up);
-
-	iflib_hwaddr_set(sctx, hw->mac.addr);
+	memcpy(mac, hw->mac.addr, 6);
 
 	if (ixl_setup_interface(dev, vsi) != 0) {
 		device_printf(dev, "interface setup failed!\n");
 		error = EIO;
 	}
+	if (error == 0)
+		device_printf(dev, "%s success!\n", __FUNC__);
 err:
 	return (error);
 }
@@ -898,6 +901,8 @@ ixl_if_attach_post(if_shared_ctx_t sctx)
 	ixl_netmap_attach(vsi);
 #endif /* DEV_NETMAP */
 	INIT_DEBUGOUT("ixl_attach: end");
+	device_printf(dev, "%s success!\n", __FUNC__);
+	return (0);
 err_mac_hmc:
 	i40e_shutdown_lan_hmc(hw);
 	i40e_shutdown_adminq(hw);
@@ -1653,36 +1658,10 @@ ixl_if_stop(if_shared_ctx_t sctx)
  *
  **********************************************************************/
 static int
-ixl_assign_vsi_legacy(struct ixl_pf *pf)
+ixl_if_msix_intr_assign(if_shared_ctx_t sctx, int msix)
 {
-	device_t        dev = UPCAST(pf)->isc_dev;
-	int 		error, rid = 0;
-	
-	if (pf->msix == 1)
-		rid = 1;
-	error = iflib_legacy_setup(UPCAST(pf), ixl_intr, pf, &rid, "irq0");
-	if (error) {
-		device_printf(dev, "Failed to register legacy/msi handler");
-		return (error);
-	}
-#ifdef PCI_IOV
-	TASK_INIT(&pf->vflr_task, 0, ixl_handle_vflr, pf);
-#endif
-
-	return (0);
-}
-
-
-/*********************************************************************
- *
- *  Setup MSIX Interrupt resources and handlers for the VSI
- *
- **********************************************************************/
-static int
-ixl_assign_vsi_msix(struct ixl_pf *pf)
-{
-	if_shared_ctx_t sctx = UPCAST(pf);
-	struct 		ixl_vsi *vsi = &pf->vsi;
+	struct 		ixl_vsi *vsi = DOWNCAST(sctx);
+	struct ixl_pf	*pf = vsi->back;
 	struct 		ixl_queue *que = vsi->queues;
 	int 		err, rid, vector = 0;
 
@@ -1697,12 +1676,6 @@ ixl_assign_vsi_msix(struct ixl_pf *pf)
 		return (err);
 	}
 	pf->admvec = vector;
-	/* Tasklet for Admin Queue */
-
-#ifdef PCI_IOV
-	TASK_INIT(&pf->vflr_task, 0, ixl_handle_vflr, pf);
-#endif
-
 	++vector;
 
 	/* Now set up the stations */
@@ -1722,6 +1695,7 @@ ixl_assign_vsi_msix(struct ixl_pf *pf)
 		iflib_softirq_alloc_generic(sctx, rid, IFLIB_INTR_TX, que, que->me, buf);
 		que->msix = vector;
 	}
+
 	return (0);
 fail:
 	que = vsi->queues;
@@ -1729,17 +1703,6 @@ fail:
 		iflib_irq_free(sctx, &que->que_irq);
 	return (err);
 }
-
-/*
- * Allocate MSI/X vectors
- */
-static int
-ixl_init_msix(struct ixl_pf *pf)
-{
-
-	return (iflib_msix_init(UPCAST(pf), PCIR_BAR(IXL_BAR), 1));
-}
-
 
 /*
  * Plumb MSI/X vectors
@@ -1914,12 +1877,6 @@ ixl_allocate_pci_resources(struct ixl_pf *pf)
 
 	pf->hw.back = &pf->osdep;
 
-	/*
-	** Now setup MSI or MSI/X, should
-	** return us the number of supported
-	** vectors. (Will be 1 for MSI)
-	*/
-	pf->msix = ixl_init_msix(pf);
 	return (0);
 }
 
@@ -2403,58 +2360,6 @@ ixl_free_mac_filters(struct ixl_vsi *vsi)
  *  called only once at attach.
  *
  **********************************************************************/
-static int
-ixl_setup_stations(struct ixl_pf *pf)
-{
-	struct ixl_vsi		*vsi = &pf->vsi;
-	if_shared_ctx_t sctx = UPCAST(vsi);
-	device_t		dev = sctx->isc_dev;
-	struct ixl_queue	*que;
-	struct tx_ring		*txr;
-	struct rx_ring		*rxr;
-	int 			rsize, tsize;
-	int			error = I40E_SUCCESS;
-	uint32_t qsizes[2];
-
-	vsi->back = (void *)pf;
-	vsi->hw = &pf->hw;
-	vsi->id = 0;
-	vsi->num_vlans = 0;
-
-	tsize = roundup2((ixl_ringsz * sizeof(struct i40e_tx_desc)) +
-					 sizeof(u32), DBA_ALIGN);
-	rsize = roundup2(ixl_ringsz *
-					 sizeof(union i40e_rx_desc), DBA_ALIGN);
-	qsizes[0] = tsize;
-	qsizes[1] = rsize;
-	
-	/* Get memory for the station queues */
-	if (iflib_queues_alloc(sctx, qsizes, 2)) {
-		device_printf(dev, "Unable to allocate queue memory\n");
-		error = ENOMEM;
-		goto early;
-	}
-	que = vsi->queues;
-	for (int i = 0; i < vsi->num_queues; i++, que++) {
-		que->me = i;
-		que->vsi = vsi;
-		/* mark the queue as active */
-		vsi->active_queues |= (u64)1 << que->me;
-		txr = &que->txr;
-		txr->que = que;
-		txr->tail = I40E_QTX_TAIL(que->me);
-
-		rxr = &que->rxr;
-		rxr->que = que;
-		rxr->tail = I40E_QRX_TAIL(que->me);
-
-	}
-	error = iflib_qset_structures_setup(sctx);
-	if (error)
-		device_printf(dev, "qset structure setup failed %d\n", error);
-early:
-	return (error);
-}
 
 /*
 ** Provide a update to the queue RX
@@ -4083,7 +3988,10 @@ static int
 ixl_set_advertised_speeds(struct ixl_pf *pf, int speeds)
 {
 	struct i40e_hw *hw = &pf->hw;
-	device_t dev = UPCAST(pf)->isc_dev;
+	if_shared_ctx_t sctx = UPCAST(pf);
+	device_t dev = sctx->isc_dev;
+	struct ifnet *ifp = sctx->isc_ifp;
+
 	struct i40e_aq_get_phy_abilities_resp abilities;
 	struct i40e_aq_set_phy_config config;
 	enum i40e_status_code aq_error = 0;
@@ -4131,8 +4039,7 @@ ixl_set_advertised_speeds(struct ixl_pf *pf, int speeds)
 	** This seems a bit heavy handed, but we
 	** need to get a reinit on some devices
 	*/
-	iflib_init(UPCAST(pf));
-
+	ifp->if_init(ifp->if_softc);
 	return (0);
 }
 

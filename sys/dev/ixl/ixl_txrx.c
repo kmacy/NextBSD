@@ -579,9 +579,6 @@ ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
 			done = last;
 
 	}
-
-	if (processed)
-		iflib_tx_credits_update(sctx, qid, processed);
 	return (processed);
 }
 

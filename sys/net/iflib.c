@@ -431,6 +431,12 @@ SYSCTL_INT(_net_iflib, OID_AUTO, rxd_flush, CTLFLAG_RD,
 
 static void iflib_tx_structures_free(if_shared_ctx_t sctx);
 static void iflib_rx_structures_free(if_shared_ctx_t sctx);
+static int iflib_queues_alloc(if_shared_ctx_t sctx);
+static void iflib_tx_credits_update(if_shared_ctx_t sctx, iflib_txq_t txq);
+static int iflib_qset_structures_setup(if_shared_ctx_t sctx);
+static int iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt);
+static int iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str);
+
 
 #if IFLIB_DEBUG
 static void *
@@ -471,6 +477,15 @@ _iflib_dmamap_cb(void *arg, bus_dma_segment_t *segs, int nseg, int err)
 	if (err)
 		return;
 	*(bus_addr_t *) arg = segs[0].ds_addr;
+}
+
+static void
+iflib_hwaddr_set(if_shared_ctx_t sctx, uint8_t addr[ETH_ADDR_LEN])
+{
+	if_t ifp;
+
+	ifp = sctx->isc_ifp;
+	ether_ifattach(ifp, addr);
 }
 
 static int
@@ -1700,8 +1715,8 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 	/*
 	 * Need a rate-limiting check so that this isn't called every time
 	 */
-	if (sctx->isc_txd_credits_update != NULL && reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
-		sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx_processed);
+	if (reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
+		iflib_tx_credits_update(sctx, txq);
 
 	reclaim = DESC_RECLAIMABLE(txq);
 	if (reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
@@ -1923,7 +1938,10 @@ iflib_if_init(void *arg)
 {
 	iflib_ctx_t ctx = arg;
 
-	iflib_init(ctx->ifc_sctx);
+	CTX_LOCK(ctx);
+	/* XXX if running stop before init'ing */
+	iflib_init_locked(ctx);
+	CTX_UNLOCK(ctx);
 }
 
 static int
@@ -2018,7 +2036,7 @@ iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
 		if (avoid_reset) {
 			if_setflagbits(ifp, IFF_UP,0);
 			if (!(if_getdrvflags(ifp)& IFF_DRV_RUNNING))
-				iflib_init(sctx);
+				iflib_if_init(sctx->isc_ctx);
 #ifdef INET
 			if (!(if_getflags(ifp) & IFF_NOARP))
 				arp_ifinit_drv(ifp, ifa);
@@ -2146,7 +2164,7 @@ iflib_if_ioctl(if_t ifp, u_long command, caddr_t data)
 				if_togglecapenable(ifp, IFCAP_WOL_MAGIC);
 		}
 		if (reinit && (if_getdrvflags(ifp) & IFF_DRV_RUNNING)) {
-			iflib_init(sctx);
+			iflib_if_init(sctx->isc_ctx);
 		}
 		if_vlancap(ifp);
 		break;
@@ -2166,23 +2184,6 @@ iflib_if_get_counter(if_t ifp, ift_counter cnt)
 	iflib_ctx_t ctx = if_getsoftc(ifp);
 
 	return (IFDI_GET_COUNTER(ctx->ifc_sctx, cnt));
-}
-
-uint64_t
-iflib_get_counter_default(if_shared_ctx_t sctx, ift_counter cnt)
-{
-	struct if_common_stats *stats = &sctx->isc_common_stats;
-
-	switch (cnt) {
-	case IFCOUNTER_COLLISIONS:
-		return (stats->ics_colls);
-	case IFCOUNTER_IERRORS:
-		return (stats->ics_ierrs);
-	case IFCOUNTER_OERRORS:
-		return (stats->ics_ierrs);
-	default:
-		return (if_get_counter_default(sctx->isc_ifp, cnt));
-	}
 }
 
 /*********************************************************************
@@ -2248,8 +2249,9 @@ iflib_led_func(void *arg, int onoff)
 int
 iflib_device_attach(device_t dev)
 {
-	int err;
+	int err, rid, msix;
 	if_shared_ctx_t sctx;
+	uint8_t mac[6];
 
 	if ((err = DEVICE_REGISTER(dev)) != 0)
 		return (err);
@@ -2257,12 +2259,52 @@ iflib_device_attach(device_t dev)
 	sctx = device_get_softc(dev);
 	if ((err = IFDI_ATTACH(sctx)) != 0)
 		return (err);
-	if ((err = IFDI_INTERFACE_SETUP(sctx)) != 0)
+	/* Get memory for the station queues */
+	if ((err = iflib_queues_alloc(sctx))) {
+		device_printf(dev, "Unable to allocate queue memory\n");
 		goto fail;
+	}
+
+	if ((err = iflib_qset_structures_setup(sctx))) {
+		device_printf(dev, "qset structure setup failed %d\n", err);
+		goto fail_queues;
+	}
+	/*
+	** Now setup MSI or MSI/X, should
+	** return us the number of supported
+	** vectors. (Will be 1 for MSI)
+	*/
+	if( sctx->isc_msix_bar != 0)
+		msix = iflib_msix_init(sctx, sctx->isc_msix_bar, sctx->isc_admin_intrcnt);
+	else {
+		sctx->isc_intr = IFLIB_INTR_LEGACY;
+		msix = 0;
+	}
+	if (msix > 1 && (err = IFDI_MSIX_INTR_ASSIGN(sctx, msix)) != 0)
+		goto fail_intr_free;
+	else {
+		if (sctx->isc_intr == IFLIB_INTR_MSI) {
+			MPASS(msix == 1);
+			rid = 1;
+		}
+		if ((err = iflib_legacy_setup(sctx, sctx->isc_legacy_intr, device_get_softc(dev), &rid, "irq0")) != 0)
+			goto fail_intr_free;
+	}
+	if ((err = IFDI_INTERFACE_SETUP(sctx, mac)) != 0)
+		goto fail_intr_free;
+
+	iflib_hwaddr_set(sctx, mac);
 	if ((err = IFDI_ATTACH_POST(sctx)) != 0)
-		goto fail;
+		goto fail_detach;
 
 	return (0);
+fail_detach:
+	ether_ifdetach(sctx->isc_ifp);
+fail_intr_free:
+	if (sctx->isc_intr == IFLIB_INTR_MSIX || sctx->isc_intr == IFLIB_INTR_MSI)
+		pci_release_msi(sctx->isc_dev);
+fail_queues:
+	/* XXX free queues */
 fail:
 	IFDI_ATTACH_CLEANUP(sctx);
 	return (err);
@@ -2399,15 +2441,6 @@ struct buf_ring_sc_consumer brsc = {
  *
  **********************************************************************/
 
-void
-iflib_hwaddr_set(if_shared_ctx_t sctx, uint8_t addr[ETH_ADDR_LEN])
-{
-	if_t ifp;
-
-	ifp = sctx->isc_ifp;
-	ether_ifattach(ifp, addr);
-}
-
 
 static void
 _iflib_assert(if_shared_ctx_t sctx)
@@ -2486,8 +2519,8 @@ iflib_register(device_t dev, driver_t *driver)
 }
 
 
-int
-iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)
+static int
+iflib_queues_alloc(if_shared_ctx_t sctx)
 {
 	iflib_ctx_t ctx = sctx->isc_ctx;
 	device_t dev = sctx->isc_dev;
@@ -2498,10 +2531,13 @@ iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)
 	iflib_fl_t fl = NULL;
 	int i, j, err, txconf, rxconf;
 	iflib_dma_info_t ifdip;
+	uint32_t *qsizes = sctx->isc_qsizes;
+	uint8_t nqs = sctx->isc_nqs;
 	int nfree_lists = sctx->isc_nfl ? sctx->isc_nfl : 1;
+	caddr_t *vaddrs;
+	uint64_t *paddrs;
 	struct buf_ring_sc **brscp;
 	int nbuf_rings = 1; /* XXX determine dynamically */
-
 
 	KASSERT(nqs > 0, ("number of queues must be at least 1"));
 
@@ -2625,11 +2661,25 @@ iflib_queues_alloc(if_shared_ctx_t sctx, uint32_t *qsizes, uint8_t nqs)
 		    device_get_nameunit(dev), rxq->ifr_id);
 		mtx_init(&rxq->ifr_mtx, rxq->ifr_mtx_name, NULL, MTX_DEF);
 	}
-	if ((err = IFDI_QUEUES_ALLOC(sctx)) != 0) {
+
+	vaddrs = malloc(sizeof(caddr_t)*sctx->isc_nqsets*nqs, M_DEVBUF, M_WAITOK);
+	paddrs = malloc(sizeof(uint64_t)*sctx->isc_nqsets*nqs, M_DEVBUF, M_WAITOK);
+	for (i = 0; i < sctx->isc_nqsets; i++) {
+		iflib_dma_info_t di = sctx->isc_ctx->ifc_qsets[i].ifq_ifdi;
+
+
+		for (j = 0; j < nqs; j++, di++) {
+			vaddrs[i*nqs + j] = di->idi_vaddr;
+			paddrs[i*nqs + j] = di->idi_paddr;
+		}
+	}
+	if ((err = IFDI_QUEUES_ALLOC(sctx, vaddrs, paddrs, nqs)) != 0) {
 		device_printf(sctx->isc_dev, "device queue allocation failed\n");
 		iflib_tx_structures_free(sctx);
-		return (err);
 	}
+	free(vaddrs, M_DEVBUF);
+	free(paddrs, M_DEVBUF);
+
 	return (0);
 err_rx_desc:
 err_tx_desc:
@@ -2739,7 +2789,7 @@ iflib_rx_structures_free(if_shared_ctx_t sctx)
 	}
 }
 
-int
+static int
 iflib_qset_structures_setup(if_shared_ctx_t sctx)
 {
 	int err;
@@ -2754,7 +2804,7 @@ iflib_qset_structures_setup(if_shared_ctx_t sctx)
 	}
 	return (err);
 }
-
+#if 0
 int
 iflib_qset_addr_get(if_shared_ctx_t sctx, int qidx, caddr_t *vaddrs, uint64_t *paddrs, int nqs)
 {
@@ -2771,7 +2821,7 @@ iflib_qset_addr_get(if_shared_ctx_t sctx, int qidx, caddr_t *vaddrs, uint64_t *p
 	}
 	return (0);
 }
-
+#endif
 int
 iflib_irq_alloc(if_shared_ctx_t sctx, if_irq_t irq, int rid,
 				driver_filter_t filter, void *filter_arg, driver_intr_t handler, void *arg, char *name)
@@ -2888,7 +2938,7 @@ iflib_irq_free(if_shared_ctx_t sctx, if_irq_t irq)
 	/* taskqgroup_detach() */
 }
 
-int
+static int
 iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str)
 {
 	iflib_ctx_t ctx = sctx->isc_ctx;
@@ -2924,15 +2974,6 @@ iflib_led_create(if_shared_ctx_t sctx)
 
 	ctx->ifc_led_dev = led_create(iflib_led_func, sctx,
 								  device_get_nameunit(sctx->isc_dev));
-}
-
-void
-iflib_init(if_shared_ctx_t sctx)
-{
-	SCTX_LOCK(sctx);
-	/* XXX if running stop before init'ing */
-	iflib_init_locked(sctx->isc_ctx);
-	SCTX_UNLOCK(sctx);
 }
 
 void
@@ -2975,23 +3016,22 @@ iflib_link_state_change(if_shared_ctx_t sctx, int link_state)
 	if_link_state_change(ifp, link_state);
 }
 
-int
-iflib_tx_cidx_get(if_shared_ctx_t sctx, int txqid)
+static void
+iflib_tx_credits_update(if_shared_ctx_t sctx, iflib_txq_t txq)
 {
+	int credits;
 
-	return (sctx->isc_ctx->ifc_txqs[txqid].ift_cidx);
-}
+	if (sctx->isc_txd_credits_update == NULL)
+		return;
 
-void
-iflib_tx_credits_update(if_shared_ctx_t sctx, int txqid, int credits)
-{
-	iflib_ctx_t ctx = sctx->isc_ctx;
+	if ((credits = sctx->isc_txd_credits_update(sctx, txq->ift_id, txq->ift_cidx_processed)) == 0)
+		return;
 
-	ctx->ifc_txqs[txqid].ift_processed += credits;
-	ctx->ifc_txqs[txqid].ift_cidx_processed += credits;
+	txq->ift_processed += credits;
+	txq->ift_cidx_processed += credits;
 
-	if (ctx->ifc_txqs[txqid].ift_cidx_processed >= ctx->ifc_txqs[txqid].ift_size)
-		ctx->ifc_txqs[txqid].ift_cidx_processed -= ctx->ifc_txqs[txqid].ift_size;
+	if (txq->ift_cidx_processed >= txq->ift_size)
+		txq->ift_cidx_processed -= txq->ift_size;
 }
 
 void
@@ -3008,13 +3048,6 @@ iflib_add_int_delay_sysctl(if_shared_ctx_t sctx, const char *name,
 	    info, 0, iflib_sysctl_int_delay, "I", description);
 }
 
-void
-iflib_taskqgroup_attach(struct grouptask *gtask, void *uniq, char *name)
-{
-
-	taskqgroup_attach(gctx->igc_config_tqg, gtask, uniq, -1, name);
-}
-
 struct mtx *
 iflib_sctx_lock_get(if_shared_ctx_t sctx)
 {
@@ -3022,7 +3055,7 @@ iflib_sctx_lock_get(if_shared_ctx_t sctx)
 	return (&sctx->isc_ctx->ifc_mtx);
 }
 
-int
+static int
 iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt)
 {
 	device_t dev = sctx->isc_dev;
