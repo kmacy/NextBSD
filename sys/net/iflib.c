@@ -1058,10 +1058,17 @@ iflib_fl_setup(iflib_fl_t fl)
 
 	/* Now replenish the mbufs */
 	MPASS(fl->ifl_credits == 0);
+#if 0
 	_iflib_fl_refill(ctx, fl, fl->ifl_size);
 	MPASS(fl->ifl_pidx == 0);
 	MPASS(fl->ifl_size == fl->ifl_credits);
 	MPASS(fl->ifl_gen == 1);
+#endif
+	/* avoid pre-allocating zillions of clusters to an idle card
+	 * potentially speeding up attach
+	 */
+	_iflib_fl_refill(ctx, fl, min(32, fl->ifl_size));
+	MPASS(min(32, fl->ifl_size) == fl->ifl_credits);
 	/*
 	 * handle failure
 	 */
@@ -1454,7 +1461,8 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 			mt = m;
 		}
 	}
-	__iflib_fl_refill_lt(ctx, fl, budget);
+	/* make sure that we can refill faster than drain */
+	__iflib_fl_refill_lt(ctx, fl, budget + 8);
 
 	ifp = sctx->isc_ifp;
 	while (mh != NULL) {
