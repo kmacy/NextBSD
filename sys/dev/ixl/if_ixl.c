@@ -504,6 +504,7 @@ ixl_register(device_t dev)
 	pf = device_get_softc(dev);
 	vsi = &pf->vsi;
 	vsi->back = pf;
+	vsi->hw = &pf->hw;
 	sctx = UPCAST(pf);
 	sctx->isc_dev = dev;
 	hw = &pf->hw;
@@ -519,6 +520,7 @@ ixl_register(device_t dev)
 	sctx->isc_rx_maxsegsize = PAGE_SIZE*4;
 	sctx->isc_ntxd = ixl_ringsz;
 	sctx->isc_nrxd = ixl_ringsz;
+	sctx->isc_nfl = 1;
 	sctx->isc_qsizes = malloc(2*sizeof(uint32_t), M_DEVBUF, M_WAITOK);
 
 	sctx->isc_qsizes[0] = roundup2((ixl_ringsz * sizeof(struct i40e_tx_desc)) +
