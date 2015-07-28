@@ -593,6 +593,7 @@ _iflib_irq_alloc(iflib_ctx_t ctx, if_irq_t irq, int rid,
 	void *tag;
 	device_t dev = ctx->ifc_sctx->isc_dev;
 
+	MPASS(rid < 512);
 	irq->ii_rid = rid;
 	res = bus_alloc_resource_any(dev, SYS_RES_IRQ, &irq->ii_rid,
 	    RF_SHAREABLE | RF_ACTIVE);
@@ -2284,7 +2285,7 @@ iflib_device_attach(device_t dev)
 
 	if (msix > 1 && (err = IFDI_MSIX_INTR_ASSIGN(sctx, msix)) != 0)
 		goto fail_intr_free;
-	else {
+	if (msix <= 1) {
 		if (sctx->isc_intr == IFLIB_INTR_MSI) {
 			MPASS(msix == 1);
 			rid = 1;
