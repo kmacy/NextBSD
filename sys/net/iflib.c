@@ -868,16 +868,17 @@ fail:
  *	The caller must assure that @n does not exceed the queue's capacity.
  */
 static void
-_iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int n)
+_iflib_fl_refill(iflib_ctx_t ctx, iflib_fl_t fl, int count)
 {
 	struct mbuf *m;
 	int pidx = fl->ifl_pidx;
 	iflib_sd_t rxsd = &fl->ifl_sds[pidx];
 	caddr_t cl;
-	int i = 0;
+	int n, i = 0;
 	uint64_t phys_addr;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 
+	n  = count;
 	MPASS(n > 0);
 	MPASS(fl->ifl_credits >= 0);
 	MPASS(fl->ifl_credits + n <= fl->ifl_size);
@@ -2677,6 +2678,9 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 	if ((err = IFDI_QUEUES_ALLOC(sctx, vaddrs, paddrs, nqs)) != 0) {
 		device_printf(sctx->isc_dev, "device queue allocation failed\n");
 		iflib_tx_structures_free(sctx);
+		free(vaddrs, M_DEVBUF);
+		free(paddrs, M_DEVBUF);
+		goto err_rx_desc;
 	}
 	free(vaddrs, M_DEVBUF);
 	free(paddrs, M_DEVBUF);
