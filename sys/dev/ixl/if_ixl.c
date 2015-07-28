@@ -765,7 +765,7 @@ ixl_if_attach(if_shared_ctx_t sctx)
 
 	/* Initialize mac filter list for VSI */
 	SLIST_INIT(&vsi->ftl);
-	device_printf(dev, "%s success!\n", __FUNC__);
+	device_printf(dev, "%s success!\n", __FUNCTION__);
 	return (0);
 
 err_mac_hmc:
@@ -830,7 +830,7 @@ ixl_if_interface_setup(if_shared_ctx_t sctx, uint8_t *mac)
 		error = EIO;
 	}
 	if (error == 0)
-		device_printf(dev, "%s success!\n", __FUNC__);
+		device_printf(dev, "%s success!\n", __FUNCTION__);
 err:
 	return (error);
 }
@@ -901,7 +901,7 @@ ixl_if_attach_post(if_shared_ctx_t sctx)
 	ixl_netmap_attach(vsi);
 #endif /* DEV_NETMAP */
 	INIT_DEBUGOUT("ixl_attach: end");
-	device_printf(dev, "%s success!\n", __FUNC__);
+	device_printf(dev, "%s success!\n", __FUNCTION__);
 	return (0);
 err_mac_hmc:
 	i40e_shutdown_lan_hmc(hw);
