@@ -495,12 +495,15 @@ static int
 ixl_register(device_t dev)
 {
 	struct ixl_pf	*pf;
+	struct ixl_vsi  *vsi;
 	struct i40e_hw	*hw;
 	int             error = 0;
 	if_shared_ctx_t sctx;
 
 	/* Allocate, clear, and link in our primary soft structure */
 	pf = device_get_softc(dev);
+	vsi = &pf->vsi;
+	vsi->back = pf;
 	sctx = UPCAST(pf);
 	sctx->isc_dev = dev;
 	hw = &pf->hw;
