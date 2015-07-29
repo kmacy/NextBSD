@@ -433,6 +433,7 @@ static void iflib_tx_structures_free(if_shared_ctx_t sctx);
 static void iflib_rx_structures_free(if_shared_ctx_t sctx);
 static int iflib_queues_alloc(if_shared_ctx_t sctx);
 static void iflib_tx_credits_update(if_shared_ctx_t sctx, iflib_txq_t txq);
+static int iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq);
 static int iflib_qset_structures_setup(if_shared_ctx_t sctx);
 static int iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt);
 static int iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str);
@@ -1331,7 +1332,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 {
 	iflib_ctx_t ctx = rxq->ifr_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
-	int avail, fl_cidx, cidx, gen, fl_gen;
+	int avail, fl_cidx, cidx, gen, fl_gen, i;
 	int *cidxp, *genp;
 	struct if_rxd_info ri;
 	iflib_dma_info_t di;
@@ -1365,14 +1366,10 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	mh = mt = NULL;
 	MPASS(budget > 0);
 	rx_pkts	= rx_bytes = 0;
-	avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
-	rxq->ifr_pidx += avail;
-	if (rxq->ifr_pidx > rxq->ifr_size) {
-		rxq->ifr_pidx -= rxq->ifr_size;
-		rxq->ifr_gen = 1;
-	}
-	avail = get_inuse(rxq->ifr_size, cidx, rxq->ifr_pidx, rxq->ifr_gen);
-	if (avail == 0) {
+
+	if ((avail = iflib_rxd_avail(sctx, rxq)) == 0) {
+		for (i = 0, fl = &rxq->ifr_fl[0]; i < sctx->isc_nfl; i++, fl++)
+			__iflib_fl_refill_lt(ctx, fl, budget + 8);
 		DBG_COUNTER_INC(rx_unavail);
 		return (false);
 	}
@@ -1446,7 +1443,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		fl->ifl_gen = fl_gen;
 
 		if (avail == 0 && budget_left)
-			avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
+			avail = iflib_rxd_avail(sctx, rxq);
 
 		if (m == NULL) {
 			DBG_COUNTER_INC(rx_mbuf_null);
@@ -1461,7 +1458,8 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		}
 	}
 	/* make sure that we can refill faster than drain */
-	__iflib_fl_refill_lt(ctx, fl, budget + 8);
+	for (i = 0, fl = &rxq->ifr_fl[0]; i < sctx->isc_nfl; i++, fl++)
+		__iflib_fl_refill_lt(ctx, fl, budget + 8);
 
 	ifp = sctx->isc_ifp;
 	while (mh != NULL) {
@@ -1493,7 +1491,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	if (sctx->isc_flags & IFLIB_HAS_CQ)
 		*cidxp = cidx;
 	*genp = gen;
-	return (sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx));
+	return (iflib_rxd_avail(sctx, rxq));
 }
 
 #define M_CSUM_FLAGS(m) ((m)->m_pkthdr.csum_flags)
@@ -3051,6 +3049,23 @@ iflib_tx_credits_update(if_shared_ctx_t sctx, iflib_txq_t txq)
 	if (txq->ift_cidx_processed >= txq->ift_size)
 		txq->ift_cidx_processed -= txq->ift_size;
 }
+
+static int
+iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq)
+{
+	int avail;
+
+	avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, rxq->ifr_cidx);
+	rxq->ifr_pidx += avail;
+	if (rxq->ifr_pidx >= rxq->ifr_size) {
+		rxq->ifr_pidx -= rxq->ifr_size;
+		rxq->ifr_gen = 1;
+	}
+
+	return (get_inuse(rxq->ifr_size, rxq->ifr_cidx, rxq->ifr_pidx, rxq->ifr_gen));
+}
+
+
 
 void
 iflib_add_int_delay_sysctl(if_shared_ctx_t sctx, const char *name,
