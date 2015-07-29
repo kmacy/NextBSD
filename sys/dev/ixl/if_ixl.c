@@ -201,7 +201,7 @@ static void	ixl_reset_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 #endif
 
-static int      ixl_if_attach(if_shared_ctx_t);
+static int      ixl_if_attach_pre(if_shared_ctx_t);
 static int      ixl_if_interface_setup(if_shared_ctx_t, uint8_t *mac);
 static int      ixl_if_attach_post(if_shared_ctx_t);
 static void     ixl_if_attach_cleanup(if_shared_ctx_t);
@@ -263,7 +263,7 @@ MODULE_DEPEND(ixl, iflib, 1, 1, 1);
 
 
 static device_method_t ixl_if_methods[] = {
-	DEVMETHOD(ifdi_attach, ixl_if_attach),
+	DEVMETHOD(ifdi_attach_pre, ixl_if_attach_pre),
 	DEVMETHOD(ifdi_interface_setup, ixl_if_interface_setup),
 	DEVMETHOD(ifdi_attach_post, ixl_if_attach_post),
 	DEVMETHOD(ifdi_attach_cleanup, ixl_if_attach_cleanup),
@@ -502,12 +502,9 @@ ixl_register(device_t dev)
 
 	/* Allocate, clear, and link in our primary soft structure */
 	pf = device_get_softc(dev);
-	vsi = &pf->vsi;
-	vsi->back = pf;
-	vsi->hw = &pf->hw;
 	sctx = UPCAST(pf);
 	sctx->isc_dev = dev;
-	hw = &pf->hw;
+
 
 	sctx->isc_q_align = PAGE_SIZE;/* max(DBA_ALIGN, PAGE_SIZE) */
 
@@ -556,7 +553,7 @@ ixl_register(device_t dev)
  *********************************************************************/
 
 static int
-ixl_if_attach(if_shared_ctx_t sctx)
+ixl_if_attach_pre(if_shared_ctx_t sctx)
 {
 	device_t dev;
 	struct ixl_pf	*pf;
@@ -569,6 +566,11 @@ ixl_if_attach(if_shared_ctx_t sctx)
 	dev = sctx->isc_dev;
 	pf = device_get_softc(dev);
 	hw = &pf->hw;
+	vsi = &pf->vsi;
+	vsi->back = pf;
+	vsi->hw = &pf->hw;
+	vsi->id = 0;
+	vsi->num_vlans = 0;
 
 #ifdef PCI_IOV
 	TASK_INIT(&pf->vflr_task, 0, ixl_handle_vflr, pf);

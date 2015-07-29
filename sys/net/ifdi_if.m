@@ -96,7 +96,7 @@ CODE {
 # bus interfaces
 #
 
-METHOD int attach {
+METHOD int attach_pre {
 	if_shared_ctx_t _ctx;
 };
 

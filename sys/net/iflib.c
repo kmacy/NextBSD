@@ -1374,10 +1374,18 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	mh = mt = NULL;
 	MPASS(budget > 0);
 	rx_pkts	= rx_bytes = 0;
-	if ((avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx)) == 0) {
+	avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
+	rxq->ifr_pidx += avail;
+	if (rxq->ifr_pidx > rxq->ifr_size) {
+		rxq->ifr_pidx -= rxq->ifr_size;
+		rxq->ifr_gen = 1;
+	}
+	avail = get_inuse(rxq->ifr_size, cidx, rxq->ifr_pidx, rxq->ifr_gen);
+	if (avail == 0) {
 		DBG_COUNTER_INC(rx_unavail);
 		return (false);
 	}
+
 	for (budget_left = budget; (budget_left > 0) && (avail > 0); budget_left--, avail--) {
 		if (__predict_false(!CTX_ACTIVE(ctx))) {
 			DBG_COUNTER_INC(rx_ctx_inactive);
@@ -1493,6 +1501,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 #endif
 	if (sctx->isc_flags & IFLIB_HAS_CQ)
 		*cidxp = cidx;
+	*genp = gen;
 	return (sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx));
 }
 
@@ -2015,6 +2024,7 @@ iflib_if_qflush(if_t ifp)
 	for (int i = 0; i < NQSETS(ctx); i++, txq++)
 		buf_ring_sc_drain(txq->ift_br[0], 0);
 	if_qflush(ifp);
+	ctx->ifc_flags &= ~IFC_QFLUSH;
 }
 
 static int
@@ -2267,7 +2277,7 @@ iflib_device_attach(device_t dev)
 		return (err);
 
 	sctx = device_get_softc(dev);
-	if ((err = IFDI_ATTACH(sctx)) != 0)
+	if ((err = IFDI_ATTACH_PRE(sctx)) != 0)
 		return (err);
 	/*
 	** Now setup MSI or MSI/X, should
@@ -2486,7 +2496,10 @@ iflib_register(device_t dev, driver_t *driver)
 	ctx = malloc(sizeof(struct iflib_ctx), M_DEVBUF, M_ZERO|M_WAITOK);
 	if (ctx == NULL)
 		return (ENOMEM);
+
 	CTX_LOCK_INIT(ctx, device_get_nameunit(dev));
+	HPASS(ctx->ifc_flags == 0);
+
 	sctx->isc_ctx = ctx;
 	ctx->ifc_sctx = sctx;
 
