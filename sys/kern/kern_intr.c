@@ -1327,14 +1327,13 @@ ithread_loop(void *arg)
 		 * we are running, it will set it_need to note that we
 		 * should make another pass.
 		 */
-		while (atomic_load_acq_int(&ithd->it_need) != 0) {
+		while (atomic_swap_int(&ithd->it_need, 0) != 0) {
 			/*
-			 * This might need a full read and write barrier
-			 * to make sure that this write posts before any
-			 * of the memory or device accesses in the
-			 * handlers.
+			 * This needs a release barrier to make sure
+			 * that this write posts before any of the
+			 * memory or device accesses in the handlers.
 			 */
-			atomic_store_rel_int(&ithd->it_need, 0);
+			atomic_thread_fence_acq_rel();
 			ithread_execute_handlers(p, ie);
 		}
 		WITNESS_WARN(WARN_PANIC, NULL, "suspending ithread");
@@ -1346,8 +1345,8 @@ ithread_loop(void *arg)
 		 * set again, so we have to check it again.
 		 */
 		thread_lock(td);
-		if ((atomic_load_acq_int(&ithd->it_need) == 0) &&
-		    !(ithd->it_flags & (IT_DEAD | IT_WAIT))) {
+		if (atomic_load_acq_int(&ithd->it_need) == 0 &&
+		    (ithd->it_flags & (IT_DEAD | IT_WAIT)) == 0) {
 			TD_SET_IWAIT(td);
 			ie->ie_count = 0;
 			mi_switch(SW_VOL | SWT_IWAIT, NULL);
@@ -1507,14 +1506,13 @@ ithread_loop(void *arg)
 		 * we are running, it will set it_need to note that we
 		 * should make another pass.
 		 */
-		while (atomic_load_acq_int(&ithd->it_need) != 0) {
+		while (atomic_swap_int(&ithd->it_need, 0) != 0) {
 			/*
-			 * This might need a full read and write barrier
-			 * to make sure that this write posts before any
-			 * of the memory or device accesses in the
-			 * handlers.
+			 * This needs a release barrier to make sure
+			 * that this write posts before any of the
+			 * memory or device accesses in the handlers.
 			 */
-			atomic_store_rel_int(&ithd->it_need, 0);
+			atomic_thread_fence_acq_rel();
 			if (priv)
 				priv_ithread_execute_handler(p, ih);
 			else 
@@ -1529,8 +1527,8 @@ ithread_loop(void *arg)
 		 * set again, so we have to check it again.
 		 */
 		thread_lock(td);
-		if ((atomic_load_acq_int(&ithd->it_need) == 0) &&
-		    !(ithd->it_flags & (IT_DEAD | IT_WAIT))) {
+		if (atomic_load_acq_int(&ithd->it_need) == 0 &&
+		    (ithd->it_flags & (IT_DEAD | IT_WAIT)) == 0) {
 			TD_SET_IWAIT(td);
 			ie->ie_count = 0;
 			mi_switch(SW_VOL | SWT_IWAIT, NULL);

@@ -1,6 +1,9 @@
 /*-
- * Copyright (C) 1996
- *	David L. Nugent.  All rights reserved.
+ * Copyright (c) 2015 The FreeBSD Foundation
+ * All rights reserved.
+ *
+ * This software was developed by Andrew Turner under
+ * sponsorship from the FreeBSD Foundation.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -11,10 +14,10 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY DAVID L. NUGENT AND CONTRIBUTORS ``AS IS'' AND
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL DAVID L. NUGENT OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -24,24 +27,12 @@
  * SUCH DAMAGE.
  */
 
-#ifndef lint
-static const char rcsid[] =
-  "$FreeBSD$";
-#endif /* not lint */
+#include <machine/asm.h>
+__FBSDID("$FreeBSD$");
 
-#include <stdlib.h>
-
-#include "pwupd.h"
-
-int
-extendarray(char ***buf, int * buflen, int needed)
-{
-	if (needed > *buflen) {
-		char	**tmp = realloc(*buf, needed * sizeof(char *));
-		if (tmp == NULL)
-			return -1;
-		*buf = tmp;
-		*buflen = needed;
-	}
-	return *buflen;
-}
+ENTRY(_ctx_start)
+	blr	x19		/* Call func from makecontext */
+	mov	x0, x20		/* Load ucp saved in makecontext */
+	bl	_C_LABEL(ctx_done)
+	bl	_C_LABEL(abort)
+END(_ctx_start)
