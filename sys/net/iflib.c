@@ -479,15 +479,6 @@ _iflib_dmamap_cb(void *arg, bus_dma_segment_t *segs, int nseg, int err)
 	*(bus_addr_t *) arg = segs[0].ds_addr;
 }
 
-static void
-iflib_hwaddr_set(if_shared_ctx_t sctx, uint8_t addr[ETH_ADDR_LEN])
-{
-	if_t ifp;
-
-	ifp = sctx->isc_ifp;
-	ether_ifattach(ifp, addr);
-}
-
 static int
 iflib_dma_alloc(iflib_ctx_t ctx, bus_size_t size, iflib_dma_info_t dma,
 				int mapflags)
@@ -2271,7 +2262,6 @@ iflib_device_attach(device_t dev)
 {
 	int err, rid, msix;
 	if_shared_ctx_t sctx;
-	uint8_t mac[6];
 
 	if ((err = DEVICE_REGISTER(dev)) != 0)
 		return (err);
@@ -2311,10 +2301,10 @@ iflib_device_attach(device_t dev)
 		if ((err = iflib_legacy_setup(sctx, sctx->isc_legacy_intr, device_get_softc(dev), &rid, "irq0")) != 0)
 			goto fail_intr_free;
 	}
-	if ((err = IFDI_INTERFACE_SETUP(sctx, mac)) != 0)
-		goto fail_intr_free;
+	ether_ifattach(sctx->isc_ifp, sctx->isc_mac);
+	if ((err = IFDI_INTERFACE_SETUP(sctx)) != 0)
+		goto fail_detach;
 
-	iflib_hwaddr_set(sctx, mac);
 	if ((err = IFDI_ATTACH_POST(sctx)) != 0)
 		goto fail_detach;
 

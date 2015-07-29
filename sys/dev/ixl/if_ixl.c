@@ -202,7 +202,7 @@ static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 #endif
 
 static int      ixl_if_attach_pre(if_shared_ctx_t);
-static int      ixl_if_interface_setup(if_shared_ctx_t, uint8_t *mac);
+static int      ixl_if_interface_setup(if_shared_ctx_t);
 static int      ixl_if_attach_post(if_shared_ctx_t);
 static void     ixl_if_attach_cleanup(if_shared_ctx_t);
 static int		ixl_if_msix_intr_assign(if_shared_ctx_t, int);
@@ -766,6 +766,8 @@ ixl_if_attach_pre(if_shared_ctx_t sctx)
 		goto err_mac_hmc;
 	}
 	bcopy(hw->mac.addr, hw->mac.perm_addr, ETHER_ADDR_LEN);
+	bcopy(hw->mac.addr, sctx->isc_mac, ETHER_ADDR_LEN);
+
 	i40e_get_port_mac_addr(hw, hw->mac.port_addr);
 
 	/* Initialize mac filter list for VSI */
@@ -801,7 +803,7 @@ ixl_if_attach_cleanup(if_shared_ctx_t sctx)
 }
 
 static int
-ixl_if_interface_setup(if_shared_ctx_t sctx, uint8_t *mac)
+ixl_if_interface_setup(if_shared_ctx_t sctx)
 {
 	device_t dev;
 	struct ixl_pf	*pf;
@@ -828,7 +830,6 @@ ixl_if_interface_setup(if_shared_ctx_t sctx, uint8_t *mac)
 	/* Determine link state */
 	i40e_aq_get_link_info(hw, TRUE, NULL, NULL);
 	i40e_get_link_status(hw, &pf->link_up);
-	memcpy(mac, hw->mac.addr, 6);
 
 	if (ixl_setup_interface(dev, vsi) != 0) {
 		device_printf(dev, "interface setup failed!\n");

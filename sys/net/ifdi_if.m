@@ -102,7 +102,6 @@ METHOD int attach_pre {
 
 METHOD int interface_setup {
 	if_shared_ctx_t _ctx;
-	uint8_t *mac;
 };
 
 METHOD int attach_post {

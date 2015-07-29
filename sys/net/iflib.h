@@ -146,6 +146,7 @@ struct if_shared_ctx {
 	uint16_t isc_max_frame_size;
 
 	uint32_t *isc_qsizes;
+	uint8_t isc_mac[6];
 	int isc_nqs;
 	int isc_msix_bar;
 	int isc_admin_intrcnt;
