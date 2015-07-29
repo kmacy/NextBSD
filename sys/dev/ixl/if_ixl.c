@@ -495,8 +495,6 @@ static int
 ixl_register(device_t dev)
 {
 	struct ixl_pf	*pf;
-	struct ixl_vsi  *vsi;
-	struct i40e_hw	*hw;
 	int             error = 0;
 	if_shared_ctx_t sctx;
 

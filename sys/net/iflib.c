@@ -2498,7 +2498,7 @@ iflib_register(device_t dev, driver_t *driver)
 		return (ENOMEM);
 
 	CTX_LOCK_INIT(ctx, device_get_nameunit(dev));
-	HPASS(ctx->ifc_flags == 0);
+	MPASS(ctx->ifc_flags == 0);
 
 	sctx->isc_ctx = ctx;
 	ctx->ifc_sctx = sctx;
