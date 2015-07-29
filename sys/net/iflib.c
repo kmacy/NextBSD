@@ -433,7 +433,7 @@ static void iflib_tx_structures_free(if_shared_ctx_t sctx);
 static void iflib_rx_structures_free(if_shared_ctx_t sctx);
 static int iflib_queues_alloc(if_shared_ctx_t sctx);
 static void iflib_tx_credits_update(if_shared_ctx_t sctx, iflib_txq_t txq);
-static int iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq);
+static int iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq, int cidx);
 static int iflib_qset_structures_setup(if_shared_ctx_t sctx);
 static int iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt);
 static int iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str);
@@ -1367,7 +1367,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	MPASS(budget > 0);
 	rx_pkts	= rx_bytes = 0;
 
-	if ((avail = iflib_rxd_avail(sctx, rxq)) == 0) {
+	if ((avail = iflib_rxd_avail(sctx, rxq, cidx)) == 0) {
 		for (i = 0, fl = &rxq->ifr_fl[0]; i < sctx->isc_nfl; i++, fl++)
 			__iflib_fl_refill_lt(ctx, fl, budget + 8);
 		DBG_COUNTER_INC(rx_unavail);
@@ -1443,7 +1443,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		fl->ifl_gen = fl_gen;
 
 		if (avail == 0 && budget_left)
-			avail = iflib_rxd_avail(sctx, rxq);
+			avail = iflib_rxd_avail(sctx, rxq, cidx);
 
 		if (m == NULL) {
 			DBG_COUNTER_INC(rx_mbuf_null);
@@ -1491,7 +1491,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	if (sctx->isc_flags & IFLIB_HAS_CQ)
 		*cidxp = cidx;
 	*genp = gen;
-	return (iflib_rxd_avail(sctx, rxq));
+	return (iflib_rxd_avail(sctx, rxq, cidx));
 }
 
 #define M_CSUM_FLAGS(m) ((m)->m_pkthdr.csum_flags)
@@ -3051,11 +3051,12 @@ iflib_tx_credits_update(if_shared_ctx_t sctx, iflib_txq_t txq)
 }
 
 static int
-iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq)
+iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq, int cidx)
 {
 	int avail;
 
-	avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, rxq->ifr_cidx);
+	avail = sctx->isc_rxd_available(sctx, rxq->ifr_id, cidx);
+#if 0
 	rxq->ifr_pidx += avail;
 	if (rxq->ifr_pidx >= rxq->ifr_size) {
 		rxq->ifr_pidx -= rxq->ifr_size;
@@ -3063,6 +3064,8 @@ iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq)
 	}
 
 	return (get_inuse(rxq->ifr_size, rxq->ifr_cidx, rxq->ifr_pidx, rxq->ifr_gen));
+#endif
+	return (avail);
 }
 
 
