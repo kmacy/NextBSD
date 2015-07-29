@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/errno.h>
 #include <sys/mman.h>
+#include <sys/cpuset.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,13 +44,15 @@ __FBSDID("$FreeBSD$");
 #include <libgen.h>
 #include <libutil.h>
 #include <fcntl.h>
-#include <string.h>
 #include <getopt.h>
+#include <time.h>
 #include <assert.h>
+#include <libutil.h>
 
 #include <machine/cpufunc.h>
-#include <machine/vmm.h>
 #include <machine/specialreg.h>
+#include <machine/vmm.h>
+#include <machine/vmm_dev.h>
 #include <vmmapi.h>
 
 #include "amd/vmcb.h"
@@ -157,6 +160,11 @@ usage(bool cpu_intel)
 	"       [--inject-nmi]\n"
 	"       [--force-reset]\n"
 	"       [--force-poweroff]\n"
+	"       [--get-rtc-time]\n"
+	"       [--set-rtc-time=<secs>]\n"
+	"       [--get-rtc-nvram]\n"
+	"       [--set-rtc-nvram=<val>]\n"
+	"       [--rtc-nvram-offset=<offset>]\n"
 	"       [--get-active-cpus]\n"
 	"       [--get-suspended-cpus]\n"
 	"       [--get-intinfo]\n"
@@ -220,11 +228,17 @@ usage(bool cpu_intel)
 	exit(1);
 }
 
+static int get_rtc_time, set_rtc_time;
+static int get_rtc_nvram, set_rtc_nvram;
+static int rtc_nvram_offset;
+static uint8_t rtc_nvram_value;
+static time_t rtc_secs;
+
 static int get_stats, getcap, setcap, capval, get_gpa_pmap;
 static int inject_nmi, assert_lapic_lvt;
 static int force_reset, force_poweroff;
 static const char *capname;
-static int create, destroy, get_lowmem, get_highmem;
+static int create, destroy, get_memmap, get_memseg;
 static int get_intinfo;
 static int get_active_cpus, get_suspended_cpus;
 static uint64_t memsize;
@@ -281,6 +295,7 @@ static int get_guest_pat, get_host_pat;
 static int get_guest_sysenter, get_vmcs_link;
 static int get_exit_reason, get_vmcs_exit_qualification;
 static int get_vmcs_exit_interruption_info, get_vmcs_exit_interruption_error;
+static int get_vmcs_exit_inst_length;
 
 static uint64_t desc_base;
 static uint32_t desc_limit, desc_access;
@@ -545,6 +560,9 @@ enum {
 	UNASSIGN_PPTDEV,
 	GET_GPA_PMAP,
 	ASSERT_LAPIC_LVT,
+	SET_RTC_TIME,
+	SET_RTC_NVRAM,
+	RTC_NVRAM_OFFSET,
 };
 
 static void
@@ -625,9 +643,9 @@ get_all_registers(struct vmctx *ctx, int vcpu)
 	uint64_t cr0, cr3, cr4, dr7, rsp, rip, rflags, efer;
 	uint64_t rax, rbx, rcx, rdx, rsi, rdi, rbp;
 	uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
-	int error;
+	int error = 0;
 
-	if (get_efer || get_all) {
+	if (!error && (get_efer || get_all)) {
 		error = vm_get_register(ctx, vcpu, VM_REG_GUEST_EFER, &efer);
 		if (error == 0)
 			printf("efer[%d]\t\t0x%016lx\n", vcpu, efer);
@@ -772,10 +790,10 @@ get_all_registers(struct vmctx *ctx, int vcpu)
 static int
 get_all_segments(struct vmctx *ctx, int vcpu)
 {
-	int error;
 	uint64_t cs, ds, es, fs, gs, ss, tr, ldtr;
+	int error = 0;
 
-	if (get_desc_ds || get_all) {
+	if (!error && (get_desc_ds || get_all)) {
 		error = vm_get_desc(ctx, vcpu, VM_REG_GUEST_DS,
 				   &desc_base, &desc_limit, &desc_access);
 		if (error == 0) {
@@ -920,9 +938,9 @@ static int
 get_misc_vmcs(struct vmctx *ctx, int vcpu)
 {
 	uint64_t ctl, cr0, cr3, cr4, rsp, rip, pat, addr, u64;
-	int error;
-	
-	if (get_cr0_mask || get_all) {
+	int error = 0;
+
+	if (!error && (get_cr0_mask || get_all)) {
 		uint64_t cr0mask;
 		error = vm_get_vmcs_field(ctx, vcpu, VMCS_CR0_MASK, &cr0mask);
 		if (error == 0)
@@ -1130,7 +1148,15 @@ get_misc_vmcs(struct vmctx *ctx, int vcpu)
 				vcpu, u64);
 		}
 	}
-	
+
+	if (!error && (get_vmcs_exit_inst_length || get_all)) {
+		error = vm_get_vmcs_field(ctx, vcpu,
+		    VMCS_EXIT_INSTRUCTION_LENGTH, &u64);
+		if (error == 0)
+			printf("vmcs_exit_inst_length[%d]\t0x%08x\n", vcpu,
+			    (uint32_t)u64);
+	}
+
 	if (!error && (get_vmcs_exit_qualification || get_all)) {
 		error = vm_get_vmcs_field(ctx, vcpu, VMCS_EXIT_QUALIFICATION,
 					  &u64);
@@ -1146,9 +1172,9 @@ static int
 get_misc_vmcb(struct vmctx *ctx, int vcpu)
 {
 	uint64_t ctl, addr;
-	int error;
+	int error = 0;
 
-	if (get_vmcb_intercept || get_all) {
+	if (!error && (get_vmcb_intercept || get_all)) {
 		error = vm_get_vmcb_field(ctx, vcpu, VMCB_OFF_CR_INTERCEPT, 4,
 		    &ctl);
 		if (error == 0)
@@ -1269,6 +1295,11 @@ setup_options(bool cpu_intel)
 		{ "setcap",	REQ_ARG,	0,	SET_CAP },
 		{ "get-gpa-pmap", REQ_ARG,	0,	GET_GPA_PMAP },
 		{ "assert-lapic-lvt", REQ_ARG,	0,	ASSERT_LAPIC_LVT },
+		{ "get-rtc-time", NO_ARG,	&get_rtc_time,	1 },
+		{ "set-rtc-time", REQ_ARG,	0,	SET_RTC_TIME },
+		{ "rtc-nvram-offset", REQ_ARG,	0,	RTC_NVRAM_OFFSET },
+		{ "get-rtc-nvram", NO_ARG,	&get_rtc_nvram,	1 },
+		{ "set-rtc-nvram", REQ_ARG,	0,	SET_RTC_NVRAM },
 		{ "getcap",	NO_ARG,		&getcap,	1 },
 		{ "get-stats",	NO_ARG,		&get_stats,	1 },
 		{ "get-desc-ds",NO_ARG,		&get_desc_ds,	1 },
@@ -1291,8 +1322,8 @@ setup_options(bool cpu_intel)
 		{ "get-desc-gdtr", NO_ARG,	&get_desc_gdtr, 1 },
 		{ "set-desc-idtr", NO_ARG,	&set_desc_idtr, 1 },
 		{ "get-desc-idtr", NO_ARG,	&get_desc_idtr, 1 },
-		{ "get-lowmem", NO_ARG,		&get_lowmem,	1 },
-		{ "get-highmem",NO_ARG,		&get_highmem,	1 },
+		{ "get-memmap",	NO_ARG,		&get_memmap,	1 },
+		{ "get-memseg", NO_ARG,		&get_memseg,	1 },
 		{ "get-efer",	NO_ARG,		&get_efer,	1 },
 		{ "get-cr0",	NO_ARG,		&get_cr0,	1 },
 		{ "get-cr3",	NO_ARG,		&get_cr3,	1 },
@@ -1385,6 +1416,8 @@ setup_options(bool cpu_intel)
 				REQ_ARG, 0, SET_VMCS_ENTRY_INTERRUPTION_INFO },
 		{ "get-vmcs-exit-qualification",
 				NO_ARG,	&get_vmcs_exit_qualification, 1 },
+		{ "get-vmcs-exit-inst-length",
+				NO_ARG,	&get_vmcs_exit_inst_length, 1 },
 		{ "get-vmcs-interruptibility",
 				NO_ARG, &get_vmcs_interruptibility, 1 },
 		{ "get-vmcs-exit-interruption-error",
@@ -1462,21 +1495,123 @@ setup_options(bool cpu_intel)
 	return (all_opts);
 }
 
+static const char *
+wday_str(int idx)
+{
+	static const char *weekdays[] = {
+		"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+	};
+
+	if (idx >= 0 && idx < 7)
+		return (weekdays[idx]);
+	else
+		return ("UNK");
+}
+
+static const char *
+mon_str(int idx)
+{
+	static const char *months[] = {
+		"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+	};
+
+	if (idx >= 0 && idx < 12)
+		return (months[idx]);
+	else
+		return ("UNK");
+}
+
+static int
+show_memmap(struct vmctx *ctx)
+{
+	char name[SPECNAMELEN + 1], numbuf[8];
+	vm_ooffset_t segoff;
+	vm_paddr_t gpa;
+	size_t maplen, seglen;
+	int error, flags, prot, segid, delim;
+
+	printf("Address     Length      Segment     Offset      ");
+	printf("Prot  Flags\n");
+
+	gpa = 0;
+	while (1) {
+		error = vm_mmap_getnext(ctx, &gpa, &segid, &segoff, &maplen,
+		    &prot, &flags);
+		if (error)
+			return (errno == ENOENT ? 0 : error);
+
+		error = vm_get_memseg(ctx, segid, &seglen, name, sizeof(name));
+		if (error)
+			return (error);
+
+		printf("%-12lX", gpa);
+		humanize_number(numbuf, sizeof(numbuf), maplen, "B",
+		    HN_AUTOSCALE, HN_NOSPACE);
+		printf("%-12s", numbuf);
+
+		printf("%-12s", name[0] ? name : "sysmem");
+		printf("%-12lX", segoff);
+		printf("%c%c%c   ", prot & PROT_READ ? 'R' : '-',
+		    prot & PROT_WRITE ? 'W' : '-',
+		    prot & PROT_EXEC ? 'X' : '-');
+
+		delim = '\0';
+		if (flags & VM_MEMMAP_F_WIRED) {
+			printf("%cwired", delim);
+			delim = '/';
+		}
+		if (flags & VM_MEMMAP_F_IOMMU) {
+			printf("%ciommu", delim);
+			delim = '/';
+		}
+		printf("\n");
+
+		gpa += maplen;
+	}
+}
+
+static int
+show_memseg(struct vmctx *ctx)
+{
+	char name[SPECNAMELEN + 1], numbuf[8];
+	size_t seglen;
+	int error, segid;
+
+	printf("ID  Length      Name\n");
+
+	segid = 0;
+	while (1) {
+		error = vm_get_memseg(ctx, segid, &seglen, name, sizeof(name));
+		if (error)
+			return (errno == EINVAL ? 0 : error);
+
+		if (seglen) {
+			printf("%-4d", segid);
+			humanize_number(numbuf, sizeof(numbuf), seglen, "B",
+			    HN_AUTOSCALE, HN_NOSPACE);
+			printf("%-12s", numbuf);
+			printf("%s", name[0] ? name : "sysmem");
+			printf("\n");
+		}
+		segid++;
+	}
+}
+
 int
 main(int argc, char *argv[])
 {
 	char *vmname;
 	int error, ch, vcpu, ptenum;
-	vm_paddr_t gpa, gpa_pmap;
-	size_t len;
+	vm_paddr_t gpa_pmap;
 	struct vm_exit vmexit;
 	uint64_t rax, cr0, cr3, cr4, dr7, rsp, rip, rflags, efer, pat;
 	uint64_t eptp, bm, addr, u64, pteval[4], *pte, info[2];
 	struct vmctx *ctx;
-	int wired;
 	cpuset_t cpus;
 	bool cpu_intel;
 	uint64_t cs, ds, es, fs, gs, ss, tr, ldtr;
+	struct tm tm;
 	struct option *opts;
 
 	cpu_intel = cpu_vendor_intel();
@@ -1594,6 +1729,17 @@ main(int argc, char *argv[])
 			capval = strtoul(optarg, NULL, 0);
 			setcap = 1;
 			break;
+		case SET_RTC_TIME:
+			rtc_secs = strtoul(optarg, NULL, 0);
+			set_rtc_time = 1;
+			break;
+		case SET_RTC_NVRAM:
+			rtc_nvram_value = (uint8_t)strtoul(optarg, NULL, 0);
+			set_rtc_nvram = 1;
+			break;
+		case RTC_NVRAM_OFFSET:
+			rtc_nvram_offset = strtoul(optarg, NULL, 0);
+			break;
 		case GET_GPA_PMAP:
 			gpa_pmap = strtoul(optarg, NULL, 0);
 			get_gpa_pmap = 1;
@@ -1633,7 +1779,7 @@ main(int argc, char *argv[])
 	}
 
 	if (!error && memsize)
-		error = vm_setup_memory(ctx, memsize, VM_MMAP_NONE);
+		error = vm_setup_memory(ctx, memsize, VM_MMAP_ALL);
 
 	if (!error && set_efer)
 		error = vm_set_register(ctx, vcpu, VM_REG_GUEST_EFER, efer);
@@ -1768,21 +1914,11 @@ main(int argc, char *argv[])
 		error = vm_lapic_local_irq(ctx, vcpu, assert_lapic_lvt);
 	}
 
-	if (!error && (get_lowmem || get_all)) {
-		gpa = 0;
-		error = vm_get_memory_seg(ctx, gpa, &len, &wired);
-		if (error == 0)
-			printf("lowmem\t\t0x%016lx/%ld%s\n", gpa, len,
-			    wired ? " wired" : "");
-	}
+	if (!error && (get_memseg || get_all))
+		error = show_memseg(ctx);
 
-	if (!error && (get_highmem || get_all)) {
-		gpa = 4 * GB;
-		error = vm_get_memory_seg(ctx, gpa, &len, &wired);
-		if (error == 0)
-			printf("highmem\t\t0x%016lx/%ld%s\n", gpa, len,
-			    wired ? " wired" : "");
-	}
+	if (!error && (get_memmap || get_all))
+		error = show_memmap(ctx);
 
 	if (!error)
 		error = get_all_registers(ctx, vcpu);
@@ -1971,6 +2107,31 @@ main(int argc, char *argv[])
 		}
 	}
 
+	if (!error && set_rtc_nvram)
+		error = vm_rtc_write(ctx, rtc_nvram_offset, rtc_nvram_value);
+
+	if (!error && (get_rtc_nvram || get_all)) {
+		error = vm_rtc_read(ctx, rtc_nvram_offset, &rtc_nvram_value);
+		if (error == 0) {
+			printf("rtc nvram[%03d]: 0x%02x\n", rtc_nvram_offset,
+			    rtc_nvram_value);
+		}
+	}
+
+	if (!error && set_rtc_time)
+		error = vm_rtc_settime(ctx, rtc_secs);
+
+	if (!error && (get_rtc_time || get_all)) {
+		error = vm_rtc_gettime(ctx, &rtc_secs);
+		if (error == 0) {
+			gmtime_r(&rtc_secs, &tm);
+			printf("rtc time %#lx: %s %s %02d %02d:%02d:%02d %d\n",
+			    rtc_secs, wday_str(tm.tm_wday), mon_str(tm.tm_mon),
+			    tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+			    1900 + tm.tm_year);
+		}
+	}
+
 	if (!error && (getcap || get_all)) {
 		int captype, val, getcaptype;
 
@@ -2034,10 +2195,7 @@ main(int argc, char *argv[])
 	}
 
 	if (!error && run) {
-		error = vm_get_register(ctx, vcpu, VM_REG_GUEST_RIP, &rip);
-		assert(error == 0);
-
-		error = vm_run(ctx, vcpu, rip, &vmexit);
+		error = vm_run(ctx, vcpu, &vmexit);
 		if (error == 0)
 			dump_vm_run_exitcode(&vmexit, vcpu);
 		else

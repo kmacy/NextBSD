@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -637,6 +637,11 @@ void
 AcpiExIntegerToString (
     char                    *Dest,
     UINT64                  Value);
+
+void
+AcpiExPciClsToString (
+    char                    *Dest,
+    UINT8                   ClassCode[3]);
 
 BOOLEAN
 AcpiIsValidSpaceId (

@@ -40,6 +40,9 @@ __RCSID("$NetBSD: t_faccessat.c,v 1.2 2013/03/17 04:46:06 jmmv Exp $");
 #include <string.h>
 #include <unistd.h>
 #include <sys/param.h>
+#ifdef __FreeBSD__
+#include <sys/stat.h>
+#endif
 
 #define DIR "dir"
 #define FILE "dir/faccessat"
@@ -165,6 +168,9 @@ ATF_TC_BODY(faccessat_fdlink, tc)
 	ATF_REQUIRE(faccessat(dfd, BASELINK, F_OK, 0) == -1);
 	ATF_REQUIRE(errno == ENOENT);
 
+#ifdef __FreeBSD__
+	atf_tc_expect_fail("Depends on non-standard behavior not mentioned in POSIX.1-2008");
+#endif
 	ATF_REQUIRE(faccessat(dfd, BASELINK, F_OK, AT_SYMLINK_NOFOLLOW) == 0);
 
 	ATF_REQUIRE(close(dfd) == 0);

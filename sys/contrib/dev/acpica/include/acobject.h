@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -430,13 +430,14 @@ typedef struct acpi_object_addr_handler
 typedef struct acpi_object_reference
 {
     ACPI_OBJECT_COMMON_HEADER
-     UINT8                           Class;              /* Reference Class */
-     UINT8                           TargetType;         /* Used for Index Op */
-     UINT8                           Reserved;
-     void                            *Object;            /* NameOp=>HANDLE to obj, IndexOp=>ACPI_OPERAND_OBJECT */
-     ACPI_NAMESPACE_NODE             *Node;              /* RefOf or Namepath */
-     union acpi_operand_object       **Where;            /* Target of Index */
-     UINT32                          Value;              /* Used for Local/Arg/Index/DdbHandle */
+    UINT8                           Class;              /* Reference Class */
+    UINT8                           TargetType;         /* Used for Index Op */
+    UINT8                           Reserved;
+    void                            *Object;            /* NameOp=>HANDLE to obj, IndexOp=>ACPI_OPERAND_OBJECT */
+    ACPI_NAMESPACE_NODE             *Node;              /* RefOf or Namepath */
+    union acpi_operand_object       **Where;            /* Target of Index */
+    UINT8                           *IndexPointer;      /* Used for Buffers and Strings */
+    UINT32                          Value;              /* Used for Local/Arg/Index/DdbHandle */
 
 } ACPI_OBJECT_REFERENCE;
 

@@ -52,16 +52,22 @@ __DEFAULT_YES_OPTIONS = \
     ATM \
     AUDIT \
     AUTHPF \
+    AUTOFS \
+    BHYVE \
     BINUTILS \
     BINUTILS_BOOTSTRAP \
     BLUETOOTH \
     BOOT \
+    BOOTPARAMD \
+    BOOTPD \
     BSD_CPIO \
+    BSDINSTALL \
     BSNMP \
     BZIP2 \
     CALENDAR \
     CAPSICUM \
     CASPER \
+    CCD \
     CDDL \
     CPP \
     CROSS_COMPILER \
@@ -73,29 +79,36 @@ __DEFAULT_YES_OPTIONS = \
     DMAGENT \
     DYNAMICROOT \
     ED_CRYPTO \
+    EE \
+    ELFTOOLCHAIN_TOOLS \
     EXAMPLES \
     FDT \
+    FILE \
+    FINGER \
     FLOPPY \
     FMTREE \
     FORTH \
     FP_LIBC \
     FREEBSD_UPDATE \
+    FTP \
     GAMES \
     GCOV \
     GDB \
     GNU \
     GNU_GREP_COMPAT \
-    GPIB \
     GPIO \
     GPL_DTC \
     GROFF \
+    HAST \
     HTML \
     HYPERV \
     ICONV \
     INET \
     INET6 \
+    INETD \
     IPFILTER \
     IPFW \
+    ISCSI \
     JAIL \
     KDUMP \
     KVM \
@@ -113,6 +126,7 @@ __DEFAULT_YES_OPTIONS = \
     MAIL \
     MAILWRAPPER \
     MAKE \
+    MANDOCDB \
     NDIS \
     NETCAT \
     NETGRAPH \
@@ -128,7 +142,9 @@ __DEFAULT_YES_OPTIONS = \
     PORTSNAP \
     PPP \
     QUOTAS \
+    RADIUS_SUPPORT \
     RCMDS \
+    RBOOTD \
     RCS \
     RESCUE \
     ROUTED \
@@ -139,13 +155,16 @@ __DEFAULT_YES_OPTIONS = \
     SOURCELESS_HOST \
     SOURCELESS_UCODE \
     SVNLITE \
-    SYSCALL_COMPAT \
     SYSCONS \
     SYSINSTALL \
+    TALK \
+    TCP_WRAPPERS \
     TCSH \
     TELNET \
     TESTS \
     TEXTPROC \
+    TFTP \
+    TIMED \
     UNBOUND \
     USB \
     UTMPX \
@@ -160,8 +179,6 @@ __DEFAULT_NO_OPTIONS = \
     BSD_GREP \
     CLANG_EXTRAS \
     EISA \
-    ELFTOOLCHAIN_TOOLS \
-    FMAKE \
     HESIOD \
     LLDB \
     NAND \
@@ -191,25 +208,36 @@ __TT=${TARGET}
 .else
 __TT=${MACHINE}
 .endif
-# Clang is only for x86, powerpc and little-endian arm right now, by default.
-.if ${__T} == "amd64" || ${__T} == "i386" || ${__T:Mpowerpc*}
-__DEFAULT_YES_OPTIONS+=CLANG CLANG_FULL CLANG_BOOTSTRAP
-.elif ${__TT} == "arm" && ${__T:Marm*eb*} == ""
-__DEFAULT_YES_OPTIONS+=CLANG CLANG_BOOTSTRAP
-# GCC is unable to build the full clang on arm, disable it by default.
-__DEFAULT_NO_OPTIONS+=CLANG_FULL
-.else
-__DEFAULT_NO_OPTIONS+=CLANG CLANG_FULL CLANG_BOOTSTRAP
-.endif
-# Clang the default system compiler only on little-endian arm and x86.
-.if ${__T} == "amd64" || (${__TT} == "arm" && ${__T:Marm*eb*} == "") || \
-    ${__T} == "i386"
-__DEFAULT_YES_OPTIONS+=CLANG_IS_CC
-__DEFAULT_NO_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX
-.else
-# If clang is not cc, then build gcc by default
-__DEFAULT_NO_OPTIONS+=CLANG_IS_CC CLANG CLANG_BOOTSTRAP
+
+.include <bsd.compiler.mk>
+.if !${COMPILER_FEATURES:Mc++11}
+# If the compiler is not C++11 capable, disable clang and use gcc instead.
 __DEFAULT_YES_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX
+__DEFAULT_NO_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_FULL CLANG_IS_CC
+.elif ${__T} == "aarch64" || ${__T} == "amd64" || ${__T} == "i386"
+# On x86 and arm64, clang is enabled, and will be installed as the default cc.
+__DEFAULT_YES_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_FULL CLANG_IS_CC
+__DEFAULT_NO_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX
+.elif ${__TT} == "arm"
+# On arm, clang is enabled, and it is installed as the default cc, but
+# since gcc is unable to build the full clang, disable it by default.
+__DEFAULT_YES_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_IS_CC
+__DEFAULT_NO_OPTIONS+=CLANG_FULL GCC GCC_BOOTSTRAP GNUCXX
+.elif ${__T:Mpowerpc*}
+# On powerpc, clang is enabled, but gcc is installed as the default cc.
+__DEFAULT_YES_OPTIONS+=CLANG CLANG_FULL GCC GCC_BOOTSTRAP GNUCXX
+__DEFAULT_NO_OPTIONS+=CLANG_BOOTSTRAP CLANG_IS_CC
+.else
+# Everything else disables clang, and uses gcc instead.
+__DEFAULT_YES_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX
+__DEFAULT_NO_OPTIONS+=CLANG CLANG_BOOTSTRAP CLANG_FULL CLANG_IS_CC
+.endif
+.if ${__T} == "aarch64"
+BROKEN_OPTIONS+=BINUTILS BINUTILS_BOOTSTRAP GCC GCC_BOOTSTRAP GDB
+.endif
+# LLVM lacks support for FreeBSD 64-bit atomic operations for ARMv4/ARMv5
+.if ${__T} == "arm" || ${__T} == "armeb"
+BROKEN_OPTIONS+=LLDB
 .endif
 
 .include <bsd.mkopt.mk>
@@ -217,7 +245,6 @@ __DEFAULT_YES_OPTIONS+=GCC GCC_BOOTSTRAP GNUCXX
 #
 # MK_* options that default to "yes" if the compiler is a C++11 compiler.
 #
-.include <bsd.compiler.mk>
 .for var in \
     LIBCPLUSPLUS
 .if !defined(MK_${var})

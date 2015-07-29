@@ -1596,8 +1596,7 @@ ti_newbuf_jumbo(struct ti_softc *sc, int idx, struct mbuf *m_old)
 			    "failed -- packet dropped!\n");
 			goto nobufs;
 		}
-		MCLGET(m[NPAYLOAD], M_NOWAIT);
-		if ((m[NPAYLOAD]->m_flags & M_EXT) == 0) {
+		if (!(MCLGET(m[NPAYLOAD], M_NOWAIT))) {
 			device_printf(sc->ti_dev, "mbuf allocation failed "
 			    "-- packet dropped!\n");
 			goto nobufs;
@@ -3351,7 +3350,7 @@ ti_ifmedia_upd(struct ifnet *ifp)
 
 	sc = ifp->if_softc;
 	TI_LOCK(sc);
-	error = ti_ifmedia_upd(ifp);
+	error = ti_ifmedia_upd_locked(sc);
 	TI_UNLOCK(sc);
 
 	return (error);

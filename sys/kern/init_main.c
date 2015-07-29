@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_ddb.h"
 #include "opt_init_path.h"
+#include "opt_verbose_sysinit.h"
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -410,6 +411,7 @@ struct sysentvec null_sysvec = {
 	.sv_fetch_syscall_args = null_fetch_syscall_args,
 	.sv_syscallnames = NULL,
 	.sv_schedtail	= NULL,
+	.sv_thread_detach = NULL,
 };
 
 /*
@@ -431,6 +433,7 @@ proc0_init(void *dummy __unused)
 {
 	struct proc *p;
 	struct thread *td;
+	struct ucred *newcred;
 	vm_paddr_t pageablemem;
 	int i;
 
@@ -493,7 +496,7 @@ proc0_init(void *dummy __unused)
 	td->td_flags = TDF_INMEM;
 	td->td_pflags = TDP_KTHREAD;
 	td->td_cpuset = cpuset_thread0();
-	prison0.pr_cpuset = cpuset_ref(td->td_cpuset);
+	prison0_init();
 	p->p_peers = 0;
 	p->p_leader = p;
 	p->p_reaper = p;
@@ -504,23 +507,22 @@ proc0_init(void *dummy __unused)
 
 	callout_init_mtx(&p->p_itcallout, &p->p_mtx, 0);
 	callout_init_mtx(&p->p_limco, &p->p_mtx, 0);
-	callout_init(&td->td_slpcallout, CALLOUT_MPSAFE);
+	callout_init(&td->td_slpcallout, 1);
 
 	/* Create credentials. */
-	p->p_ucred = crget();
-	p->p_ucred->cr_ngroups = 1;	/* group 0 */
-	p->p_ucred->cr_uidinfo = uifind(0);
-	p->p_ucred->cr_ruidinfo = uifind(0);
-	p->p_ucred->cr_prison = &prison0;
-	p->p_ucred->cr_loginclass = loginclass_find("default");
+	newcred = crget();
+	newcred->cr_ngroups = 1;	/* group 0 */
+	newcred->cr_uidinfo = uifind(0);
+	newcred->cr_ruidinfo = uifind(0);
+	newcred->cr_prison = &prison0;
+	newcred->cr_loginclass = loginclass_find("default");
+	proc_set_cred_init(p, newcred);
 #ifdef AUDIT
-	audit_cred_kproc0(p->p_ucred);
+	audit_cred_kproc0(newcred);
 #endif
 #ifdef MAC
-	mac_cred_create_swapper(p->p_ucred);
+	mac_cred_create_swapper(newcred);
 #endif
-	td->td_ucred = crhold(p->p_ucred);
-
 	/* Create sigacts. */
 	p->p_sigacts = sigacts_alloc();
 
@@ -552,15 +554,19 @@ proc0_init(void *dummy __unused)
 	p->p_limit->pl_rlimit[RLIMIT_MEMLOCK].rlim_max = pageablemem;
 	p->p_cpulimit = RLIM_INFINITY;
 
+	PROC_LOCK(p);
+	thread_cow_get_proc(td, p);
+	PROC_UNLOCK(p);
+
 	/* Initialize resource accounting structures. */
 	racct_create(&p->p_racct);
 
 	p->p_stats = pstats_alloc();
 
 	/* Allocate a prototype map so we have something to fork. */
-	pmap_pinit0(vmspace_pmap(&vmspace0));
 	p->p_vmspace = &vmspace0;
 	vmspace0.vm_refcnt = 1;
+	pmap_pinit0(vmspace_pmap(&vmspace0));
 
 	/*
 	 * proc0 is not expected to enter usermode, so there is no special
@@ -707,6 +713,9 @@ start_init(void *dummy)
 
 	vfs_mountroot();
 
+	/* Wipe GELI passphrase from the environment. */
+	kern_unsetenv("kern.geom.eli.passphrase");
+
 	/*
 	 * Need just enough stack to hold the faked-up "execve()" arguments.
 	 */
@@ -835,11 +844,11 @@ create_init(const void *udata __unused)
 #ifdef AUDIT
 	audit_cred_proc1(newcred);
 #endif
-	initproc->p_ucred = newcred;
+	proc_set_cred(initproc, newcred);
+	cred_update_thread(FIRST_THREAD_IN_PROC(initproc));
 	PROC_UNLOCK(initproc);
 	sx_xunlock(&proctree_lock);
 	crfree(oldcred);
-	cred_update_thread(FIRST_THREAD_IN_PROC(initproc));
 	cpu_set_fork_handler(FIRST_THREAD_IN_PROC(initproc), start_init, NULL);
 }
 SYSINIT(init, SI_SUB_CREATE_INIT, SI_ORDER_FIRST, create_init, NULL);

@@ -72,7 +72,7 @@ __FBSDID("$FreeBSD$");
 #ifdef USB_DEBUG
 static int rsu_debug = 0;
 SYSCTL_NODE(_hw_usb, OID_AUTO, rsu, CTLFLAG_RW, 0, "USB rsu");
-SYSCTL_INT(_hw_usb_rsu, OID_AUTO, debug, CTLFLAG_RW, &rsu_debug, 0,
+SYSCTL_INT(_hw_usb_rsu, OID_AUTO, debug, CTLFLAG_RWTUN, &rsu_debug, 0,
     "Debug level");
 #endif
 
@@ -142,7 +142,7 @@ static void	rsu_vap_delete(struct ieee80211vap *);
 static void	rsu_scan_start(struct ieee80211com *);
 static void	rsu_scan_end(struct ieee80211com *);
 static void	rsu_set_channel(struct ieee80211com *);
-static void	rsu_update_mcast(struct ifnet *);
+static void	rsu_update_mcast(struct ieee80211com *);
 static int	rsu_alloc_rx_list(struct rsu_softc *);
 static void	rsu_free_rx_list(struct rsu_softc *);
 static int	rsu_alloc_tx_list(struct rsu_softc *);
@@ -328,11 +328,11 @@ rsu_attach(device_t self)
 	if (sc->cut != 3)
 		sc->cut = (sc->cut >> 1) + 1;
 	error = rsu_read_rom(sc);
+	RSU_UNLOCK(sc);
 	if (error != 0) {
 		device_printf(self, "could not read ROM\n");
 		goto fail_rom;
 	}
-	RSU_UNLOCK(sc);
 	IEEE80211_ADDR_COPY(sc->sc_bssid, &sc->rom[0x12]);
 	device_printf(self, "MAC/BB RTL8712 cut %d\n", sc->cut);
 	ifp = sc->sc_ifp = if_alloc(IFT_IEEE80211);
@@ -355,6 +355,8 @@ rsu_attach(device_t self)
 	ifp->if_hwassist = CSUM_TCP;
 
 	ic->ic_ifp = ifp;
+	ic->ic_softc = sc;
+	ic->ic_name = device_get_nameunit(self);
 	ic->ic_phytype = IEEE80211_T_OFDM;	/* Not only, but not used. */
 	ic->ic_opmode = IEEE80211_M_STA;	/* Default to BSS mode. */
 
@@ -532,7 +534,7 @@ rsu_set_channel(struct ieee80211com *ic __unused)
 }
 
 static void
-rsu_update_mcast(struct ifnet *ifp)
+rsu_update_mcast(struct ieee80211com *ic)
 {
         /* XXX do nothing?  */
 }

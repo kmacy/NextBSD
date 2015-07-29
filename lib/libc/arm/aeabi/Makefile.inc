@@ -20,20 +20,12 @@ SRCS+=	aeabi_vfp_double.S	\
 # libc. This causes issues when other parts of libc call these functions.
 # We work around this by including these functions in libc but mark them as
 # hidden so users of libc will not pick up these versions.
-.PATH: ${LIBC_SRCTOP}/../../contrib/compiler-rt/lib/arm
+.PATH: ${LIBC_SRCTOP}/../../contrib/compiler-rt/lib/builtins/arm
 
 SRCS+=	aeabi_memcmp.S		\
 	aeabi_memcpy.S		\
 	aeabi_memmove.S		\
 	aeabi_memset.S
-
-# Mark the functions as hidden so they are not available outside of libc.
-CFLAGS.aeabi_memcmp.S=	-DVISIBILITY_HIDDEN
-CFLAGS.aeabi_memcpy.S=	-DVISIBILITY_HIDDEN
-CFLAGS.aeabi_memmove.S=	-DVISIBILITY_HIDDEN
-CFLAGS.aeabi_memset.S=	-DVISIBILITY_HIDDEN
-CFLAGS+=		${CFLAGS.${.IMPSRC:T}}
-
 
 SYM_MAPS+=${LIBC_SRCTOP}/arm/aeabi/Symbol.map
 

@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -679,10 +679,10 @@ AcpiGetTagPathname (
      * end up in the final compiled AML, it's just an appearance issue for the
      * disassembled code.
      */
-    Pathname[ACPI_STRLEN (Pathname) - ACPI_NAME_SIZE] = 0;
-    ACPI_STRNCAT (Pathname, ResourceNode->Name.Ascii, ACPI_NAME_SIZE);
-    ACPI_STRCAT (Pathname, ".");
-    ACPI_STRNCAT (Pathname, Tag, ACPI_NAME_SIZE);
+    Pathname[strlen (Pathname) - ACPI_NAME_SIZE] = 0;
+    strncat (Pathname, ResourceNode->Name.Ascii, ACPI_NAME_SIZE);
+    strcat (Pathname, ".");
+    strncat (Pathname, Tag, ACPI_NAME_SIZE);
 
     /* Internalize the namepath to AML format */
 

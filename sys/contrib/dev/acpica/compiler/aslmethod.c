@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -430,7 +430,7 @@ MtMethodAnalysisWalkBegin (
 
         /* Special typechecking for _HID */
 
-        if (!ACPI_STRCMP (METHOD_NAME__HID, Op->Asl.NameSeg))
+        if (!strcmp (METHOD_NAME__HID, Op->Asl.NameSeg))
         {
             Next = Op->Asl.Child->Asl.Next;
             AnCheckId (Next, ASL_TYPE_HID);
@@ -438,7 +438,7 @@ MtMethodAnalysisWalkBegin (
 
         /* Special typechecking for _CID */
 
-        else if (!ACPI_STRCMP (METHOD_NAME__CID, Op->Asl.NameSeg))
+        else if (!strcmp (METHOD_NAME__CID, Op->Asl.NameSeg))
         {
             Next = Op->Asl.Child->Asl.Next;
 

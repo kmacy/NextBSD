@@ -1,4 +1,4 @@
-/*	$Id: libmdoc.h,v 1.95 2014/11/29 03:37:44 schwarze Exp $ */
+/*	$Id: libmdoc.h,v 1.97 2015/02/02 04:26:44 schwarze Exp $ */
 /*
  * Copyright (c) 2008, 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
  * Copyright (c) 2013, 2014 Ingo Schwarze <schwarze@openbsd.org>
@@ -15,8 +15,6 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef LIBMDOC_H
-#define LIBMDOC_H
 
 enum	mdoc_next {
 	MDOC_NEXT_SIBLING = 0,
@@ -108,7 +106,7 @@ struct mdoc_node *mdoc_block_alloc(struct mdoc *, int, int,
 struct mdoc_node *mdoc_head_alloc(struct mdoc *, int, int, enum mdoct);
 void		  mdoc_tail_alloc(struct mdoc *, int, int, enum mdoct);
 struct mdoc_node *mdoc_body_alloc(struct mdoc *, int, int, enum mdoct);
-void		  mdoc_endbody_alloc(struct mdoc *, int, int, enum mdoct,
+struct mdoc_node *mdoc_endbody_alloc(struct mdoc *, int, int, enum mdoct,
 			struct mdoc_node *, enum mdoc_endbody);
 void		  mdoc_node_delete(struct mdoc *, struct mdoc_node *);
 void		  mdoc_node_relink(struct mdoc *, struct mdoc_node *);
@@ -129,5 +127,3 @@ void		  mdoc_macroend(struct mdoc *);
 enum mdelim	  mdoc_isdelim(const char *);
 
 __END_DECLS
-
-#endif /*!LIBMDOC_H*/

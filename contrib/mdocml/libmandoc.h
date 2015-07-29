@@ -1,4 +1,4 @@
-/*	$Id: libmandoc.h,v 1.49 2014/11/28 06:27:05 schwarze Exp $ */
+/*	$Id: libmandoc.h,v 1.55 2015/01/15 04:26:39 schwarze Exp $ */
 /*
  * Copyright (c) 2009, 2010, 2011, 2012 Kristaps Dzonsons <kristaps@bsd.lv>
  * Copyright (c) 2013, 2014 Ingo Schwarze <schwarze@openbsd.org>
@@ -15,8 +15,6 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef LIBMANDOC_H
-#define LIBMANDOC_H
 
 enum	rofferr {
 	ROFF_CONT, /* continue processing line */
@@ -26,8 +24,7 @@ enum	rofferr {
 	ROFF_SO, /* include another file */
 	ROFF_IGN, /* ignore current line */
 	ROFF_TBL, /* a table row was successfully parsed */
-	ROFF_EQN, /* an equation was successfully parsed */
-	ROFF_ERR /* badness: puke and stop */
+	ROFF_EQN /* an equation was successfully parsed */
 };
 
 struct	buf {
@@ -37,6 +34,10 @@ struct	buf {
 
 __BEGIN_DECLS
 
+struct	mparse;
+struct	mchars;
+struct	tbl_span;
+struct	eqn;
 struct	roff;
 struct	mdoc;
 struct	man;
@@ -59,15 +60,16 @@ struct	mdoc	*mdoc_alloc(struct roff *, struct mparse *,
 			const char *, int);
 void		 mdoc_reset(struct mdoc *);
 int		 mdoc_parseln(struct mdoc *, int, char *, int);
-int		 mdoc_endparse(struct mdoc *);
+void		 mdoc_endparse(struct mdoc *);
 void		 mdoc_addspan(struct mdoc *, const struct tbl_span *);
 void		 mdoc_addeqn(struct mdoc *, const struct eqn *);
 
 void		 man_free(struct man *);
-struct	man	*man_alloc(struct roff *, struct mparse *, int);
+struct	man	*man_alloc(struct roff *, struct mparse *,
+			const char *, int);
 void		 man_reset(struct man *);
 int		 man_parseln(struct man *, int, char *, int);
-int		 man_endparse(struct man *);
+void		 man_endparse(struct man *);
 void		 man_addspan(struct man *, const struct tbl_span *);
 void		 man_addeqn(struct man *, const struct eqn *);
 
@@ -91,5 +93,3 @@ const struct tbl_span	*roff_span(const struct roff *);
 const struct eqn	*roff_eqn(const struct roff *);
 
 __END_DECLS
-
-#endif /*!LIBMANDOC_H*/

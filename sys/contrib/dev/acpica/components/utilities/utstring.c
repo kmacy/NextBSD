@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2014, Intel Corp.
+ * Copyright (C) 2000 - 2015, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,8 +40,6 @@
  * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGES.
  */
-
-#define __UTSTRING_C__
 
 #include <contrib/dev/acpica/include/acpi.h>
 #include <contrib/dev/acpica/include/accommon.h>
@@ -91,7 +89,7 @@ AcpiUtStrlwr (
 
     for (String = SrcString; *String; String++)
     {
-        *String = (char) ACPI_TOLOWER (*String);
+        *String = (char) tolower ((int) *String);
     }
 
     return;
@@ -170,7 +168,7 @@ AcpiUtStrupr (
 
     for (String = SrcString; *String; String++)
     {
-        *String = (char) ACPI_TOUPPER (*String);
+        *String = (char) toupper ((int) *String);
     }
 
     return;
@@ -236,7 +234,7 @@ AcpiUtStrtoul64 (
 
     /* Skip over any white space in the buffer */
 
-    while ((*String) && (ACPI_IS_SPACE (*String) || *String == '\t'))
+    while ((*String) && (isspace ((int) *String) || *String == '\t'))
     {
         String++;
     }
@@ -247,7 +245,7 @@ AcpiUtStrtoul64 (
          * Base equal to ACPI_ANY_BASE means 'ToInteger operation case'.
          * We need to determine if it is decimal or hexadecimal.
          */
-        if ((*String == '0') && (ACPI_TOLOWER (*(String + 1)) == 'x'))
+        if ((*String == '0') && (tolower ((int) *(String + 1)) == 'x'))
         {
             SignOf0x = 1;
             Base = 16;
@@ -263,7 +261,7 @@ AcpiUtStrtoul64 (
 
     /* Any string left? Check that '0x' is not followed by white space. */
 
-    if (!(*String) || ACPI_IS_SPACE (*String) || *String == '\t')
+    if (!(*String) || isspace ((int) *String) || *String == '\t')
     {
         if (ToIntegerOp)
         {
@@ -285,7 +283,7 @@ AcpiUtStrtoul64 (
 
     while (*String)
     {
-        if (ACPI_IS_DIGIT (*String))
+        if (isdigit ((int) *String))
         {
             /* Convert ASCII 0-9 to Decimal value */
 
@@ -299,8 +297,8 @@ AcpiUtStrtoul64 (
         }
         else
         {
-            ThisDigit = (UINT8) ACPI_TOUPPER (*String);
-            if (ACPI_IS_XDIGIT ((char) ThisDigit))
+            ThisDigit = (UINT8) toupper ((int) *String);
+            if (isxdigit ((int) ThisDigit))
             {
                 /* Convert ASCII Hex char to value */
 
@@ -471,7 +469,7 @@ AcpiUtPrintString (
 
             /* Check for printable character or hex escape */
 
-            if (ACPI_IS_PRINT (String[i]))
+            if (isprint ((int) String[i]))
             {
                 /* This is a normal character */
 
@@ -713,12 +711,12 @@ AcpiUtSafeStrcpy (
     char                    *Source)
 {
 
-    if (ACPI_STRLEN (Source) >= DestSize)
+    if (strlen (Source) >= DestSize)
     {
         return (TRUE);
     }
 
-    ACPI_STRCPY (Dest, Source);
+    strcpy (Dest, Source);
     return (FALSE);
 }
 
@@ -729,12 +727,12 @@ AcpiUtSafeStrcat (
     char                    *Source)
 {
 
-    if ((ACPI_STRLEN (Dest) + ACPI_STRLEN (Source)) >= DestSize)
+    if ((strlen (Dest) + strlen (Source)) >= DestSize)
     {
         return (TRUE);
     }
 
-    ACPI_STRCAT (Dest, Source);
+    strcat (Dest, Source);
     return (FALSE);
 }
 
@@ -749,14 +747,14 @@ AcpiUtSafeStrncat (
     ACPI_SIZE               ActualTransferLength;
 
 
-    ActualTransferLength = ACPI_MIN (MaxTransferLength, ACPI_STRLEN (Source));
+    ActualTransferLength = ACPI_MIN (MaxTransferLength, strlen (Source));
 
-    if ((ACPI_STRLEN (Dest) + ActualTransferLength) >= DestSize)
+    if ((strlen (Dest) + ActualTransferLength) >= DestSize)
     {
         return (TRUE);
     }
 
-    ACPI_STRNCAT (Dest, Source, MaxTransferLength);
+    strncat (Dest, Source, MaxTransferLength);
     return (FALSE);
 }
 #endif

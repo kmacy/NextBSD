@@ -1,4 +1,4 @@
-/*	$Id: msec.c,v 1.12 2014/08/10 23:54:41 schwarze Exp $ */
+/*	$Id: msec.c,v 1.14 2014/12/21 14:14:35 schwarze Exp $ */
 /*
  * Copyright (c) 2009 Kristaps Dzonsons <kristaps@bsd.lv>
  *

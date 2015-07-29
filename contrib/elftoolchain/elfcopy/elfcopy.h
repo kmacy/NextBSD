@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * $Id: elfcopy.h 2970 2013-12-01 15:22:12Z kaiwang27 $
+ * $Id: elfcopy.h 3221 2015-05-24 23:42:43Z kaiwang27 $
  */
 
 #include <sys/queue.h>
@@ -115,6 +115,7 @@ struct segment;
 /* Internal data structure for sections. */
 struct section {
 	struct segment	*seg;	/* containing segment */
+	struct segment	*seg_tls; /* tls segment */
 	const char	*name;	/* section name */
 	char		*newname; /* new section name */
 	Elf_Scn		*is;	/* input scn */
@@ -189,7 +190,9 @@ struct elfcopy {
 		STRIP_NONE = 0,
 		STRIP_ALL,
 		STRIP_DEBUG,
+		STRIP_DWO,
 		STRIP_NONDEBUG,
+		STRIP_NONDWO,
 		STRIP_UNNEEDED
 	} strip;
 
@@ -215,6 +218,7 @@ struct elfcopy {
 #define	SEC_REMOVE	0x00800000U
 #define	SEC_COPY	0x01000000U
 #define	DISCARD_LLABEL	0x02000000U
+#define	LOCALIZE_HIDDEN	0x04000000U
 
 	int		 flags;		/* elfcopy run control flags. */
 	int64_t		 change_addr;	/* Section address adjustment. */
@@ -233,6 +237,7 @@ struct elfcopy {
 	uint64_t	*secndx;	/* section index map. */
 	uint64_t	*symndx;	/* symbol index map. */
 	unsigned char	*v_rel;		/* symbols needed by relocation. */
+	unsigned char	*v_grp;		/* symbols refered by section group. */
 	unsigned char	*v_secsym;	/* sections with section symbol. */
 	STAILQ_HEAD(, segment) v_seg;	/* list of segments. */
 	STAILQ_HEAD(, sec_action) v_sac;/* list of section operations. */

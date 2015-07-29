@@ -1,4 +1,4 @@
-/*	$Id: libman.h,v 1.65 2014/11/28 05:51:32 schwarze Exp $ */
+/*	$Id: libman.h,v 1.67 2014/12/28 14:42:27 schwarze Exp $ */
 /*
  * Copyright (c) 2009, 2010, 2011 Kristaps Dzonsons <kristaps@bsd.lv>
  * Copyright (c) 2014 Ingo Schwarze <schwarze@openbsd.org>
@@ -15,8 +15,6 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef LIBMAN_H
-#define LIBMAN_H
 
 enum	man_next {
 	MAN_NEXT_SIBLING = 0,
@@ -25,6 +23,7 @@ enum	man_next {
 
 struct	man {
 	struct mparse	*parse; /* parse pointer */
+	const char	*defos; /* default OS argument for .TH */
 	int		 quick; /* abort parse early */
 	int		 flags; /* parse flags */
 #define	MAN_ELINE	(1 << 1) /* Next-line element scope. */
@@ -75,5 +74,3 @@ void		  man_valid_post(struct man *);
 void		  man_unscope(struct man *, const struct man_node *);
 
 __END_DECLS
-
-#endif /*!LIBMAN_H*/

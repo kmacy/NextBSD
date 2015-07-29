@@ -78,7 +78,6 @@
  * Created      : 28/11/94
  */
 
-
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -95,6 +94,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/vm_extern.h>
 
+#include <machine/acle-compat.h>
 #include <machine/cpu.h>
 #include <machine/frame.h>
 #include <machine/machdep.h>
@@ -103,6 +103,10 @@ __FBSDID("$FreeBSD$");
 
 #ifdef KDB
 #include <sys/kdb.h>
+#endif
+
+#ifdef KDTRACE_HOOKS
+#include <sys/dtrace_bsd.h>
 #endif
 
 extern char fusubailout[];
@@ -116,7 +120,7 @@ struct ksig {
 	u_long code;
 };
 struct data_abort {
-	int (*func)(struct trapframe *, u_int, u_int, struct thread *, 
+	int (*func)(struct trapframe *, u_int, u_int, struct thread *,
 	    struct ksig *);
 	const char *desc;
 };
@@ -127,6 +131,7 @@ static int dab_align(struct trapframe *, u_int, u_int, struct thread *,
     struct ksig *);
 static int dab_buserr(struct trapframe *, u_int, u_int, struct thread *,
     struct ksig *);
+static void prefetch_abort_handler(struct trapframe *);
 
 static const struct data_abort data_aborts[] = {
 	{dab_fatal,	"Vector Exception"},
@@ -171,7 +176,7 @@ call_trapsignal(struct thread *td, int sig, u_long code)
 }
 
 void
-data_abort_handler(struct trapframe *tf)
+abort_handler(struct trapframe *tf, int type)
 {
 	struct vm_map *map;
 	struct pcb *pcb;
@@ -184,6 +189,8 @@ data_abort_handler(struct trapframe *tf)
 	struct ksig ksig;
 	struct proc *p;
 
+	if (type == 1)
+		return (prefetch_abort_handler(tf));
 
 	/* Grab FAR/FSR before enabling interrupts */
 	far = cpu_faultaddress();
@@ -208,8 +215,8 @@ data_abort_handler(struct trapframe *tf)
 	if (user) {
 		td->td_pticks = 0;
 		td->td_frame = tf;
-		if (td->td_ucred != td->td_proc->p_ucred)
-			cred_update_thread(td);
+		if (td->td_cowgen != td->td_proc->p_cowgen)
+			thread_cow_update(td);
 
 	}
 	/* Grab the current pcb */
@@ -319,7 +326,7 @@ data_abort_handler(struct trapframe *tf)
 	 * location, so we can deal with those quickly.  Otherwise we need to
 	 * disassemble the faulting instruction to determine if it was a write.
 	 */
-#if ARM_ARCH_6 || ARM_ARCH_7A
+#if __ARM_ARCH >= 6
 	ftype = (fsr & FAULT_WNR) ? VM_PROT_READ | VM_PROT_WRITE : VM_PROT_READ;
 #else
 	if (IS_PERMISSION_FAULT(fsr))
@@ -423,6 +430,13 @@ dab_fatal(struct trapframe *tf, u_int fsr, u_int far, struct thread *td,
     struct ksig *ksig)
 {
 	const char *mode;
+
+#ifdef KDTRACE_HOOKS
+	if (!TRAP_USERMODE(tf))	{
+		if (dtrace_trap_func != NULL && (*dtrace_trap_func)(tf, far & FAULT_TYPE_MASK))
+			return (0);
+	}
+#endif
 
 	mode = TRAP_USERMODE(tf) ? "user" : "kernel";
 
@@ -545,7 +559,7 @@ dab_buserr(struct trapframe *tf, u_int fsr, u_int far, struct thread *td,
 		 * If the current trapframe is at the top of the kernel stack,
 		 * the fault _must_ have come from user mode.
 		 */
-		if (tf != ((struct trapframe *)pcb->un_32.pcb32_sp) - 1) {
+		if (tf != ((struct trapframe *)pcb->pcb_regs.sf_sp) - 1) {
 			/*
 			 * Kernel mode. We're either about to die a
 			 * spectacular death, or pcb_onfault will come
@@ -605,7 +619,7 @@ dab_buserr(struct trapframe *tf, u_int fsr, u_int far, struct thread *td,
  * does no have read permission so send it a signal.
  * Otherwise fault the page in and try again.
  */
-void
+static void
 prefetch_abort_handler(struct trapframe *tf)
 {
 	struct thread *td;
@@ -631,8 +645,8 @@ prefetch_abort_handler(struct trapframe *tf)
 
 	if (TRAP_USERMODE(tf)) {
 		td->td_frame = tf;
-		if (td->td_ucred != td->td_proc->p_ucred)
-			cred_update_thread(td);
+		if (td->td_cowgen != td->td_proc->p_cowgen)
+			thread_cow_update(td);
 	}
 	fault_pc = tf->tf_pc;
 	if (td->td_md.md_spinlock_count == 0) {

@@ -138,18 +138,24 @@ static void	vtmmio_vq_intr(void *);
  */
 #define vtmmio_write_config_1(sc, o, v)				\
 do {								\
+	if (sc->platform != NULL)				\
+		VIRTIO_MMIO_PREWRITE(sc->platform, (o), (v));	\
 	bus_write_1((sc)->res[0], (o), (v)); 			\
 	if (sc->platform != NULL)				\
 		VIRTIO_MMIO_NOTE(sc->platform, (o), (v));	\
 } while (0)
 #define vtmmio_write_config_2(sc, o, v)				\
 do {								\
+	if (sc->platform != NULL)				\
+		VIRTIO_MMIO_PREWRITE(sc->platform, (o), (v));	\
 	bus_write_2((sc)->res[0], (o), (v));			\
 	if (sc->platform != NULL)				\
 		VIRTIO_MMIO_NOTE(sc->platform, (o), (v));	\
 } while (0)
 #define vtmmio_write_config_4(sc, o, v)				\
 do {								\
+	if (sc->platform != NULL)				\
+		VIRTIO_MMIO_PREWRITE(sc->platform, (o), (v));	\
 	bus_write_4((sc)->res[0], (o), (v));			\
 	if (sc->platform != NULL)				\
 		VIRTIO_MMIO_NOTE(sc->platform, (o), (v));	\
@@ -202,6 +208,7 @@ static driver_t vtmmio_driver = {
 devclass_t vtmmio_devclass;
 
 DRIVER_MODULE(virtio_mmio, simplebus, vtmmio_driver, vtmmio_devclass, 0, 0);
+DRIVER_MODULE(virtio_mmio, ofwbus, vtmmio_driver, vtmmio_devclass, 0, 0);
 MODULE_VERSION(virtio_mmio, 1);
 MODULE_DEPEND(virtio_mmio, simplebus, 1, 1, 1);
 MODULE_DEPEND(virtio_mmio, virtio, 1, 1, 1);
@@ -505,6 +512,8 @@ vtmmio_alloc_virtqueues(device_t dev, int flags, int nvqs,
 	if (sc->vtmmio_vqs == NULL)
 		return (ENOMEM);
 
+	vtmmio_write_config_4(sc, VIRTIO_MMIO_GUEST_PAGE_SIZE, 1 << PAGE_SHIFT);
+
 	for (idx = 0; idx < nvqs; idx++) {
 		vqx = &sc->vtmmio_vqs[idx];
 		info = &vq_info[idx];
@@ -699,7 +708,7 @@ vtmmio_describe_features(struct vtmmio_softc *sc, const char *msg,
 	dev = sc->dev;
 	child = sc->vtmmio_child_dev;
 
-	if (device_is_attached(child) && bootverbose == 0)
+	if (device_is_attached(child) || bootverbose == 0)
 		return;
 
 	virtio_describe(dev, msg, features, sc->vtmmio_child_feat_desc);

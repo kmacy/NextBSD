@@ -80,7 +80,7 @@ __FBSDID("$FreeBSD$");
 static int zyd_debug = 0;
 
 static SYSCTL_NODE(_hw_usb, OID_AUTO, zyd, CTLFLAG_RW, 0, "USB zyd");
-SYSCTL_INT(_hw_usb_zyd, OID_AUTO, debug, CTLFLAG_RW, &zyd_debug, 0,
+SYSCTL_INT(_hw_usb_zyd, OID_AUTO, debug, CTLFLAG_RWTUN, &zyd_debug, 0,
     "zyd debug level");
 
 enum {
@@ -147,7 +147,7 @@ static int	zyd_set_bssid(struct zyd_softc *, const uint8_t *);
 static int	zyd_switch_radio(struct zyd_softc *, int);
 static int	zyd_set_led(struct zyd_softc *, int, int);
 static void	zyd_set_multi(struct zyd_softc *);
-static void	zyd_update_mcast(struct ifnet *);
+static void	zyd_update_mcast(struct ieee80211com *);
 static int	zyd_set_rxfilter(struct zyd_softc *);
 static void	zyd_set_chan(struct zyd_softc *, struct ieee80211_channel *);
 static int	zyd_set_beacon_interval(struct zyd_softc *, int);
@@ -388,6 +388,8 @@ zyd_attach(device_t dev)
 
 	ic = ifp->if_l2com;
 	ic->ic_ifp = ifp;
+	ic->ic_softc = sc;
+	ic->ic_name = device_get_nameunit(dev);
 	ic->ic_phytype = IEEE80211_T_OFDM;	/* not only, but not used */
 	ic->ic_opmode = IEEE80211_M_STA;
 
@@ -2044,11 +2046,11 @@ fail:
 }
 
 static void
-zyd_update_mcast(struct ifnet *ifp)
+zyd_update_mcast(struct ieee80211com *ic)
 {
-	struct zyd_softc *sc = ifp->if_softc;
+	struct zyd_softc *sc = ic->ic_softc;
 
-	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0)
+	if ((ic->ic_ifp->if_drv_flags & IFF_DRV_RUNNING) == 0)
 		return;
 
 	ZYD_LOCK(sc);

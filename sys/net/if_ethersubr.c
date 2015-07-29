@@ -63,6 +63,7 @@
 #include <net/if_vlan_var.h>
 #include <net/if_llatbl.h>
 #include <net/pfil.h>
+#include <net/rss_config.h>
 #include <net/vnet.h>
 
 #include <netpfil/pf/pf_mtag.h>
@@ -71,7 +72,6 @@
 #include <netinet/in.h>
 #include <netinet/in_var.h>
 #include <netinet/if_ether.h>
-#include <netinet/in_rss.h>
 #include <netinet/ip_carp.h>
 #include <netinet/ip_var.h>
 #endif
@@ -426,6 +426,8 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	}
 #endif
 
+	random_harvest_queue(m, sizeof(*m), 2, RANDOM_NET_ETHER);
+
 	CURVNET_SET_QUIET(ifp->if_vnet);
 
 	if (ETHER_IS_MULTICAST(eh->ether_dhost)) {
@@ -569,8 +571,6 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		    bcmp(IF_LLADDR(ifp), eh->ether_dhost, ETHER_ADDR_LEN) != 0)
 			m->m_flags |= M_PROMISC;
 	}
-
-	random_harvest(&(m->m_data), 12, 2, RANDOM_NET_ETHER);
 
 	ether_demux(ifp, m);
 	CURVNET_RESTORE();

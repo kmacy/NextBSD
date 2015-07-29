@@ -22,7 +22,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $Id: readelf.1 2577 2012-09-13 16:07:04Z jkoshy $
+.\" $Id: readelf.1 3219 2015-05-24 23:42:34Z kaiwang27 $
 .\"
 .Dd September 13, 2012
 .Os
@@ -90,7 +90,7 @@ sections in the ELF object.
 .It Fl e | Fl -headers
 Print all program, file and section headers in the ELF object.
 .It Fl g | Fl -section-groups
-This option is recognized, but is ignored.
+Print the contents of the section groups in the ELF object.
 .It Fl h | Fl -file-header
 Print the file header of the ELF object.
 .It Fl l | Fl -program-headers
@@ -139,7 +139,7 @@ option names:
 .It p Ta pubnames Ta Show global names.
 .It r Ta aranges|ranges Ta Show address range information.
 .It s Ta str Ta Show the debug string table.
-.It F Ta Ta Show frame information, displaying register rules.
+.It F Ta frames-interp Ta Show frame information, displaying register rules.
 .It L Ta decodedline Ta Show line information in decoded form.
 .It R Ta Ranges Ta Show range lists.
 .El
@@ -194,4 +194,4 @@ separate lines.
 The
 .Nm
 utility was written by
-.An "Kai Wang" Aq kaiwang27@users.sourceforge.net .
+.An Kai Wang Aq Mt kaiwang27@users.sourceforge.net .

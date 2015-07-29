@@ -27,7 +27,7 @@
  */
 /*
  * file.h - definitions for file(1) program
- * @(#)$File: file.h,v 1.161 2014/12/04 15:56:46 christos Exp $
+ * @(#)$File: file.h,v 1.168 2015/04/09 20:01:41 christos Exp $
  */
 
 #ifndef __file_h__
@@ -126,7 +126,7 @@
 #endif
 
 #ifndef HOWMANY
-# define HOWMANY (256 * 1024)	/* how much of the file to look at */
+# define HOWMANY (1024 * 1024)	/* how much of the file to look at */
 #endif
 #define MAXMAGIS 8192		/* max entries in any one magic file
 				   or directory */
@@ -135,8 +135,8 @@
 #define MAXstring 64		/* max len of "string" types */
 
 #define MAGICNO		0xF11E041C
-#define VERSIONNO	12
-#define FILE_MAGICSIZE	248
+#define VERSIONNO	13
+#define FILE_MAGICSIZE	312
 
 #define	FILE_LOAD	0
 #define FILE_CHECK	1
@@ -234,6 +234,7 @@ struct magic {
 	 (t) == FILE_LESTRING16 || \
 	 (t) == FILE_REGEX || \
 	 (t) == FILE_SEARCH || \
+	 (t) == FILE_INDIRECT || \
 	 (t) == FILE_NAME || \
 	 (t) == FILE_USE)
 
@@ -306,7 +307,9 @@ struct magic {
 	/* Words 33-52 */
 	char mimetype[MAXMIME]; /* MIME type */
 	/* Words 53-54 */
-	char apple[8];
+	char apple[8];		/* APPLE CREATOR/TYPE */
+	/* Words 55-63 */
+	char ext[64];		/* Popular extensions */
 };
 
 #define BIT(A)   (1 << (A))
@@ -346,6 +349,8 @@ struct magic {
 #define STRING_IGNORE_CASE		(STRING_IGNORE_LOWERCASE|STRING_IGNORE_UPPERCASE)
 #define STRING_DEFAULT_RANGE		100
 
+#define	INDIRECT_RELATIVE			BIT(0)
+#define	CHAR_INDIRECT_RELATIVE			'r'
 
 /* list of magic entries */
 struct mlist {
@@ -407,10 +412,12 @@ struct magic_set {
 	uint16_t name_max;
 	uint16_t elf_shnum_max;
 	uint16_t elf_phnum_max;
+	uint16_t elf_notes_max;
 #define	FILE_INDIR_MAX			15
 #define	FILE_NAME_MAX			30
 #define	FILE_ELF_SHNUM_MAX		32768
 #define	FILE_ELF_PHNUM_MAX		128
+#define	FILE_ELF_NOTES_MAX		256
 };
 
 /* Type for Unicode characters */
@@ -476,6 +483,7 @@ protected int file_looks_utf8(const unsigned char *, size_t, unichar *,
     size_t *);
 protected size_t file_pstring_length_size(const struct magic *);
 protected size_t file_pstring_get_length(const struct magic *, const char *);
+protected char * file_printable(char *, size_t, const char *);
 #ifdef __EMX__
 protected int file_os2_apptype(struct magic_set *, const char *, const void *,
     size_t);
@@ -558,6 +566,12 @@ char   *ctime_r(const time_t *, char *);
 #ifndef HAVE_ASCTIME_R
 char   *asctime_r(const struct tm *, char *);
 #endif
+#ifndef HAVE_GMTIME_R
+struct tm *gmtime_r(const time_t *, struct tm *);
+#endif
+#ifndef HAVE_LOCALTIME_R
+struct tm *localtime_r(const time_t *, struct tm *);
+#endif
 #ifndef HAVE_FMTCHECK
 const char *fmtcheck(const char *, const char *) 
      __attribute__((__format_arg__(2)));
@@ -583,6 +597,9 @@ static const char *rcsid(const char *p) { \
 #endif
 #else
 #define FILE_RCSID(id)
+#endif
+#ifndef __RCSID
+#define __RCSID(a)
 #endif
 
 #endif /* __file_h__ */

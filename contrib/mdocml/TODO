@@ -1,6 +1,6 @@
 ************************************************************************
 * Official mandoc TODO.
-* $Id: TODO,v 1.189 2014/11/26 21:40:17 schwarze Exp $
+* $Id: TODO,v 1.202 2015/03/11 13:11:22 schwarze Exp $
 ************************************************************************
 
 Many issues are annotated for difficulty as follows:
@@ -60,7 +60,7 @@ are mere guesses, and some may be wrong.
 - .fc (field control)
   found by naddy@ in xloadimage(1)
   loc **  exist ***  algo *  size *  imp *
-  
+
 - .nr third argument (auto-increment step size, requires \n+)
   found by bentley@ in sbcl(1)  Mon, 9 Dec 2013 18:36:57 -0700
   loc *  exist *  algo *  size *  imp **
@@ -69,33 +69,36 @@ are mere guesses, and some may be wrong.
   reported by brad@  Sat, 15 Jan 2011 15:45:23 -0500
   loc ***  exist ***  algo ***  size **  imp *
 
-- .ta (tab settings) occurs in ircbug(1) and probably gnats(1)
-  reported by brad@  Sat, 15 Jan 2011 15:50:51 -0500
+- .ta (tab settings)
+  #1 most important issue naddy@ Mon, 16 Feb 2015 20:59:17 +0100
+  ircbug(1) gnats(1) reported by brad@  Sat, 15 Jan 2011 15:50:51 -0500
   also Tcl_NewStringObj(3) via wiz@  Wed, 5 Mar 2014 22:27:43 +0100
-  loc **  exist ***  algo **  size **  imp **
+  also posix2time(3) Carsten Kunze  Mon, 1 Dec 2014 13:03:10 +0100
+  loc **  exist ***  algo **  size **  imp ***
 
 - .ti (temporary indent)
-  found by naddy@ in xloadimage(1)
+  found by naddy@ in xloadimage(1) [devel/libvstr] vstr(3)
   found by bentley@ in nmh(1)  Mon, 23 Apr 2012 13:38:28 -0600
   loc **  exist **  algo **  size *  imp ** (parser reorg helps a lot)
 
-- .while and .shift 
+- .while and .shift
   found by jca@ in ratpoison(1)  Sun, 30 Jun 2013 12:01:09 +0200
   loc *  exist **  algo **  size **  imp **
 
-- \c (interrupted text) should prevent the line break
-  even inside .Bd literal; that occurs in chat(8)
-  also found in cclive(1) - DocBook output
-  loc **  exist ***  algo **  size *  imp *
-
 - \h horizontal move
-  found in cclive(1) DocBook output
-  Anthony J. Bentley on discuss@  Sat, 21 Sep 2013 22:29:34 -0600
-  loc **  exist **  algo **  size *  imp ** (parser reorg helps a lot)
+  #2 most important issue naddy@  Mon, 16 Feb 2015 20:59:17 +0100
+  found in cclive(1) nasm(1) bogofilter(1) asciidoc/DocBook output
+  bentley@ on discuss@  Sat, 21 Sep 2013 22:29:34 -0600
+  naddy@  Thu, 4 Dec 2014 16:26:41 +0100
+  loc **  exist **  algo **  size *  imp *** (parser reorg helps a lot)
 
 - \n+ and \n- numerical register increment and decrement
   found by bentley@ in sbcl(1)  Mon, 9 Dec 2013 18:36:57 -0700
   loc *  exist *  algo *  size *  imp **
+
+- \n(.$ macro argument count number register; ocserv(8) by autogen
+  found by sthen@  Thu, 19 Feb 2015 22:03:01 +0000
+  loc *  exist **  algo *  size *  imp **
 
 - \w'' improve width measurements
   would not be very useful without an expression parser, see below
@@ -107,10 +110,6 @@ are mere guesses, and some may be wrong.
   loc *  exist *  algo *  size *  imp *
 
 --- missing mdoc features ----------------------------------------------
-
-- fix bad block nesting involving multiple identical explicit blocks
-  see the OpenBSD mdoc_macro.c 1.47 commit message
-  loc *  exist ***  algo ***  size *  imp **
 
 - .Bl -column .Xo support is missing
   ultimate goal:
@@ -124,13 +123,6 @@ are mere guesses, and some may be wrong.
   .Sh .Nm .Bk .Nm .Ek .Sh found by jmc@ in ssh-keygen(1)
   from jmc@  Wed, 14 Jul 2010 18:10:32 +0100
   loc *  exist ***  algo ***  size **  imp **
-
-- \\ is now implemented correctly
-  * when defining strings and macros using .ds and .de
-  * when parsing roff(7) and man(7) macro arguments
-  It does not yet work in mdoc(7) macro arguments
-  because libmdoc does not yet use mandoc_getarg().
-  Also check what happens in plain text, it must be identical to \e.
 
 - .Bd -centered implies -filled, not -unfilled, which is not
   easy to implement; it requires code similar to .ce, which
@@ -171,12 +163,6 @@ are mere guesses, and some may be wrong.
 - inside `.Bl -column' phrases, TERMP_IGNDELIM handling by `Pf'
   is not safe, e.g. `.Bl -column .It Pf a b .' gives "ab."
   but should give "ab ."
-
-- set a meaningful default if no `Bl' list type is assigned
-  loc *  exist *  algo *  size *  imp **  (already done?)
-
-- have a blank `It' head for `Bl -tag' not puke
-  loc *  exist *  algo *  size *  imp **  (already done?)
 
 - check whether it is correct that `D1' uses INDENT+1;
   does it need its own constant?
@@ -271,6 +257,10 @@ are mere guesses, and some may be wrong.
 
 --- compatibility checks -----------------------------------------------
 
+- write a configure check for [[:<:]] support and provide some
+  fallback for whatis(1) when it doesn't work;
+  Svyatoslav Mishyn  Wed, 17 Dec 2014 11:07:10 +0200
+
 - is .Bk implemented correctly in modern groff?
   sobrado@  Tue, 19 Apr 2011 22:12:55 +0200
 
@@ -315,8 +305,17 @@ are mere guesses, and some may be wrong.
 * formatting issues: ugly output
 ************************************************************************
 
-- a column list with blank `Ta' cells triggers a spurrious
+- revisit empty in-line macros
+  look at the difference between "Em x Em ." and "Sq x Em ."
+  Carsten Kunze  Fri, 12 Dec 2014 00:15:41 +0100
+  loc *** exist *** algo *** size * imp **
+
+- a column list with blank `Ta' cells triggers a spurious
   start-with-whitespace printing of a newline
+
+- In .Bl -column, .It a<tab>"b<tab>c"
+  shows the quotes in groff, but not in mandoc
+  loc * exist *** algo ** size * imp **
 
 - In .Bl -column,
   .It Em Authentication<tab>Key Length
@@ -353,6 +352,10 @@ are mere guesses, and some may be wrong.
 - in enclosures, mandoc sometimes fancies a bogus end of sentence
   reminded by jmc@  Thu, 23 Sep 2010 18:13:39 +0059
   loc *  exist **  algo ***  size *  imp ***
+
+- a line starting with "\fB something" counts as starting with whitespace
+  and triggers a line break; found in audio/normalize-mp3(1)
+  loc **  exist *  algo **  size *  imp **
 
 - formatting /usr/local/man/man1/latex2man.1 with groff and mandoc
   reveals lots of bugs both in groff and mandoc...
@@ -402,16 +405,6 @@ are mere guesses, and some may be wrong.
   Do we want to change mandoc or groff?
   Steffen Nurpmeso  Sat, 08 Nov 2014 13:34:59 +0100
   loc *  exist **  algo **  size *  imp **
-
-- .Rv (and probably .Ex) print different text if an `Nm' has been named
-  or not (run a manual without `Nm blah' to see this).  I'm not sure
-  that this exists in the wild, but it's still an error.
-  loc *  exist *  algo *  size *  imp * (already done?)
-
-- In .Bl -bullet, the groff bullet is "+\b+\bo\bo", the mandoc bullet
-  is just "o\bo".  The problem is to not break ps/pdf when fixing.
-  see for example OpenBSD ksh(1)
-  loc **  exist **  algo **  size *  imp **
 
 - In .Bl -enum -width 0n, groff continues one the same line after
   the number, mandoc breaks the line.
@@ -474,7 +467,7 @@ are mere guesses, and some may be wrong.
   loc *  exist *  algo *  size *  imp *
 
 - trailing whitespace must be ignored even when followed by a font escape,
-  see for example 
+  see for example
     makes
     \fBdig \fR
     operate in batch mode
@@ -548,7 +541,7 @@ are mere guesses, and some may be wrong.
   How does SQLITE_CONFIG_PAGECACHE actually work?  Document it!
   from kristaps@  Sat, 09 Aug 2014 13:51:36 +0200
 
-Several areas can be cleaned up to make mandoc even faster.  These are 
+Several areas can be cleaned up to make mandoc even faster.  These are
 
 - improve hashing mechanism for macros (quite important: performance)
 
@@ -557,12 +550,17 @@ Several areas can be cleaned up to make mandoc even faster.  These are
 - the PDF file is HUGE: this can be reduced by using relative offsets
 
 - instead of re-initialising the roff predefined-strings set before each
-  parse, create a read-only version the first time and copy it 
+  parse, create a read-only version the first time and copy it
   loc *  exist **  algo **  size *  imp **
 
 ************************************************************************
 * structural issues
 ************************************************************************
+
+- Improve -O suboption parsing.  Do it in the main program such that
+  errors can be reported.  Pay attention to distinguishing the
+  mandoc(1) and apropos(1) styles of both options.
+  loc **  exist *  algo **  size **  imp ***
 
 - Use libz directly instead of forking gunzip(1).
   Suggested by bapt at FreeBSD among others.
@@ -573,7 +571,7 @@ Several areas can be cleaned up to make mandoc even faster.  These are
 
 - Find better ways to prevent endless loops
   in roff(7) macro and string expansion.
- 
+
 - Finish cleanup of date handling.
   Decide which formats should be recognized where.
   Update both mdoc(7) and man(7) documentation.
@@ -601,3 +599,9 @@ Several areas can be cleaned up to make mandoc even faster.  These are
  - Have Mac OSX systems automatically disable -static compilation of the
    CGI: -static isn't supported.
 
+************************************************************************
+* to improve in the groff_mdoc(7) macros
+************************************************************************
+
+- use uname(1) to set doc-default-operating-system at install time
+  tobimensch  Mon, 1 Dec 2014 00:25:07 +0100

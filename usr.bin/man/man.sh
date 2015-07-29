@@ -311,8 +311,11 @@ man_display_page() {
 		return
 	fi
 
-	testline="mandoc -Tlint -Werror 2>/dev/null"
-	pipeline="mandoc -Tlocale | $MANPAGER"
+	if [ -n "$use_width" ]; then
+		mandoc_args="-O width=${use_width}"
+	fi
+	testline="mandoc -Tlint -Wunsupp 2>/dev/null"
+	pipeline="mandoc $mandoc_args | $MANPAGER"
 
 	if ! eval "$cattool $manpage | $testline" ;then
 		if which -s groff; then

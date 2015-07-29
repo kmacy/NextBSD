@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# $File: filesystems,v 1.107 2014/12/03 18:02:52 christos Exp $
+# $File: filesystems,v 1.109 2015/02/22 01:22:54 christos Exp $
 # filesystems:  file(1) magic for different filesystems
 #
 0	name	partid  
@@ -260,6 +260,13 @@
 >>(11.s-2)	uleshort	0xAA55		DOS/MBR boot sector
 # for sector sizes with 512 or more Bytes
 >0x1FE		leshort		0xAA55		DOS/MBR boot sector
+
+# keep old DOS/MBR boot sector as dummy for mbr and bootloader displaying
+# only for sector sizes with 512 or more Bytes
+0x1FE          leshort         0xAA55         	DOS/MBR boot sector
+#
+# to display information (50) before DOS BPB (strength=70) and after DOS floppy (120) like in old file version
+!:strength +65
 >2		string		OSBS		OS/BS MBR
 # added by Joerg Jenderek at Feb 2013 according to http://thestarman.pcministry.com/asm/mbr/
 # and http://en.wikipedia.org/wiki/Master_Boot_Record
@@ -1921,6 +1928,7 @@
 >>38917	string    3         (version 2.0)
 >>38917	byte     >0x33      (unknown version, ID 0x%X)
 >>38917	byte     <0x31      (unknown version, ID 0x%X)
+>0x1FE	leshort  0xAA55     (DOS/MBR boot sector)
 # "application id" which appears to be used as a volume label
 >32808	string/T  >\0       '%s'
 >34816	string    \000CD001\001EL\ TORITO\ SPECIFICATION    (bootable)

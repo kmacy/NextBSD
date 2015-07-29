@@ -401,17 +401,24 @@ int
 vop_stdadvlock(struct vop_advlock_args *ap)
 {
 	struct vnode *vp;
-	struct ucred *cred;
 	struct vattr vattr;
 	int error;
 
 	vp = ap->a_vp;
-	cred = curthread->td_ucred;
-	vn_lock(vp, LK_SHARED | LK_RETRY);
-	error = VOP_GETATTR(vp, &vattr, cred);
-	VOP_UNLOCK(vp, 0);
-	if (error)
-		return (error);
+	if (ap->a_fl->l_whence == SEEK_END) {
+		/*
+		 * The NFSv4 server must avoid doing a vn_lock() here, since it
+		 * can deadlock the nfsd threads, due to a LOR.  Fortunately
+		 * the NFSv4 server always uses SEEK_SET and this code is
+		 * only required for the SEEK_END case.
+		 */
+		vn_lock(vp, LK_SHARED | LK_RETRY);
+		error = VOP_GETATTR(vp, &vattr, curthread->td_ucred);
+		VOP_UNLOCK(vp, 0);
+		if (error)
+			return (error);
+	} else
+		vattr.va_size = 0;
 
 	return (lf_advlock(ap, &(vp->v_lockf), vattr.va_size));
 }
@@ -420,17 +427,19 @@ int
 vop_stdadvlockasync(struct vop_advlockasync_args *ap)
 {
 	struct vnode *vp;
-	struct ucred *cred;
 	struct vattr vattr;
 	int error;
 
 	vp = ap->a_vp;
-	cred = curthread->td_ucred;
-	vn_lock(vp, LK_SHARED | LK_RETRY);
-	error = VOP_GETATTR(vp, &vattr, cred);
-	VOP_UNLOCK(vp, 0);
-	if (error)
-		return (error);
+	if (ap->a_fl->l_whence == SEEK_END) {
+		/* The size argument is only needed for SEEK_END. */
+		vn_lock(vp, LK_SHARED | LK_RETRY);
+		error = VOP_GETATTR(vp, &vattr, curthread->td_ucred);
+		VOP_UNLOCK(vp, 0);
+		if (error)
+			return (error);
+	} else
+		vattr.va_size = 0;
 
 	return (lf_advlockasync(ap, &(vp->v_lockf), vattr.va_size));
 }
@@ -801,7 +810,7 @@ vop_stdvptocnp(struct vop_vptocnp_args *ap)
 	VREF(vp);
 	locked = VOP_ISLOCKED(vp);
 	VOP_UNLOCK(vp, 0);
-	NDINIT_ATVP(&nd, LOOKUP, FOLLOW | LOCKLEAF, UIO_SYSSPACE,
+	NDINIT_ATVP(&nd, LOOKUP, FOLLOW | LOCKSHARED | LOCKLEAF, UIO_SYSSPACE,
 	    "..", vp, td);
 	flags = FREAD;
 	error = vn_open_cred(&nd, &flags, 0, VN_OPEN_NOAUDIT, cred, NULL);
@@ -821,7 +830,7 @@ vop_stdvptocnp(struct vop_vptocnp_args *ap)
 		VOP_UNLOCK(mvp, 0);
 		vn_close(mvp, FREAD, cred, td);
 		VREF(*dvp);
-		vn_lock(*dvp, LK_EXCLUSIVE | LK_RETRY);
+		vn_lock(*dvp, LK_SHARED | LK_RETRY);
 		covered = 1;
 	}
 
@@ -850,15 +859,15 @@ vop_stdvptocnp(struct vop_vptocnp_args *ap)
 		    (dp->d_fileno == fileno)) {
 			if (covered) {
 				VOP_UNLOCK(*dvp, 0);
-				vn_lock(mvp, LK_EXCLUSIVE | LK_RETRY);
+				vn_lock(mvp, LK_SHARED | LK_RETRY);
 				if (dirent_exists(mvp, dp->d_name, td)) {
 					error = ENOENT;
 					VOP_UNLOCK(mvp, 0);
-					vn_lock(*dvp, LK_EXCLUSIVE | LK_RETRY);
+					vn_lock(*dvp, LK_SHARED | LK_RETRY);
 					goto out;
 				}
 				VOP_UNLOCK(mvp, 0);
-				vn_lock(*dvp, LK_EXCLUSIVE | LK_RETRY);
+				vn_lock(*dvp, LK_SHARED | LK_RETRY);
 			}
 			i -= dp->d_namlen;
 

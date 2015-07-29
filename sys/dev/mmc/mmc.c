@@ -1379,6 +1379,20 @@ mmc_discover_cards(struct mmc_softc *sc)
 					ivar->hs_tran_speed = SD_MAX_HS;
 				}
 			}
+
+			/*
+			 * We reselect the card here. Some cards become
+			 * unselected and timeout with the above two commands,
+			 * although the state tables / diagrams in the standard
+			 * suggest they go back to the transfer state. The only
+			 * thing we use from the sd_status is the erase sector
+			 * size, but it is still nice to get that right. It is
+			 * normally harmless for cards not misbehaving. The
+			 * Atmel bridge will complain about this command timing
+			 * out. Others seem to handle it correctly, so it may
+			 * be a combination of card and controller.
+			 */
+			mmc_select_card(sc, ivar->rca);
 			mmc_app_sd_status(sc, ivar->rca, ivar->raw_sd_status);
 			mmc_app_decode_sd_status(ivar->raw_sd_status,
 			    &ivar->sd_status);
@@ -1446,10 +1460,10 @@ mmc_discover_cards(struct mmc_softc *sc)
 			break;
 		}
 
+		mmc_select_card(sc, ivar->rca);
+
 		/* Only MMC >= 4.x cards support EXT_CSD. */
 		if (ivar->csd.spec_vers >= 4) {
-			/* Card must be selected to fetch EXT_CSD. */
-			mmc_select_card(sc, ivar->rca);
 			mmc_send_ext_csd(sc, ivar->raw_ext_csd);
 			/* Handle extended capacity from EXT_CSD */
 			sec_count = ivar->raw_ext_csd[EXT_CSD_SEC_CNT] +
@@ -1479,7 +1493,6 @@ mmc_discover_cards(struct mmc_softc *sc)
 				mmc_switch(sc, EXT_CSD_CMD_SET_NORMAL,
 				    EXT_CSD_ERASE_GRP_DEF, 1);
 			}
-			mmc_select_card(sc, 0);
 		} else {
 			ivar->bus_width = bus_width_1;
 			ivar->timing = bus_timing_normal;
@@ -1506,6 +1519,7 @@ mmc_discover_cards(struct mmc_softc *sc)
 			child = device_add_child(sc->dev, NULL, -1);
 			device_set_ivars(child, ivar);
 		}
+		mmc_select_card(sc, 0);
 	}
 }
 
@@ -1622,7 +1636,7 @@ mmc_go_discovery(struct mmc_softc *sc)
 		mmc_send_app_op_cond(sc,
 		    (err ? 0 : MMC_OCR_CCS) | mmcbr_get_ocr(dev), NULL);
 	} else
-		mmc_send_op_cond(sc, mmcbr_get_ocr(dev), NULL);
+		mmc_send_op_cond(sc, MMC_OCR_CCS | mmcbr_get_ocr(dev), NULL);
 	mmc_discover_cards(sc);
 	mmc_rescan_cards(sc);
 
@@ -1797,6 +1811,9 @@ static driver_t mmc_driver = {
 };
 static devclass_t mmc_devclass;
 
+DRIVER_MODULE(mmc, a10_mmc, mmc_driver, mmc_devclass, NULL, NULL);
+DRIVER_MODULE(mmc, aml8726_mmc, mmc_driver, mmc_devclass, NULL, NULL);
+DRIVER_MODULE(mmc, aml8726_sdxc, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, at91_mci, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, sdhci_bcm, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, sdhci_fdt, mmc_driver, mmc_devclass, NULL, NULL);
@@ -1805,4 +1822,3 @@ DRIVER_MODULE(mmc, sdhci_pci, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, sdhci_ti, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, ti_mmchs, mmc_driver, mmc_devclass, NULL, NULL);
 DRIVER_MODULE(mmc, dwmmc, mmc_driver, mmc_devclass, NULL, NULL);
-
