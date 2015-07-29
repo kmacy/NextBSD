@@ -79,14 +79,10 @@
  *
  *
  * Next steps:
- *  - validate the default tx path
- *  - validate the default rx path
  *
- *  - validate queue initialization paths
  *  - validate queue teardown
  *  - validate that all structure fields are initialized
 
- *  - add rx_buf recycling
  *  - add SW RSS to demux received data packets to buf_rings for deferred processing
  *    look at handling tx ack processing
  *
@@ -1607,6 +1603,9 @@ retry:
 	 *        cxgb
 	 */
 	if (nsegs > TXQ_AVAIL(txq)) {
+#ifdef INVARIANTS
+		panic("filled ring in spite of INVARIANTS");
+#endif
 		txq->ift_no_desc_avail++;
 		bus_dmamap_unload(txq->ift_desc_tag, map);
 		DBG_COUNTER_INC(encap_txq_avail_fail);
@@ -3067,8 +3066,6 @@ iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq, int cidx)
 #endif
 	return (avail);
 }
-
-
 
 void
 iflib_add_int_delay_sysctl(if_shared_ctx_t sctx, const char *name,
