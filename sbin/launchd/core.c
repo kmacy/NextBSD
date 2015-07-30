@@ -3994,7 +3994,7 @@ job_t
 job_dispatch(job_t j, bool kickstart)
 {
 	// Don't dispatch a job if it has no audit session set.
-	syslog(LOG_ERR, "dispatching job j=%p kickstart=%d", j, kickstart);
+	syslog(LOG_DEBUG, "dispatching job j=%p kickstart=%d", j, kickstart);
 	#ifdef notyet
 	if (!uuid_is_null(j->expected_audit_uuid)) {
 		job_log(j, LOG_DEBUG, "Job is still awaiting its audit session UUID. Not dispatching.");
@@ -4057,7 +4057,6 @@ job_dispatch(job_t j, bool kickstart)
 	} else {
 		job_log(j, LOG_DEBUG, "Tried to dispatch an already active job: %s.", job_active(j));
 	}
-	syslog(LOG_ERR, "dispatched j=%p", j);
 	return j;
 }
 
@@ -4505,8 +4504,7 @@ job_start(job_t j)
 		if (unlikely(_vproc_post_fork_ping())) {
 			syslog(LOG_ERR, "_vproc_post_fork_ping() fail");
 			DEBUG_EXIT(EXIT_FAILURE);
-		} else
-			syslog(LOG_ERR, "_vproc_post_fork_ping() success");
+		}
 
 		(void)job_assumes_zero(j, runtime_close(execspair[0]));
 		// wait for our parent to say they've attached a kevent to us

@@ -676,7 +676,6 @@ x_handle_kqueue(mach_port_t junk __attribute__((unused)), integer_t fd)
 			kevi = &kev[i];
 
 			if (kevi->filter) {
-				_launchd_syslog(LOG_DEBUG, "Dispatching kevent (ident/filter): %lu/%hd", kevi->ident, kevi->filter);
 				log_kevent_struct(LOG_DEBUG, kev, i);
 
 				struct job_check_s {
@@ -692,7 +691,6 @@ x_handle_kqueue(mach_port_t junk __attribute__((unused)), integer_t fd)
 					_launchd_syslog(LOG_ERR, "The following kevent had invalid context data. Please file a bug with the following information:");
 					log_kevent_struct(LOG_EMERG, &kev[0], i);
 				}
-				_launchd_syslog(LOG_DEBUG, "Handled kevent.");
 			}
 		}
 	} else {
@@ -759,7 +757,6 @@ runtime_fork(mach_port_t bsport)
 
 	sigemptyset(&emptyset);
 
-	syslog(LOG_ERR, "runtime_fork(bsport=%d)", bsport);
 	(void)os_assumes_zero(launchd_mport_make_send(bsport));
 	(void)os_assumes_zero(launchd_set_bport(bsport));
 	(void)os_assumes_zero(launchd_mport_deallocate(bsport));
