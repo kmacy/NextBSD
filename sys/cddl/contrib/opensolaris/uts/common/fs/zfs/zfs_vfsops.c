@@ -1717,19 +1717,9 @@ zfs_mount(vfs_t *vfsp)
 	 * according to those options set in the current VFS options.
 	 */
 	if (vfsp->vfs_flag & MS_REMOUNT) {
-		zfsvfs_t *zfsvfs = vfsp->vfs_data;
-
-		/*
-		 * Refresh mount options with z_teardown_lock blocking I/O while
-		 * the filesystem is in an inconsistent state.
-		 * The lock also serializes this code with filesystem
-		 * manipulations between entry to zfs_suspend_fs() and return
-		 * from zfs_resume_fs().
-		 */
-		rrm_enter(&zfsvfs->z_teardown_lock, RW_WRITER, FTAG);
-		zfs_unregister_callbacks(zfsvfs);
+		/* refresh mount options */
+		zfs_unregister_callbacks(vfsp->vfs_data);
 		error = zfs_register_callbacks(vfsp);
-		rrm_exit(&zfsvfs->z_teardown_lock, FTAG);
 		goto out;
 	}
 
