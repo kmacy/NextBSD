@@ -528,23 +528,22 @@ vm_map_copyin_internal(
 		/* "len" is too big and doesn't fit in a "vm_size_t" */
 		return KERN_RESOURCE_SHORTAGE;
 	}
-	if (src_map == kernel_map)
-		size = (vm_size_t) sizeof(struct vm_map_copy);
-	else
-		size =  (vm_size_t) (sizeof(struct vm_map_copy) + len);
-	copy = (vm_map_copy_t) malloc(size, M_MACH_VM, M_NOWAIT);
+	size =  (vm_size_t) (sizeof(struct vm_map_copy) + len);
+	copy = (vm_map_copy_t) malloc(size, M_MACH_VM, M_NOWAIT|M_ZERO);
 	if (copy == VM_MAP_COPY_NULL) {
-		return KERN_RESOURCE_SHORTAGE;
+		kr = KERN_RESOURCE_SHORTAGE;
+		goto fail;
 	}
 	copy->type = VM_MAP_COPY_KERNEL_BUFFER;
 	copy->size = len;
 	copy->offset = 0;
 	copy->cpy_kalloc_size = size;
+	copy->cpy_kdata = (vm_offset_t) (copy + 1);
+
 	if (src_map == kernel_map) {
-		copy->cpy_kdata = src_addr;
-		copy->type = VM_MAP_COPY_OBJECT_PREALLOC;
+		memcpy((void *)copy->cpy_kdata, (void *)src_addr, len);
+		free((void *)src_addr, M_MACH_VM);
 	} else {
-		copy->cpy_kdata = (vm_offset_t) (copy + 1);
 
 		kr = copyinmap(src_map, src_addr, copy->cpy_kdata, (vm_size_t) len);
 		if (kr != KERN_SUCCESS) {
@@ -560,6 +559,10 @@ vm_map_copyin_internal(
 	}
 	*copy_result = copy;
 	return KERN_SUCCESS;
+fail:
+	if (src_map == kernel_map)
+		free((void *)src_addr, M_MACH_VM);
+	return (kr);
 }
 
 /*
@@ -630,8 +633,6 @@ vm_map_copyout_kernel_buffer(
 		kr = KERN_NOT_SUPPORTED;
 	}
 
-	if (copy->type == VM_MAP_COPY_OBJECT_PREALLOC)
-		free((void *)copy->cpy_kdata, M_MACH_VM);
 	free(copy, M_MACH_VM);
 
 	return(kr);
@@ -660,7 +661,7 @@ vm_map_copyin_object(
 	 *	that contains the object directly.
 	 */
 
-	copy = (vm_map_copy_t) malloc(sizeof(vm_map_copy_t), M_MACH_VM, M_WAITOK);
+	copy = (vm_map_copy_t) malloc(sizeof(vm_map_copy_t), M_MACH_VM, M_WAITOK|M_ZERO);
 	copy->type = VM_MAP_COPY_OBJECT;
 	copy->cpy_object = object;
 
@@ -811,8 +812,7 @@ vm_map_copyout(
 	 *	Check for special kernel buffer allocated
 	 *	by new_ipc_kmsg_copyin.
 	 */
-
-	if (copy->type == VM_MAP_COPY_KERNEL_BUFFER || copy->type == VM_MAP_COPY_OBJECT_PREALLOC) {
+	if (copy->type == VM_MAP_COPY_KERNEL_BUFFER) {
 		return (vm_map_copyout_kernel_buffer(dst_map, dst_addr,
 						    copy, FALSE));
 	}
@@ -1161,8 +1161,6 @@ vm_map_copy_discard(
 	if (copy == VM_MAP_COPY_NULL)
 		return;
 
-	if (copy->type == VM_MAP_COPY_OBJECT_PREALLOC)
-		free((void *)copy->cpy_kdata, M_MACH_VM);
 	if (copy->type == VM_MAP_COPY_OBJECT)
 		vm_object_deallocate(copy->cpy_object);
 	free(copy, M_MACH_VM);

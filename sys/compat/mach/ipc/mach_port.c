@@ -1043,7 +1043,7 @@ mach_port_get_set_status(
 	if (actual == 0) {
 		memory = VM_MAP_COPY_NULL;
 
-		free(addr, M_MACH_TMP);
+		free(addr, M_MACH_VM);
 	} else {
 		vm_size_t size_used;
 

@@ -1528,9 +1528,9 @@ ipc_kmsg_copyin_ool_descriptor(
 	mach_msg_ool_descriptor_t *dsc,
 	mach_msg_descriptor_t *user_dsc,
 	int is_64bit __unused,
-	vm_offset_t *paddr,
+	vm_offset_t *paddr __unused,
 	vm_map_copy_t *copy,
-	vm_size_t *space_needed,
+	vm_size_t *space_needed __unused,
 	vm_map_t map,
 	mach_msg_return_t *mr)
 {
@@ -1557,36 +1557,8 @@ ipc_kmsg_copyin_ool_descriptor(
 
 	if (length == 0) {
 		dsc->address = NULL;
-	} else if ((length >= MSG_OOL_SIZE_SMALL) &&
-			   (copy_options == MACH_MSG_PHYSICAL_COPY) && !dealloc) {
-
-		/*
-		 * If the request is a physical copy and the source
-		 * is not being deallocated, then allocate space
-		 * in the kernel's pageable ipc copy map and copy
-		 * the data in.  The semantics guarantee that the
-		 * data will have been physically copied before
-		 * the send operation terminates.  Thus if the data
-		 * is not being deallocated, we must be prepared
-		 * to page if the region is sufficiently large.
-		 */
-		MPASS(*space_needed >= length);
-
-		if (copyin((const char *) addr, (char *) *paddr,
-				   length)) {
-			*mr = MACH_SEND_INVALID_MEMORY;
-			return NULL;
-		}
-
-		if (vm_map_copyin(kernel_map, *paddr, length,
-						  TRUE, copy) != KERN_SUCCESS) {
-			*mr = MACH_MSG_VM_KERNEL;
-			return NULL;
-		}
-		dsc->address = (void *) *copy;
-		*paddr += length;
-		*space_needed -= length;
-	} else {
+	}
+	else {
 		/*
 		 * Make a virtual copy of the of the data if requested
 		 * or if a physical copy was requested but the source
@@ -1845,12 +1817,12 @@ ipc_kmsg_copyin_body(
 			}
 		}
 	}
-	if (space_needed && (paddr = (vm_offset_t)malloc(space_needed, M_MACH_VM, M_NOWAIT| M_NODUMP | M_ZERO)) == 0) {
+	if (space_needed > 8*1024*1024 /* XXX come up with a better define */) {
 		ipc_kmsg_clean_partial(kmsg, 0, NULL, 0, 0);
 		mr = MACH_MSG_VM_KERNEL;
 		goto out;
-	}
 
+	}
 	/* user_addr = just after base as it was copied in */
     user_addr = (mach_msg_descriptor_t *)((vm_offset_t)kmsg->ikm_header + sizeof(mach_msg_base_t));
 
@@ -1902,7 +1874,7 @@ ipc_kmsg_copyin_body(
             /* clean from start of message descriptors to i */
             ipc_kmsg_clean_partial(kmsg, i,
                     (mach_msg_descriptor_t *)((mach_msg_base_t *)kmsg->ikm_header + 1),
-                    paddr, space_needed);
+								   0, 0);
             goto out;
         }
     }
@@ -2511,6 +2483,7 @@ ipc_kmsg_copyout_ool_descriptor(mach_msg_ool_descriptor_t *dsc, mach_msg_descrip
 			else
 				*mr |= MACH_MSG_VM_SPACE;
 			vm_map_copy_discard(map_copy);
+			dsc->address = NULL;
 			rcv_addr = 0;
 			size = 0;
 		}
