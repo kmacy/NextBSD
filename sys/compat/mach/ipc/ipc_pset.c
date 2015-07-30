@@ -591,7 +591,9 @@ filt_machport(struct knote *kn, long hint)
 	if (option & MACH_RCV_MSG) {
 		self->ith_msg_addr = (mach_vm_address_t) kn->kn_ext[0];
 		size = (mach_msg_size_t)kn->kn_ext[1];
+#ifdef DEBUG_KEVENT
 		printf("%s:%d: filt_machport option: %d \n", curproc->p_comm, curproc->p_pid, option);
+#endif
 	} else {
 		option = MACH_RCV_LARGE;
 		self->ith_msg_addr = 0;
@@ -623,7 +625,7 @@ filt_machport(struct knote *kn, long hint)
 		assert(self->ith_state == MACH_RCV_TOO_LARGE);
 		assert(self->ith_kmsg == IKM_NULL);
 		kn->kn_data = self->ith_receiver_name;
-#ifdef __LP64__
+#if defined(__LP64__) && defined(DEBUG_KEVENT)
 		printf("%s:%d, receiver_name %ld\n", curproc->p_comm, curproc->p_pid, kn->kn_data);
 #endif
 		return (1);
@@ -632,7 +634,7 @@ filt_machport(struct knote *kn, long hint)
 	assert(option & MACH_RCV_MSG);
 	kn->kn_ext[1] = self->ith_msize;
 	kn->kn_data = MACH_PORT_NAME_NULL;
-#ifdef __LP64__
+#if defined(__LP64__) && defined(DEBUG_KEVENT)
 	printf("%s:%d receive result size: %d to: %lx \n", curproc->p_comm, curproc->p_pid, self->ith_msize, self->ith_msg_addr);
 #endif
 	kn->kn_fflags = mach_msg_receive_results(self);
