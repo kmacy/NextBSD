@@ -448,6 +448,8 @@ FBSD_1.4 {
 	mk_timer_arm;
 	mk_timer_cancel;
 	utimensat;
+	numa_setaffinity;
+	numa_getaffinity;
 };
 
 FBSDprivate_1.0 {

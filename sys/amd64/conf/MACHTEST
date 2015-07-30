@@ -75,7 +75,7 @@ options 	KDTRACE_HOOKS		# Kernel DTrace hooks
 options 	DDB_CTF			# Kernel ELF linker loads CTF data
 options 	INCLUDE_CONFIG_FILE	# Include this file in kernel
 options		ALT_BREAK_TO_DEBUGGER
-#options		OPENSOLARIS_WITNESS
+options		OPENSOLARIS_WITNESS
 
 # Debugging support.  Always need this:
 options 	KDB			# Enable kernel debugger support.

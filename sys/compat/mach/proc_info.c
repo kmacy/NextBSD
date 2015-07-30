@@ -178,7 +178,7 @@ proc_pidbsdinfo(struct proc *p, struct proc_bsdinfo * pbsd, int zombie)
 
 	bzero(pbsd, sizeof(struct proc_bsdinfo));
 	pbsd->pbi_status = p->p_state;
-	pbsd->pbi_xstatus = p->p_xstat;
+	pbsd->pbi_xstatus = KW_EXITCODE(p->p_xexit, p->p_xsig);
 	pbsd->pbi_pid = p->p_pid;
 	if (p->p_pptr)
 		pbsd->pbi_ppid = p->p_pptr->p_pid;

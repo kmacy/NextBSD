@@ -54,7 +54,6 @@
 #include <vm/vm.h>
 #include <sys/mach/mach_types.h>
 #include <sys/mach/message.h>
-#include <sys/mach/mach_port.h>
 #include <sys/mach/mach_time.h>
 #include <sys/mach/port.h>
 #include <sys/mach/clock_server.h>
@@ -1005,8 +1004,12 @@
 				    char *path, \
 				    struct timespec *times, int flag); }					
 ; padding so that the mach system calls are on a straightforward boundary
-548	AUE_NULL	UNIMPL	nosys
-549	AUE_NULL	UNIMPL	nosys
+548	AUE_NULL	STD	{ int numa_getaffinity(cpuwhich_t which, \
+				    id_t id, \
+				    struct vm_domain_policy_entry *policy); }
+549	AUE_NULL	STD	{ int numa_setaffinity(cpuwhich_t which, \
+				    id_t id, \
+				    const struct vm_domain_policy_entry *policy); }
 550	AUE_NULL	UNIMPL	nosys
 551	AUE_NULL	UNIMPL	nosys
 552	AUE_NULL	UNIMPL	nosys

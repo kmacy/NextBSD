@@ -419,6 +419,8 @@ MIASM =  \
 	ppoll.o \
 	futimens.o \
 	utimensat.o \
+	numa_getaffinity.o \
+	numa_setaffinity.o \
 	_kernelrpc_mach_vm_allocate_trap.o \
 	_kernelrpc_mach_vm_deallocate_trap.o \
 	_kernelrpc_mach_vm_protect_trap.o \

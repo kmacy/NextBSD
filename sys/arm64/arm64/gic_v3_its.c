@@ -44,6 +44,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/lock.h>
 #include <sys/mutex.h>
 
+#include <dev/pci/pcireg.h>
 #include <dev/pci/pcivar.h>
 
 #include <vm/vm.h>
@@ -89,6 +90,7 @@ static void its_free_tables(struct gic_v3_its_softc *);
 static void its_init_commandq(struct gic_v3_its_softc *);
 static int its_init_cpu(struct gic_v3_its_softc *);
 static void its_init_cpu_collection(struct gic_v3_its_softc *);
+static uint32_t its_get_devid(device_t);
 
 static int its_cmd_send(struct gic_v3_its_softc *, struct its_cmd_desc *);
 
@@ -98,6 +100,8 @@ static void its_cmd_mapvi(struct gic_v3_its_softc *, struct its_dev *, uint32_t,
 static void its_cmd_mapi(struct gic_v3_its_softc *, struct its_dev *, uint32_t);
 static void its_cmd_inv(struct gic_v3_its_softc *, struct its_dev *, uint32_t);
 static void its_cmd_invall(struct gic_v3_its_softc *, struct its_col *);
+
+static uint32_t its_get_devbits(device_t);
 
 static void lpi_init_conftable(struct gic_v3_its_softc *);
 static void lpi_bitmap_init(struct gic_v3_its_softc *);
@@ -131,6 +135,29 @@ const char *its_ptab_type[] = {
 	[GITS_BASER_TYPE_RES5] = "Reserved (5)",
 	[GITS_BASER_TYPE_RES6] = "Reserved (6)",
 	[GITS_BASER_TYPE_RES7] = "Reserved (7)",
+};
+
+/*
+ * Vendor specific quirks.
+ * One needs to add appropriate entry to its_quirks[]
+ * table if the imlementation varies from the generic ARM ITS.
+ */
+
+/* Cavium ThunderX PCI devid acquire function */
+static uint32_t its_get_devbits_thunder(device_t);
+static uint32_t its_get_devid_thunder(device_t);
+
+static const struct its_quirks its_quirks[] = {
+	{
+		/*
+		 * Hardware:		Cavium ThunderX
+		 * Chip revision:	Pass 1.0, Pass 1.1
+		 */
+		.cpuid =	CPU_ID_RAW(CPU_IMPL_CAVIUM, CPU_PART_THUNDER, 0, 0),
+		.cpuid_mask =	CPU_IMPL_MASK | CPU_PART_MASK,
+		.devid_func =	its_get_devid_thunder,
+		.devbits_func =	its_get_devbits_thunder,
+	},
 };
 
 static struct gic_v3_its_softc *its_sc;
@@ -280,7 +307,6 @@ its_alloc_tables(struct gic_v3_its_softc *sc)
 {
 	uint64_t gits_baser, gits_tmp;
 	uint64_t type, esize, cache, share, psz;
-	uint64_t gits_typer;
 	size_t page_size, npages, nitspages, nidents, tn;
 	size_t its_tbl_size;
 	vm_offset_t ptab_vaddr;
@@ -288,9 +314,6 @@ its_alloc_tables(struct gic_v3_its_softc *sc)
 	boolean_t first = TRUE;
 
 	page_size = PAGE_SIZE_64K;
-
-	/* Read features first */
-	gits_typer = gic_its_read(sc, 8, GITS_TYPER);
 
 	for (tn = 0; tn < GITS_BASER_NUM; tn++) {
 		gits_baser = gic_its_read(sc, 8, GITS_BASER(tn));
@@ -305,7 +328,7 @@ its_alloc_tables(struct gic_v3_its_softc *sc)
 		case GITS_BASER_TYPE_RES7:
 			continue;
 		case GITS_BASER_TYPE_DEV:
-			nidents = (1 << GITS_TYPER_DEVB(gits_typer));
+			nidents = (1 << its_get_devbits(sc->dev));
 			its_tbl_size = esize * nidents;
 			its_tbl_size = roundup2(its_tbl_size, page_size);
 			npages = howmany(its_tbl_size, PAGE_SIZE);
@@ -792,6 +815,26 @@ retry:
 	lpic->lpi_free = lpic->lpi_num;
 
 	return (0);
+}
+
+static void
+lpi_free_chunk(struct gic_v3_its_softc *sc, struct lpi_chunk *lpic)
+{
+	int start, end;
+	uint8_t *bitmap;
+
+	bitmap = (uint8_t *)sc->its_lpi_bitmap;
+
+	KASSERT((lpic->lpi_free == lpic->lpi_num),
+	    ("Trying to free LPI chunk that is still in use.\n"));
+
+	/* First bit of this chunk in a global bitmap */
+	start = lpic->lpi_base - GIC_FIRST_LPI;
+	/* and last bit of this chunk... */
+	end = start + lpic->lpi_num - 1;
+
+	/* Finally free this chunk */
+	bit_nclear(bitmap, start, end);
 }
 
 static void
@@ -1300,10 +1343,13 @@ its_device_alloc_locked(struct gic_v3_its_softc *sc, device_t pci_dev,
 	if (newdev != NULL)
 		return (newdev);
 
-	devid = PCI_DEVID(pci_dev);
+	devid = its_get_devid(pci_dev);
 
 	/* There was no previously created device. Create one now */
-	newdev = malloc(sizeof(*newdev), M_GIC_V3_ITS, (M_WAITOK | M_ZERO));
+	newdev = malloc(sizeof(*newdev), M_GIC_V3_ITS, (M_NOWAIT | M_ZERO));
+	if (newdev == NULL)
+		return (NULL);
+
 	newdev->pci_dev = pci_dev;
 	newdev->devid = devid;
 
@@ -1321,7 +1367,12 @@ its_device_alloc_locked(struct gic_v3_its_softc *sc, device_t pci_dev,
 	 */
 	newdev->itt = (vm_offset_t)contigmalloc(
 	    roundup2(roundup2(nvecs, 2) * esize, 0x100), M_GIC_V3_ITS,
-	    (M_WAITOK | M_ZERO), 0, ~0UL, 0x100, 0);
+	    (M_NOWAIT | M_ZERO), 0, ~0UL, 0x100, 0);
+	if (newdev->itt == 0) {
+		lpi_free_chunk(sc, &newdev->lpis);
+		free(newdev, M_GIC_V3_ITS);
+		return (NULL);
+	}
 
 	/*
 	 * XXX ARM64TODO: Currently all interrupts are going
@@ -1353,6 +1404,139 @@ its_device_asign_lpi_locked(struct gic_v3_its_softc *sc,
 	    its_dev->lpis.lpi_free);
 	its_dev->lpis.lpi_free--;
 }
+
+/*
+ * ITS quirks.
+ * Add vendor specific PCI devid function here.
+ */
+static uint32_t
+its_get_devid_thunder(device_t pci_dev)
+{
+	int bsf;
+	int pem;
+	uint32_t bus;
+
+	bus = pci_get_bus(pci_dev);
+
+	bsf = PCI_RID(pci_get_bus(pci_dev), pci_get_slot(pci_dev),
+	    pci_get_function(pci_dev));
+
+	/* ECAM is on bus=0 */
+	if (bus == 0) {
+		return ((pci_get_domain(pci_dev) << PCI_RID_DOMAIN_SHIFT) |
+		    bsf);
+	/* PEM otherwise */
+	} else {
+		/* PEM (PCIe MAC/root complex) number is equal to domain */
+		pem = pci_get_domain(pci_dev);
+
+		/*
+		 * Set appropriate device ID (passed by the HW along with
+		 * the transaction to memory) for different root complex
+		 * numbers using hard-coded domain portion for each group.
+		 */
+		if (pem < 3)
+			return ((0x1 << PCI_RID_DOMAIN_SHIFT) | bsf);
+
+		if (pem < 6)
+			return ((0x3 << PCI_RID_DOMAIN_SHIFT) | bsf);
+
+		if (pem < 9)
+			return ((0x9 << PCI_RID_DOMAIN_SHIFT) | bsf);
+
+		if (pem < 12)
+			return ((0xB << PCI_RID_DOMAIN_SHIFT) | bsf);
+	}
+
+	return (0);
+}
+
+static uint32_t
+its_get_devbits_thunder(device_t dev)
+{
+	uint32_t devid_bits;
+
+	/*
+	 * GITS_TYPER[17:13] of ThunderX reports that device IDs
+	 * are to be 21 bits in length.
+	 * The entry size of the ITS table can be read from GITS_BASERn[52:48]
+	 * and on ThunderX is supposed to be 8 bytes in length (for device
+	 * table). Finally the page size that is to be used by ITS to access
+	 * this table will be set to 64KB.
+	 *
+	 * This gives 0x200000 entries of size 0x8 bytes covered by 256 pages
+	 * each of which 64KB in size. The number of pages (minus 1) should
+	 * then be written to GITS_BASERn[7:0]. In that case this value would
+	 * be 0xFF but on ThunderX the maximum value that HW accepts is 0xFD.
+	 *
+	 * Set arbitrary number of device ID bits to 20 in order to limit
+	 * the number of entries in ITS device table to 0x100000 and hence
+	 * the table size to 8MB.
+	 */
+	devid_bits = 20;
+	if (bootverbose) {
+		device_printf(dev,
+		    "Limiting number of Device ID bits implemented to %d\n",
+		    devid_bits);
+	}
+
+	return (devid_bits);
+}
+
+static __inline uint32_t
+its_get_devbits_default(device_t dev)
+{
+	uint64_t gits_typer;
+	struct gic_v3_its_softc *sc;
+
+	sc = device_get_softc(dev);
+
+	gits_typer = gic_its_read(sc, 8, GITS_TYPER);
+
+	return (GITS_TYPER_DEVB(gits_typer));
+}
+
+static uint32_t
+its_get_devbits(device_t dev)
+{
+	const struct its_quirks *quirk;
+	size_t i;
+
+	for (i = 0; i < nitems(its_quirks); i++) {
+		quirk = &its_quirks[i];
+		if (CPU_MATCH_RAW(quirk->cpuid_mask, quirk->cpuid)) {
+			if (quirk->devbits_func != NULL)
+				return ((*quirk->devbits_func)(dev));
+		}
+	}
+
+	return (its_get_devbits_default(dev));
+}
+
+static __inline uint32_t
+its_get_devid_default(device_t pci_dev)
+{
+
+	return (PCI_DEVID_GENERIC(pci_dev));
+}
+
+static uint32_t
+its_get_devid(device_t pci_dev)
+{
+	const struct its_quirks *quirk;
+	size_t i;
+
+	for (i = 0; i < nitems(its_quirks); i++) {
+		quirk = &its_quirks[i];
+		if (CPU_MATCH_RAW(quirk->cpuid_mask, quirk->cpuid)) {
+			if (quirk->devid_func != NULL)
+				return ((*quirk->devid_func)(pci_dev));
+		}
+	}
+
+	return (its_get_devid_default(pci_dev));
+}
+
 /*
  * Message signalled interrupts handling.
  */

@@ -26,7 +26,37 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/syscallsubr.h>
+#include <sys/sysproto.h>
+#include <sys/systm.h>
+#include <sys/un.h>
+
 #include <compat/cloudabi/cloudabi_proto.h>
+#include <compat/cloudabi/cloudabi_syscalldefs.h>
+
+/* Copies a pathname into a UNIX socket address structure. */
+static int
+copyin_sockaddr_un(const char *path, size_t pathlen, struct sockaddr_un *sun)
+{
+	int error;
+
+	/* Copy in pathname string if there's enough space. */
+	if (pathlen >= sizeof(sun->sun_path))
+		return (ENAMETOOLONG);
+	error = copyin(path, &sun->sun_path, pathlen);
+	if (error != 0)
+		return (error);
+	if (memchr(sun->sun_path, '\0', pathlen) != NULL)
+		return (EINVAL);
+
+	/* Initialize the rest of the socket address. */
+	sun->sun_path[pathlen] = '\0';
+	sun->sun_family = AF_UNIX;
+	sun->sun_len = sizeof(*sun);
+	return (0);
+}
 
 int
 cloudabi_sys_sock_accept(struct thread *td,
@@ -41,36 +71,63 @@ int
 cloudabi_sys_sock_bind(struct thread *td,
     struct cloudabi_sys_sock_bind_args *uap)
 {
+	struct sockaddr_un sun;
+	int error;
 
-	/* Not implemented. */
-	return (ENOSYS);
+	error = copyin_sockaddr_un(uap->path, uap->pathlen, &sun);
+	if (error != 0)
+		return (error);
+	return (kern_bindat(td, uap->fd, uap->s, (struct sockaddr *)&sun));
 }
 
 int
 cloudabi_sys_sock_connect(struct thread *td,
     struct cloudabi_sys_sock_connect_args *uap)
 {
+	struct sockaddr_un sun;
+	int error;
 
-	/* Not implemented. */
-	return (ENOSYS);
+	error = copyin_sockaddr_un(uap->path, uap->pathlen, &sun);
+	if (error != 0)
+		return (error);
+	return (kern_connectat(td, uap->fd, uap->s, (struct sockaddr *)&sun));
 }
 
 int
 cloudabi_sys_sock_listen(struct thread *td,
     struct cloudabi_sys_sock_listen_args *uap)
 {
+	struct listen_args listen_args = {
+		.s = uap->s,
+		.backlog = uap->backlog,
+	};
 
-	/* Not implemented. */
-	return (ENOSYS);
+	return (sys_listen(td, &listen_args));
 }
 
 int
 cloudabi_sys_sock_shutdown(struct thread *td,
     struct cloudabi_sys_sock_shutdown_args *uap)
 {
+	struct shutdown_args shutdown_args = {
+		.s = uap->fd,
+	};
 
-	/* Not implemented. */
-	return (ENOSYS);
+	switch (uap->how) {
+	case CLOUDABI_SHUT_RD:
+		shutdown_args.how = SHUT_RD;
+		break;
+	case CLOUDABI_SHUT_WR:
+		shutdown_args.how = SHUT_WR;
+		break;
+	case CLOUDABI_SHUT_RD | CLOUDABI_SHUT_WR:
+		shutdown_args.how = SHUT_RDWR;
+		break;
+	default:
+		return (EINVAL);
+	}
+
+	return (sys_shutdown(td, &shutdown_args));
 }
 
 int
