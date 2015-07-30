@@ -197,7 +197,7 @@ ipc_right_reverse(
 
 		entry = ipc_entry_lookup(space, name);
 
-		assert(entry != IE_NULL);
+		KASSERT(entry != IE_NULL, ("no entry found for port: %p name: %d space: %p", port, name, space);
 		assert(entry->ie_bits & MACH_PORT_TYPE_RECEIVE);
 		assert(port == (ipc_port_t) entry->ie_object);
 
