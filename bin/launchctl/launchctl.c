@@ -581,8 +581,6 @@ system_specific_bootstrap(bool sflag)
 	do_single_user_mode(sflag);
 	// Apple does a lot in the code, but we'll just call /etc/bootstrap for now
 	system(PATH_BOOTSTRAP);
-	// Then run the rc script(s)
-	runcom();
 }
 
 static int
@@ -670,7 +668,8 @@ cmd_bootstrap(int argc, char * const argv[])
 					printf("failed: %s\n", strerror(errno));
 			}
 		}
-
+		// Then run the rc script(s)
+		runcom();
 	}
 	return (0);
 }
