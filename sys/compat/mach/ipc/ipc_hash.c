@@ -90,9 +90,8 @@
 #include <sys/mach/ipc/ipc_entry.h>
 #include <sys/mach/ipc/ipc_hash.h>
 #include <sys/mach/ipc/ipc_init.h>
-#if 0
-#include <mach_ipc_debug.h>
-#endif
+#include <sys/limits.h>
+
 #if	MACH_IPC_DEBUG
 #include <mach/kern_return.h>
 #include <mach_debug/hash_info.h>
@@ -339,11 +338,15 @@ ipc_hash_local_delete(
 
 	if ((entryp = table[hindex]) == entry) {
 		table[hindex] = entry->ie_link;
+		entry->ie_link = NULL;
+		entry->ie_index = UINT_MAX;
 		return;
 	}
 	while (entryp->ie_link != NULL) {
 		if (entryp->ie_link == entry) {
 			entryp->ie_link = entry->ie_link;
+			entry->ie_link = NULL;
+			entry->ie_index = UINT_MAX;
 			break;
 		}
 		entryp = entryp->ie_link;
