@@ -212,7 +212,8 @@ sys__kernelrpc_mach_port_insert_right_trap(struct thread *td, struct _kernelrpc_
 
 	if (task != current_task())
 		goto done;
-
+	if (uap->name != uap->poly)
+		goto done;
 	rv = ipc_object_copyin(task->itk_space, uap->poly, uap->polyPoly, (ipc_object_t *)&port);
 	if (rv != KERN_SUCCESS)
 		goto done;
