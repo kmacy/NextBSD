@@ -113,6 +113,7 @@
 #endif
 #endif
 
+extern int mach_debug_enable;
 
 #define decl_mutex_data(__annot, __lock) __annot struct mtx __lock;
 #define assert(exp) KASSERT(exp, (#exp))
@@ -145,7 +146,7 @@
 #if MACH_DEBUG && defined(INVARIANTS)
 #define UNSUPPORTED { panic("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
 #elif defined(INVARIANTS)
-#define UNSUPPORTED { printf("%s not supported", __FUNCTION__); return (KERN_NOT_SUPPORTED); }
+#define UNSUPPORTED { if (mach_debug_enable) {printf("%s not supported", __FUNCTION__);} return (KERN_NOT_SUPPORTED); }
 #else
 #define UNSUPPORTED { return (KERN_NOT_SUPPORTED); }
 #endif

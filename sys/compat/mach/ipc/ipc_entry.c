@@ -299,12 +299,15 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 		return (NULL);
 
 	if (fget(curthread, name, NULL, &fp) != 0) {
-		log(LOG_DEBUG, "%s:%d entry for port name: %d not found\n", curproc->p_comm, curproc->p_pid, name);
+		if (mach_debug_enable)
+			log(LOG_DEBUG, "%s:%d entry for port name: %d not found\n", curproc->p_comm, curproc->p_pid, name);
 		return (NULL);
 	}
 	if (fp->f_type != DTYPE_MACH_IPC) {
-		kdb_backtrace();
-		log(LOG_DEBUG, "%s:%d port name: %d is not MACH\n", curproc->p_comm, curproc->p_pid, name);
+		if (mach_debug_enable) {
+			kdb_backtrace();
+			log(LOG_DEBUG, "%s:%d port name: %d is not MACH\n", curproc->p_comm, curproc->p_pid, name);
+		}
 		fdrop(fp, curthread);
 		return (NULL);
 	}
@@ -359,10 +362,12 @@ ipc_entry_port_to_file(ipc_space_t space, mach_port_name_t *namep, ipc_object_t 
 	/* Are sent file O_CLOEXEC? */
 	if (kern_finstall(curthread, fp, namep, 0, NULL) != 0) {
 		fdrop(fp, curthread);
-		printf("finstall failed\n");
+		if (mach_debug_enable)
+			printf("finstall failed\n");
 		return (KERN_RESOURCE_SHORTAGE);
 	}
-	printf(" installing received file *fp=%p at %d\n", fp, *namep);
+	if (mach_debug_enable)
+		printf(" installing received file *fp=%p at %d\n", fp, *namep);
 	return (KERN_SUCCESS);
 }
 

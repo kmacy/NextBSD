@@ -3,10 +3,21 @@
 #include <sys/kernel.h>
 #include <sys/module.h>
 #include <sys/syscall.h>
+#include <sys/sysctl.h>
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
 #include <sys/types.h>
 #include <sys/systm.h>
+
+
+int mach_debug_enable;
+
+SYSCTL_ROOT_NODE(OID_AUTO,  mach, CTLFLAG_RW, 0,
+	"mach subsystem parameters");
+
+SYSCTL_INT(_mach, OID_AUTO, debug_enable, CTLFLAG_RWTUN,
+		   &mach_debug_enable, 0, "enable mach debug logging");
+
 
 extern struct filterops machport_filtops;
 

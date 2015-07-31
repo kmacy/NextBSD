@@ -1088,7 +1088,8 @@ ipc_kmsg_copyin_header(
 
 		entry = ipc_entry_lookup(space, name);
 		if (entry == IE_NULL) {
-			printf("name=%d not found\n", name);
+			if (mach_debug_enable)
+				printf("name=%d not found\n", name);
 			goto invalid_dest;
 		}
 			
@@ -1109,7 +1110,8 @@ ipc_kmsg_copyin_header(
 			 *	checked for reply port errors above,
 			 *	so report a destination error.
 			 */
-			printf("dest_type or reply_type is SEND_ONCE\n");
+			if (mach_debug_enable)
+				printf("dest_type or reply_type is SEND_ONCE\n");
 			
 			goto invalid_dest;
 		} else if ((dest_type == MACH_MSG_TYPE_MAKE_SEND) ||
@@ -1120,7 +1122,8 @@ ipc_kmsg_copyin_header(
 					      dest_type, FALSE,
 					      &dest_port, &dest_soright);
 			if (kr != KERN_SUCCESS) {
-				printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
+				if (mach_debug_enable)
+					printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 				goto invalid_dest;
 			}
 
@@ -1157,7 +1160,8 @@ ipc_kmsg_copyin_header(
 					      dest_type, FALSE,
 					      &dest_port, &dest_soright);
 			if (kr != KERN_SUCCESS) {
-				printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
+				if (mach_debug_enable)
+					printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 				goto invalid_dest;
 			}
 			assert(entry->ie_bits & MACH_PORT_TYPE_SEND);
@@ -1249,14 +1253,16 @@ ipc_kmsg_copyin_header(
 
 		entry = ipc_entry_lookup(space, dest_name);
 		if (entry == IE_NULL) {
-			printf("ipc_entry_lookup failed on dest_name=%d\n", dest_name);
+			if (mach_debug_enable)
+				printf("ipc_entry_lookup failed on dest_name=%d\n", dest_name);
 			goto invalid_dest;
 		}
 		kr = ipc_right_copyin(space, dest_name, entry,
 				      dest_type, FALSE,
 				      &dest_port, &dest_soright);
 		if (kr != KERN_SUCCESS) {
-			printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
+			if (mach_debug_enable)
+				printf("ipc_right_copyin failed kr=%d %s:%d\n", kr, __FILE__, __LINE__);
 			goto invalid_dest;
 		}
 		/* the entry might need to be deallocated */
@@ -1447,22 +1453,19 @@ ipc_kmsg_copyin_header(
 	return MACH_MSG_SUCCESS;
 
     invalid_dest:
-is_write_unlock(space);
-kdb_backtrace();
-	printf("%s:%d - MACH_SEND_INVALID_DEST dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);
+	is_write_unlock(space);
+	if (mach_debug_enable) {
+		kdb_backtrace();
+		printf("%s:%d - MACH_SEND_INVALID_DEST dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);
+	}
 	return MACH_SEND_INVALID_DEST;
 
     invalid_reply:
 	is_write_unlock(space);
-	printf("%s:%d - MACH_SEND_INVALID_REPLY dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);	return MACH_SEND_INVALID_REPLY;
+	if (mach_debug_enable)
+		printf("%s:%d - MACH_SEND_INVALID_REPLY dest_name: 0x%x reply_name: 0x%x \n", curproc->p_comm, curproc->p_pid, dest_name, reply_name);
+	return MACH_SEND_INVALID_REPLY;
 }
-
-#ifdef INVARIANTS
-#define ERIGHTLOG printf("MACH_SEND_INVALID_RIGHT: %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__)
-#else
-#define ERIGHTLOG
-#endif
-
 
 mach_msg_descriptor_t *ipc_kmsg_copyin_port_descriptor(
         volatile mach_msg_port_descriptor_t *dsc,
@@ -1495,7 +1498,8 @@ ipc_kmsg_copyin_port_descriptor(
         kern_return_t kr = ipc_object_copyin(space, name, user_disp, &object);
         if (kr != KERN_SUCCESS) {
             *mr = MACH_SEND_INVALID_RIGHT;
-			ERIGHTLOG;
+			if (mach_debug_enable)
+				printf("MACH_SEND_INVALID_RIGHT: %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__);
             return NULL;
         }
 

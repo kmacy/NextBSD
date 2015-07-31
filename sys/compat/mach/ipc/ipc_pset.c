@@ -543,8 +543,10 @@ filt_machportdetach(struct knote *kn)
 	knlist_remove(&pset->ips_note, kn, 0);
 	return;
 fail:
-	kdb_backtrace();
-	printf("kqdetach fail for: %d pset: %p entry: %p\n", name, pset, entry);
+	if (mach_debug_enable) {
+		kdb_backtrace();
+		printf("kqdetach fail for: %d pset: %p entry: %p\n", name, pset, entry);
+	}
 }
 
 
@@ -569,8 +571,10 @@ filt_machport(struct knote *kn, long hint)
 		kr = ipc_object_translate(current_space(), name, MACH_PORT_RIGHT_PORT_SET,
 								  (ipc_object_t *)&pset);
 		if (kr != KERN_SUCCESS || !ips_active(pset)) {
-			kdb_backtrace();
-			printf("%s: filt_machport kr=%d ips_active=%d name=%d\n", curproc->p_comm, kr, !!ips_active(pset), name);
+			if (mach_debug_enable) {
+				kdb_backtrace();
+				printf("%s: filt_machport kr=%d ips_active=%d name=%d\n", curproc->p_comm, kr, !!ips_active(pset), name);
+			}
 			kn->kn_data = 0;
 			kn->kn_flags |= (EV_EOF | EV_ONESHOT);
 			return (1);
