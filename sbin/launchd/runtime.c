@@ -118,7 +118,7 @@ static uint64_t time_of_mach_msg_return;
 static double tbi_float_val;
 
 
-#define VERBOSE_DEBUGGING 1
+#define VERBOSE_DEBUGGING 0
 
 #if VERBOSE_DEBUGGING
 #define _launchd_syslog syslog
