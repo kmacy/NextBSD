@@ -491,7 +491,6 @@ get_system_info(struct system_info *si)
 		GETSYSCTL("vm.stats.vm.v_active_count", memory_stats[0]);
 		GETSYSCTL("vm.stats.vm.v_inactive_count", memory_stats[1]);
 		GETSYSCTL("vm.stats.vm.v_wire_count", memory_stats[2]);
-		GETSYSCTL("vm.stats.vm.v_cache_count", memory_stats[3]);
 		GETSYSCTL("vm.stats.vm.v_free_count", memory_stats[5]);
 		GETSYSCTL("vm.stats.vm.v_swappgsin", nspgsin);
 		GETSYSCTL("vm.stats.vm.v_swappgsout", nspgsout);
@@ -499,7 +498,6 @@ get_system_info(struct system_info *si)
 		memory_stats[0] = pagetok(memory_stats[0]);
 		memory_stats[1] = pagetok(memory_stats[1]);
 		memory_stats[2] = pagetok(memory_stats[2]);
-		memory_stats[3] = pagetok(memory_stats[3]);
 		memory_stats[4] = bufspace / 1024;
 		memory_stats[5] = pagetok(memory_stats[5]);
 		memory_stats[6] = -1;
