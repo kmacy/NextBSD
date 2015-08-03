@@ -1018,6 +1018,24 @@ vm_reserv_reclaim_contig(u_long npages, vm_paddr_t low, vm_paddr_t high,
 }
 
 /*
+ * Breaks the reservation holding the page as long as it is partially
+ * populated.
+ */
+boolean_t
+vm_reserv_reclaim_page(vm_page_t m)
+{
+	mtx_assert(&vm_page_queue_free_mtx, MA_OWNED);
+	vm_reserv_t rv;
+
+	rv = vm_reserv_from_page(m);
+	if (rv->object == NULL || !rv->inpartpopq)
+		return (FALSE);
+	vm_reserv_reclaim(rv);
+
+	return (TRUE);
+}
+
+/*
  * Transfers the reservation underlying the given page to a new object.
  *
  * The object must be locked.

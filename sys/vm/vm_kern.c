@@ -162,7 +162,7 @@ kmem_alloc_attr(vmem_t *vmem, vm_size_t size, int flags, vm_paddr_t low,
 	vm_offset_t addr;
 	vm_ooffset_t offset;
 	vm_page_t m;
-	int pflags, tries;
+	int pflags, level;
 	int i;
 
 	size = round_page(size);
@@ -172,16 +172,17 @@ kmem_alloc_attr(vmem_t *vmem, vm_size_t size, int flags, vm_paddr_t low,
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
 	VM_OBJECT_WLOCK(object);
 	for (i = 0; i < size; i += PAGE_SIZE) {
-		tries = 0;
+		level = 0;
 retry:
 		m = vm_page_alloc_contig(object, OFF_TO_IDX(offset + i),
 		    pflags, 1, low, high, PAGE_SIZE, 0, memattr);
 		if (m == NULL) {
 			VM_OBJECT_WUNLOCK(object);
-			if (tries < ((flags & M_NOWAIT) != 0 ? 1 : 3)) {
-				vm_pageout_grow_cache(tries, low, high);
+			if (level < ((flags & M_NOWAIT) != 0 ? 1 : 3)) {
+				vm_pageout_reclaim_contig(1, low, high,
+				    PAGE_SIZE, 0, level);
 				VM_OBJECT_WLOCK(object);
-				tries++;
+				level++;
 				goto retry;
 			}
 			/* 
@@ -226,7 +227,7 @@ kmem_alloc_contig(struct vmem *vmem, vm_size_t size, int flags, vm_paddr_t low,
 	vm_offset_t addr, tmp;
 	vm_ooffset_t offset;
 	vm_page_t end_m, m;
-	int pflags, tries;
+	int pflags, level;
  
 	size = round_page(size);
 	if (vmem_alloc(vmem, size, flags | M_BESTFIT, &addr))
@@ -234,16 +235,17 @@ kmem_alloc_contig(struct vmem *vmem, vm_size_t size, int flags, vm_paddr_t low,
 	offset = addr - VM_MIN_KERNEL_ADDRESS;
 	pflags = malloc2vm_flags(flags) | VM_ALLOC_NOBUSY | VM_ALLOC_WIRED;
 	VM_OBJECT_WLOCK(object);
-	tries = 0;
+	level = 0;
 retry:
 	m = vm_page_alloc_contig(object, OFF_TO_IDX(offset), pflags,
 	    atop(size), low, high, alignment, boundary, memattr);
 	if (m == NULL) {
 		VM_OBJECT_WUNLOCK(object);
-		if (tries < ((flags & M_NOWAIT) != 0 ? 1 : 3)) {
-			vm_pageout_grow_cache(tries, low, high);
+		if (level < ((flags & M_NOWAIT) != 0 ? 1 : 3)) {
+			vm_pageout_reclaim_contig(atop(size), low, high,
+			    alignment, boundary, level);
 			VM_OBJECT_WLOCK(object);
-			tries++;
+			level++;
 			goto retry;
 		}
 		vmem_free(vmem, addr, size);

@@ -1037,8 +1037,10 @@ pmap_grow_direct_page_cache()
 
 #ifdef __mips_n64
 	VM_WAIT;
-#else
+#elif defined(VM_LEGACY)
 	vm_pageout_grow_cache(3, 0, MIPS_KSEG0_LARGEST_PHYS);
+#else
+	vm_pageout_reclaim_contig(1, 0, MIPS_KSEG0_LARGEST_PHYS, PAGE_SIZE, 0, 3);
 #endif
 }
 

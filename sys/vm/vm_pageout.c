@@ -107,6 +107,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_pageout.h>
 #include <vm/vm_pager.h>
 #include <vm/vm_phys.h>
+#include <vm/vm_reserv.h>
 #include <vm/swap_pager.h>
 #include <vm/vm_extern.h>
 #include <vm/uma.h>
@@ -122,6 +123,8 @@ static int vm_pageout_clean(vm_page_t m);
 static int vm_pageout_cluster(vm_page_t m);
 static void vm_pageout_scan(struct vm_domain *vmd, int pass);
 static void vm_pageout_mightbe_oom(struct vm_domain *vmd, int pass);
+static boolean_t vm_pageout_candidate(vm_page_t);
+static boolean_t vm_pageout_contig(vm_page_t p_start, u_long npages, int level);
 
 SYSINIT(pagedaemon_init, SI_SUB_KTHREAD_PAGE, SI_ORDER_FIRST, vm_pageout_init,
     NULL);
@@ -231,8 +234,6 @@ SYSCTL_INT(_vm, OID_AUTO, max_wired,
 	CTLFLAG_RW, &vm_page_max_wired, 0, "System-wide limit to wired page count");
 
 static boolean_t vm_pageout_fallback_object_lock(vm_page_t, vm_page_t *);
-static boolean_t vm_pageout_launder(struct vm_pagequeue *pq, int, vm_paddr_t,
-    vm_paddr_t);
 #if !defined(NO_SWAPPING)
 static void vm_pageout_map_deactivate_pages(vm_map_t, long);
 static void vm_pageout_object_deactivate_pages(pmap_t, vm_object_t, long);
@@ -578,107 +579,187 @@ vm_pageout_flush(vm_page_t *mc, int count, int flags, int mreq, int *prunlen,
 	return (numpagedout);
 }
 
-static boolean_t
-vm_pageout_launder(struct vm_pagequeue *pq, int tries, vm_paddr_t low,
-    vm_paddr_t high)
+static __noinline boolean_t
+vm_pageout_candidate(vm_page_t p)
 {
-	struct mount *mp;
-	struct vnode *vp;
-	vm_object_t object;
-	vm_paddr_t pa;
-	vm_page_t m, m_tmp, next;
-	int lockmode;
-
-	vm_pagequeue_lock(pq);
-	TAILQ_FOREACH_SAFE(m, &pq->pq_pl, plinks.q, next) {
-		if ((m->flags & PG_MARKER) != 0)
-			continue;
-		pa = VM_PAGE_TO_PHYS(m);
-		if (pa < low || pa + PAGE_SIZE > high)
-			continue;
-		if (!vm_pageout_page_lock(m, &next) || m->hold_count != 0) {
-			vm_page_unlock(m);
-			continue;
-		}
-		object = m->object;
-		if ((!VM_OBJECT_TRYWLOCK(object) &&
-		    (!vm_pageout_fallback_object_lock(m, &next) ||
-		    m->hold_count != 0)) || vm_page_busied(m)) {
-			vm_page_unlock(m);
-			VM_OBJECT_WUNLOCK(object);
-			continue;
-		}
-		vm_page_test_dirty(m);
-		if (m->dirty == 0 && object->ref_count != 0)
-			pmap_remove_all(m);
-		if (m->dirty != 0) {
-			vm_page_unlock(m);
-			if (tries == 0 || (object->flags & OBJ_DEAD) != 0) {
-				VM_OBJECT_WUNLOCK(object);
-				continue;
-			}
-			if (object->type == OBJT_VNODE) {
-				vm_pagequeue_unlock(pq);
-				vp = object->handle;
-				vm_object_reference_locked(object);
-				VM_OBJECT_WUNLOCK(object);
-				(void)vn_start_write(vp, &mp, V_WAIT);
-				lockmode = MNT_SHARED_WRITES(vp->v_mount) ?
-				    LK_SHARED : LK_EXCLUSIVE;
-				vn_lock(vp, lockmode | LK_RETRY);
-				VM_OBJECT_WLOCK(object);
-				vm_object_page_clean(object, 0, 0, OBJPC_SYNC);
-				VM_OBJECT_WUNLOCK(object);
-				VOP_UNLOCK(vp, 0);
-				vm_object_deallocate(object);
-				vn_finished_write(mp);
-				return (TRUE);
-			} else if (object->type == OBJT_SWAP ||
-			    object->type == OBJT_DEFAULT) {
-				vm_pagequeue_unlock(pq);
-				m_tmp = m;
-				vm_pageout_flush(&m_tmp, 1, VM_PAGER_PUT_SYNC,
-				    0, NULL, NULL);
-				VM_OBJECT_WUNLOCK(object);
-				return (TRUE);
-			}
-		} else {
-			/*
-			 * Dequeue here to prevent lock recursion in
-			 * vm_page_cache().
-			 */
-			vm_page_dequeue_locked(m);
-			vm_page_cache(m);
-			vm_page_unlock(m);
-		}
-		VM_OBJECT_WUNLOCK(object);
-	}
-	vm_pagequeue_unlock(pq);
-	return (FALSE);
+	/* Can't pageout wired, busy, or held pages */
+	if (p->wire_count || p->hold_count ||
+	    (p->oflags & VPO_UNMANAGED) != 0 ||
+	    vm_page_busied(p))
+		return (FALSE);
+	return (TRUE);
 }
 
 /*
- * Increase the number of cached pages.  The specified value, "tries",
- * determines which categories of pages are cached:
+ * Count the number of pages requiring pageout processing to create
+ * a contiguous free block.
+ *
+ * The interpretation of level is as follows:
+ * 0: only inactive or free pages
+ * 1: include dirty pages
+ * 2: include active pages
+ *
+ * Held, busy, or wired pages cause a return of -1.
+ */
+int
+vm_pageout_count_pages(vm_page_t p_start, u_long npages, int level)
+{
+	vm_page_t p;
+	int i, workpages;
+
+	workpages = 0;
+	for (i = 0; i < npages; i++) {
+		/*
+		 * All of these checks are done locklessly
+		 * because the results can change as soon
+		 *  as we return.  This is a best-effort
+		 * interface.
+		 */
+		p = &p_start[i];
+		if (!vm_pageout_candidate(p))
+			return (-1);
+		/* Dirty is not coherent until we check pmap. */
+		if (p->dirty) {
+			if (level < 1)
+				return (-1);
+			workpages++;
+			continue;
+		}
+		if (p->queue == PQ_ACTIVE) {
+			if (level < 2)
+				return (-1);
+			workpages++;
+			continue;
+		}
+		/*
+		 * Only count INACTIVE and reservations against level 0.
+		 */
+		if (level > 0)
+			continue;
+		if (p->queue == PQ_INACTIVE)
+			workpages++;
+		else if (p->order == VM_NFREEORDER && p->queue == PQ_NONE)
+			workpages++;
+	}
+
+	return (workpages);
+}
+
+static boolean_t
+vm_pageout_contig(vm_page_t p_start, u_long npages, int level)
+{
+	vm_object_t object;
+	vm_page_t p;
+	int i;
+
+	if (level > 1) {
+		/* Scan and deactivate. */
+		for (i = 0; i < npages; i++) {
+			p = &p_start[i];
+			vm_page_lock(p);
+			if (!vm_pageout_candidate(p)) {
+				vm_page_unlock(p);
+				return (FALSE);
+			}
+			if (p->queue != PQ_ACTIVE) {
+				vm_page_unlock(p);
+				continue;
+			}
+			vm_page_deactivate(p);
+			vm_page_unlock(p);
+		}
+	}
+	/* Scan and free, cleaning if allowed. */
+	for (i = 0; i < npages; i++) {
+		p = &p_start[i];
+		object = p->object;
+		if (object == NULL) {
+			vm_page_lock(p);
+			if (object != NULL) {
+				vm_page_unlock(p);
+				i--; /* Retry */
+				continue;
+			}
+			if (!vm_pageout_candidate(p)) {
+				vm_page_unlock(p);
+				return (FALSE);
+			}
+#if VM_NRESERVLEVEL > 0
+			if (p->order == VM_NFREEORDER && p->queue == PQ_NONE) {
+				mtx_lock(&vm_page_queue_free_mtx);
+				vm_page_unlock(p);
+				vm_reserv_reclaim_page(p);
+				mtx_unlock(&vm_page_queue_free_mtx);
+			} else
+#endif
+				vm_page_unlock(p);
+			continue;
+		}
+		VM_OBJECT_WLOCK(object);
+		if (object != p->object) {
+			VM_OBJECT_WUNLOCK(object);
+			i--; /* Retry this page. */
+			continue;
+		}
+		vm_page_lock(p);
+		if (!vm_pageout_candidate(p))
+			goto fail;
+		if (p->queue != PQ_INACTIVE) {
+			vm_page_unlock(p);
+			VM_OBJECT_WUNLOCK(object);
+			continue;
+		}
+		pmap_remove_all(p);
+		if (p->dirty) {
+			/* Have we been asked to clean dirty pages? */
+			if (level < 1)
+				goto fail;
+			/*
+			 * We don't bother paging objects that are "dead".
+			 */
+			if (object->flags & OBJ_DEAD)
+				goto fail;
+			if (disable_swap_pageouts &&
+			    (object->type == OBJT_SWAP ||
+			    object->type == OBJT_DEFAULT))
+				goto fail;
+			if (vm_pageout_clean(p))
+				return (FALSE);
+		} else {
+			vm_page_free(p);
+			vm_page_unlock(p);
+			VM_OBJECT_WUNLOCK(object);
+		}
+	}
+	return (TRUE);
+
+fail:
+	vm_page_unlock(p);
+	VM_OBJECT_WUNLOCK(object);
+	return (FALSE);
+}
+/*
+ * Attempt to free a contiguous region of physical memory within the
+ * specified boundaries.
  *
  *  0: All clean, inactive pages within the specified physical address range
- *     are cached.  Will not sleep.
+ *     are freed.  Will not sleep.
  *  1: The vm_lowmem handlers are called.  All inactive pages within
- *     the specified physical address range are cached.  May sleep.
+ *     the specified physical address range are reclaimed.  May sleep.
  *  2: The vm_lowmem handlers are called.  All inactive and active pages
- *     within the specified physical address range are cached.  May sleep.
+ *     within the specified physical address range are freed.  May sleep.
  */
-void
-vm_pageout_grow_cache(int tries, vm_paddr_t low, vm_paddr_t high)
+int
+vm_pageout_reclaim_contig(u_long npages, vm_paddr_t low, vm_paddr_t high,
+    u_long alignment, vm_paddr_t boundary, int level)
 {
-	int actl, actmax, inactl, inactmax, dom, initial_dom;
-	static int start_dom = 0;
+	vm_page_t p, lastp;
 
-	if (tries > 0) {
+	if (level > 0) {
 		/*
 		 * Decrease registered cache sizes.  The vm_lowmem handlers
 		 * may acquire locks and/or sleep, so they can only be invoked
-		 * when "tries" is greater than zero.
+		 * when "level" is greater than zero.
 		 */
 		SDT_PROBE0(vm, , , vm__lowmem_cache);
 		EVENTHANDLER_INVOKE(vm_lowmem, 0);
@@ -689,56 +770,25 @@ vm_pageout_grow_cache(int tries, vm_paddr_t low, vm_paddr_t high)
 		 */
 		uma_reclaim();
 	}
-
-	/*
-	 * Make the next scan start on the next domain.
-	 */
-	initial_dom = atomic_fetchadd_int(&start_dom, 1) % vm_ndomains;
-
-	inactl = 0;
-	inactmax = vm_cnt.v_inactive_count;
-	actl = 0;
-	actmax = tries < 2 ? 0 : vm_cnt.v_active_count;
-	dom = initial_dom;
-
-	/*
-	 * Scan domains in round-robin order, first inactive queues,
-	 * then active.  Since domain usually owns large physically
-	 * contiguous chunk of memory, it makes sense to completely
-	 * exhaust one domain before switching to next, while growing
-	 * the pool of contiguous physical pages.
-	 *
-	 * Do not even start launder a domain which cannot contain
-	 * the specified address range, as indicated by segments
-	 * constituting the domain.
-	 */
-again:
-	if (inactl < inactmax) {
-		if (vm_phys_domain_intersects(vm_dom[dom].vmd_segs,
-		    low, high) &&
-		    vm_pageout_launder(&vm_dom[dom].vmd_pagequeues[PQ_INACTIVE],
-		    tries, low, high)) {
-			inactl++;
-			goto again;
-		}
-		if (++dom == vm_ndomains)
-			dom = 0;
-		if (dom != initial_dom)
-			goto again;
+	lastp = NULL;
+	for (;;) {
+		mtx_lock(&vm_page_queue_free_mtx);
+		p = vm_phys_reclaim_contig(npages, low, high, alignment, boundary,
+		    level);
+		mtx_unlock(&vm_page_queue_free_mtx);
+		if (p == NULL)
+			break;
+		if (vm_pageout_contig(p, npages, level) == 0)
+			return (0);
+		/*
+		 * Prevent looping if pageout_pages failed but the same
+		 * group was selected again.
+		 */
+		if (p == lastp)
+			break;
+		lastp = p;
 	}
-	if (actl < actmax) {
-		if (vm_phys_domain_intersects(vm_dom[dom].vmd_segs,
-		    low, high) &&
-		    vm_pageout_launder(&vm_dom[dom].vmd_pagequeues[PQ_ACTIVE],
-		      tries, low, high)) {
-			actl++;
-			goto again;
-		}
-		if (++dom == vm_ndomains)
-			dom = 0;
-		if (dom != initial_dom)
-			goto again;
-	}
+	return (ENOENT);
 }
 
 #if !defined(NO_SWAPPING)
