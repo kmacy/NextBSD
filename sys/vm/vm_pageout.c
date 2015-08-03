@@ -569,7 +569,7 @@ vm_pageout_flush(vm_page_t *mc, int count, int flags, int mreq, int *prunlen,
 			vm_page_sunbusy(mt);
 			if (vm_page_count_severe()) {
 				vm_page_lock(mt);
-				vm_page_try_to_cache(mt);
+				vm_page_try_to_free(mt);
 				vm_page_unlock(mt);
 			}
 		}

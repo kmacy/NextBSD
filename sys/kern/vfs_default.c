@@ -1035,7 +1035,6 @@ int
 vop_stdadvise(struct vop_advise_args *ap)
 {
 	struct vnode *vp;
-	off_t start, end;
 	int error;
 
 	vp = ap->a_vp;
@@ -1063,14 +1062,17 @@ vop_stdadvise(struct vop_advise_args *ap)
 			break;
 		}
 		vinvalbuf(vp, V_CLEANONLY, 0, 0);
+#ifdef VM_LEGACY
 		if (vp->v_object != NULL) {
-			start = trunc_page(ap->a_start);
-			end = round_page(ap->a_end);
+			int start = trunc_page(ap->a_start);
+			int end = round_page(ap->a_end);
+
 			VM_OBJECT_WLOCK(vp->v_object);
 			vm_object_page_cache(vp->v_object, OFF_TO_IDX(start),
 			    OFF_TO_IDX(end));
 			VM_OBJECT_WUNLOCK(vp->v_object);
 		}
+#endif
 		VOP_UNLOCK(vp, 0);
 		break;
 	default:

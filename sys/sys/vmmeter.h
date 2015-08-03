@@ -96,9 +96,6 @@ struct vmmeter {
 	u_int v_active_count;	/* (q) pages active */
 	u_int v_inactive_target; /* (c) pages desired inactive */
 	u_int v_inactive_count;	/* (q) pages inactive */
-	u_int v_cache_count;	/* (f) pages on cache queue */
-	u_int v_cache_min;	/* (c) min pages desired on cache queue */
-	u_int v_cache_max;	/* (c) max pages in cached obj (unused) */
 	u_int v_pageout_free_min;   /* (c) min pages reserved for kernel */
 	u_int v_interrupt_free_min; /* (c) reserved pages for int code */
 	u_int v_free_severe;	/* (c) severe page depletion point */
@@ -131,8 +128,7 @@ static __inline
 int
 vm_page_count_severe(void)
 {
-    return (vm_cnt.v_free_severe > (vm_cnt.v_free_count +
-          vm_cnt.v_cache_count));
+    return (vm_cnt.v_free_severe > vm_cnt.v_free_count);
 }
 
 /*
@@ -149,7 +145,7 @@ static __inline
 int
 vm_page_count_min(void)
 {
-    return (vm_cnt.v_free_min > (vm_cnt.v_free_count + vm_cnt.v_cache_count));
+    return (vm_cnt.v_free_min > vm_cnt.v_free_count);
 }
 
 /*
@@ -161,8 +157,7 @@ static __inline
 int
 vm_page_count_target(void)
 {
-    return (vm_cnt.v_free_target > (vm_cnt.v_free_count +
-          vm_cnt.v_cache_count));
+    return (vm_cnt.v_free_target > vm_cnt.v_free_count);
 }
 
 /*
@@ -174,8 +169,7 @@ static __inline
 int
 vm_paging_target(void)
 {
-    return (vm_cnt.v_free_target - (vm_cnt.v_free_count +
-          vm_cnt.v_cache_count));
+    return (vm_cnt.v_free_target - vm_cnt.v_free_count);
 }
 
 /*
@@ -186,8 +180,7 @@ static __inline
 int
 vm_paging_needed(void)
 {
-    return (vm_cnt.v_free_count + vm_cnt.v_cache_count <
-        vm_pageout_wakeup_thresh);
+    return (vm_cnt.v_free_count < vm_pageout_wakeup_thresh);
 }
 
 #endif

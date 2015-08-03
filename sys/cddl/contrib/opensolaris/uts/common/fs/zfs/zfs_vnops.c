@@ -378,7 +378,9 @@ page_busy(vnode_t *vp, int64_t start, int64_t off, int64_t nbytes)
 				continue;
 			}
 			vm_page_sbusy(pp);
-		} else if (pp == NULL) {
+		}
+#ifdef VM_LEGACY
+		else if (pp == NULL) {
 			pp = vm_page_alloc(obj, OFF_TO_IDX(start),
 			    VM_ALLOC_SYSTEM | VM_ALLOC_IFCACHED |
 			    VM_ALLOC_SBUSY);
@@ -386,7 +388,7 @@ page_busy(vnode_t *vp, int64_t start, int64_t off, int64_t nbytes)
 			ASSERT(pp != NULL && !pp->valid);
 			pp = NULL;
 		}
-
+#endif
 		if (pp != NULL) {
 			ASSERT3U(pp->valid, ==, VM_PAGE_BITS_ALL);
 			vm_object_pip_add(obj, 1);
