@@ -178,6 +178,105 @@ CTASSERT(sizeof(u_long) >= 8);
 #endif
 #endif
 
+
+struct vm_page_percpu {
+	struct mtx	vpp_lock;
+	struct pglist	vpp_pages;
+	int		vpp_cnt;
+} __aligned(CACHE_LINE_SIZE);
+
+struct vm_page_percpu page_percpu[MAXCPU] __aligned(CACHE_LINE_SIZE);
+
+#define	VM_PERCPU_MIN		128
+#define	VM_PERCPU_TARGET	(VM_PERCPU_MIN * 2)
+#define	VM_PERCPU_MAX		(VM_PERCPU_MIN * 3)
+
+static void
+vm_page_percpu_init(void)
+{
+	int i;
+
+	for (i = 0; i < MAXCPU; i++) {
+		mtx_init(&page_percpu[i].vpp_lock, "per-cpu free mtx", NULL,
+				 MTX_DEF);
+		TAILQ_INIT(&page_percpu[i].vpp_pages);
+		page_percpu[i].vpp_cnt = 0;
+	}
+}
+
+static vm_page_t
+vm_page_percpu_alloc(vm_object_t object)
+{
+	struct vm_page_percpu *ppcpu = &page_percpu[PCPU_GET(cpuid)];
+	vm_page_t m;
+
+#if VM_NRESERVLEVEL > 0
+	/*
+	 * Skip the cache of free pages for objects that have reservations
+	 * so that they can still get superpages.  This will never be set
+	 * for objects populated via the filesystem buffercache.
+	 */
+	if (object != NULL && (object->flags & OBJ_COLORED) != 0)
+		return (NULL);
+#endif
+
+	mtx_lock(&ppcpu->vpp_lock);
+	if (ppcpu->vpp_cnt < VM_PERCPU_MIN) {
+		mtx_lock(&vm_page_queue_free_mtx);
+		while (!vm_page_count_min() &&
+			   ppcpu->vpp_cnt < VM_PERCPU_TARGET)  {
+			m = vm_phys_alloc_pages(object != NULL ?
+									VM_FREEPOOL_DEFAULT : VM_FREEPOOL_DIRECT, 0);
+			if (m == NULL)
+				break;
+			vm_phys_freecnt_adj(m, -1);
+			ppcpu->vpp_cnt++;
+			TAILQ_INSERT_TAIL(&ppcpu->vpp_pages, m, plinks.q);
+		}
+		mtx_unlock(&vm_page_queue_free_mtx);
+	}
+	m = NULL;
+	if (ppcpu->vpp_cnt > 0) {
+		m = TAILQ_FIRST(&ppcpu->vpp_pages);
+		TAILQ_REMOVE(&ppcpu->vpp_pages, m, plinks.q);
+		ppcpu->vpp_cnt--;
+	}
+	mtx_unlock(&ppcpu->vpp_lock);
+
+	return (m);
+}
+
+static inline void vm_page_free_wakeup(void);
+
+static void
+vm_page_percpu_free(vm_page_t m)
+{
+	struct vm_page_percpu *ppcpu = &page_percpu[PCPU_GET(cpuid)];
+
+	mtx_lock(&ppcpu->vpp_lock);
+	TAILQ_INSERT_HEAD(&ppcpu->vpp_pages, m, plinks.q);
+	ppcpu->vpp_cnt++;
+	if (ppcpu->vpp_cnt > VM_PERCPU_MAX) {
+		mtx_lock(&vm_page_queue_free_mtx);
+		while (ppcpu->vpp_cnt > VM_PERCPU_TARGET) {
+			m = TAILQ_FIRST(&ppcpu->vpp_pages);
+			TAILQ_REMOVE(&ppcpu->vpp_pages, m, plinks.q);
+			ppcpu->vpp_cnt--;
+			vm_phys_freecnt_adj(m, 1);
+#if VM_NRESERVLEVEL > 0
+			if (!vm_reserv_free_page(m))
+#else
+				if (TRUE)
+#endif
+					vm_phys_free_pages(m, 0);
+		}
+		vm_page_free_wakeup();
+		mtx_unlock(&vm_page_queue_free_mtx);
+	}
+	mtx_unlock(&ppcpu->vpp_lock);
+}
+
+
 /*
  * Try to acquire a physical address lock while a pmap is locked.  If we
  * fail to trylock we unlock and lock the pmap directly and cache the
@@ -617,6 +716,7 @@ vm_page_startup(vm_offset_t vaddr)
 	 */
 	vm_reserv_init();
 #endif
+	vm_page_percpu_init();
 	return (vaddr);
 }
 
@@ -1476,6 +1576,10 @@ vm_page_alloc(vm_object_t object, vm_pindex_t pindex, int req)
 		   ("vm_page_alloc: pindex already allocated"));
 	}
 
+	if ((m = vm_page_percpu_alloc(object)) != NULL) {
+		flags = 0;
+		goto gotit;
+	}
 	/*
 	 * The page allocation request can came from consumers which already
 	 * hold the free page queue mutex.
@@ -1546,6 +1650,7 @@ vm_page_alloc(vm_object_t object, vm_pindex_t pindex, int req)
 	if ((req & VM_ALLOC_ZERO) != 0)
 		flags = PG_ZERO;
 	flags &= m->flags;
+	gotit:
 	if ((req & VM_ALLOC_NODUMP) != 0)
 		flags |= PG_NODUMP;
 	m->flags = flags;
@@ -2154,6 +2259,7 @@ vm_page_free_wakeup(void)
 void
 vm_page_free_toq(vm_page_t m)
 {
+	int can_cache;
 
 	if ((m->oflags & VPO_UNMANAGED) == 0) {
 		vm_page_lock_assert(m, MA_OWNED);
@@ -2166,6 +2272,12 @@ vm_page_free_toq(vm_page_t m)
 
 	if (vm_page_sbusied(m))
 		panic("vm_page_free: freeing busy page %p", m);
+
+	if (m->object != NULL) {
+		VM_OBJECT_ASSERT_LOCKED(m->object);
+		can_cache = ((m->object->flags & OBJ_COLORED) == 0);
+	} else
+		can_cache = 0;
 
 	/*
 	 * Unqueue, then remove page.  Note that we cannot destroy
@@ -2201,6 +2313,10 @@ vm_page_free_toq(vm_page_t m)
 		if (pmap_page_get_memattr(m) != VM_MEMATTR_DEFAULT)
 			pmap_page_set_memattr(m, VM_MEMATTR_DEFAULT);
 
+		if (can_cache) {
+			vm_page_percpu_free(m);
+			return;
+		}
 		/*
 		 * Insert the page into the physical memory allocator's
 		 * cache/free page queues.
