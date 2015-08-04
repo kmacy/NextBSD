@@ -488,13 +488,34 @@ vm_page_domain_init(struct vm_domain *vmd)
 	vmd->vmd_segs = 0;
 	vmd->vmd_oom = FALSE;
 	vmd->vmd_pass = 0;
-	for (i = 0; i < PQ_COUNT; i++) {
+	for (i = 0; i < PQ_COUNT + PA_LOCK_COUNT; i++) {
 		pq = &vmd->vmd_pagequeues[i];
 		TAILQ_INIT(&pq->pq_pl);
 		mtx_init(&pq->pq_mutex, pq->pq_name, "vm pagequeue",
 		    MTX_DEF | MTX_DUPOK);
+		if (i >= PQ_COUNT) {
+			pq->pq_cnt = 0;
+			*__DECONST(char **, &vmd->vmd_pagequeues[i].pq_name) =
+				"vm inactive pagequeue";
+			*__DECONST(int **, &vmd->vmd_pagequeues[i].pq_vcnt) =
+				&vm_cnt.v_inactive_count;
+		}
 	}
 }
+
+#define	PAQLENTHRESH_SMALL_LWM	4
+#define	PAQLENTHRESH_MEDIUM_LWM	16
+#define	PAQLENTHRESH_LARGE_LWM	64
+
+#define	PAQLENTHRESH_SMALL_HWM	6
+#define	PAQLENTHRESH_MEDIUM_HWM	24
+#define	PAQLENTHRESH_LARGE_HWM	80
+
+#define	VM_PAGES_SMALL		(1<<18)
+#define	VM_PAGES_MEDIUM 	(1<<21)
+
+static int vm_paqlenthresh_lwm;
+static int vm_paqlenthresh_hwm;
 
 /*
  *	vm_page_startup:
@@ -715,6 +736,16 @@ vm_page_startup(vm_offset_t vaddr)
 	 * Initialize the reservation management system.
 	 */
 	vm_reserv_init();
+	if (vm_page_array_size < VM_PAGES_SMALL) {
+		vm_paqlenthresh_lwm = PAQLENTHRESH_SMALL_LWM;
+		vm_paqlenthresh_hwm = PAQLENTHRESH_SMALL_HWM;
+	} else if (vm_page_array_size < VM_PAGES_MEDIUM) {
+		vm_paqlenthresh_lwm = PAQLENTHRESH_MEDIUM_LWM;
+		vm_paqlenthresh_hwm = PAQLENTHRESH_MEDIUM_HWM;
+	} else {
+		vm_paqlenthresh_lwm = PAQLENTHRESH_LARGE_LWM;
+		vm_paqlenthresh_hwm = PAQLENTHRESH_LARGE_HWM;
+	}
 #endif
 	vm_page_percpu_init();
 	return (vaddr);
@@ -1598,8 +1629,6 @@ vm_page_alloc(vm_object_t object, vm_pindex_t pindex, int req)
 		if (object == NULL || (object->flags & (OBJ_COLORED |
 		    OBJ_FICTITIOUS)) != OBJ_COLORED || (m =
 		    vm_reserv_alloc_page(object, pindex, mpred)) == NULL) {
-#else
-			{
 #endif
 			m = vm_phys_alloc_pages(object != NULL ?
 			    VM_FREEPOOL_DEFAULT : VM_FREEPOOL_DIRECT, 0);
@@ -1609,8 +1638,8 @@ vm_page_alloc(vm_object_t object, vm_pindex_t pindex, int req)
 				    VM_FREEPOOL_DEFAULT : VM_FREEPOOL_DIRECT,
 				    0);
 			}
-#endif
 		}
+#endif
 	} else {
 		/*
 		 * Not allocatable, give up.
@@ -2070,8 +2099,87 @@ vm_waitpfault(void)
 struct vm_pagequeue *
 vm_page_pagequeue(vm_page_t m)
 {
+	int queue = m->queue;
+	struct vm_domain *dom = vm_phys_domain(m);
 
-	return (&vm_phys_domain(m)->vmd_pagequeues[m->queue]);
+	return (&dom->vmd_pagequeues[queue]);
+}
+
+struct vm_pagequeue *
+vm_page_pagequeue_deferred(vm_page_t m)
+{
+	int queue = m->queue;
+	struct vm_domain *dom = vm_phys_domain(m);
+
+	vm_page_lock_assert(m, MA_OWNED);
+	if ((queue == PQ_INACTIVE) && (m->flags & PG_PAQUEUE))
+		return (&dom->vmd_pagequeues[vm_page_queue_idx(m)]);
+	else
+		return (&dom->vmd_pagequeues[queue]);
+}
+
+int
+vm_page_queue_fixup_locked(vm_page_t m)
+{
+	int merged, _cnt, was_locked;
+	struct vm_pagequeue *vpq, *lvpq;
+	struct vm_domain *vmd;
+	vm_page_t m1;
+
+	vmd = vm_phys_domain(m);
+	vm_page_lock_assert(m, MA_OWNED);
+
+	vpq = &vmd->vmd_pagequeues[PQ_INACTIVE];
+	was_locked = mtx_owned(&vpq->pq_mutex);
+
+	merged = 0;
+	lvpq = &vmd->vmd_pagequeues[vm_page_queue_idx(m)];
+
+	_cnt = 0;
+	TAILQ_FOREACH(m1, &lvpq->pq_pl, plinks.q) {
+#ifdef INVARIANTS
+		_cnt++;
+		VM_ASSERT(m1->queue == PQ_INACTIVE);
+		VM_ASSERT((m1->flags & PG_PAQUEUE) != 0);
+#endif
+		m1->flags &= ~PG_PAQUEUE;
+	}
+#ifdef INVARIANTS
+	VM_ASSERT(_cnt == lvpq->pq_cnt);
+#endif
+
+	TAILQ_CONCAT(&vpq->pq_pl, &lvpq->pq_pl, plinks.q);
+	vpq->pq_cnt += lvpq->pq_cnt;
+	merged += lvpq->pq_cnt;
+	atomic_add_int(&vm_cnt.v_inactive_deferred_count, -lvpq->pq_cnt);
+	lvpq->pq_cnt = 0;
+
+	return (merged);
+}
+
+int
+vm_page_queue_fixup(vm_page_t m)
+{
+	struct vm_domain *vmd;
+	struct vm_pagequeue *vpq, *lvpq;
+	int merged;
+
+	vmd = vm_phys_domain(m);
+	vpq = &vmd->vmd_pagequeues[PQ_INACTIVE];
+
+	lvpq = &vmd->vmd_pagequeues[vm_page_queue_idx(m)];
+
+	if (lvpq->pq_cnt < vm_paqlenthresh_lwm) {
+		return (0);
+	} else if (lvpq->pq_cnt < vm_paqlenthresh_hwm) {
+		if (!vm_pagequeue_trylock(vpq))
+			return (0);
+	} else
+		vm_pagequeue_lock(vpq);
+
+	merged = vm_page_queue_fixup_locked(m);
+	vm_pagequeue_unlock(vpq);
+	return (merged);
 }
 
 /*
@@ -2089,12 +2197,19 @@ vm_page_dequeue(vm_page_t m)
 	vm_page_assert_locked(m);
 	KASSERT(m->queue < PQ_COUNT, ("vm_page_dequeue: page %p is not queued",
 	    m));
-	pq = vm_page_pagequeue(m);
-	vm_pagequeue_lock(pq);
+	pq = vm_page_pagequeue_deferred(m);
+	if (m->flags & PG_PAQUEUE) {
+		TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
+		vm_pagequeue_cnt_dec(pq);
+		m->flags &= ~PG_PAQUEUE;
+		atomic_add_int(&vm_cnt.v_inactive_deferred_count, -1);
+	} else {
+		vm_pagequeue_lock(pq);
+		TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
+		vm_pagequeue_cnt_dec(pq);
+		vm_pagequeue_unlock(pq);
+	}
 	m->queue = PQ_NONE;
-	TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
-	vm_pagequeue_cnt_dec(pq);
-	vm_pagequeue_unlock(pq);
 }
 
 /*
@@ -2110,8 +2225,12 @@ vm_page_dequeue_locked(vm_page_t m)
 	struct vm_pagequeue *pq;
 
 	vm_page_lock_assert(m, MA_OWNED);
-	pq = vm_page_pagequeue(m);
-	vm_pagequeue_assert_locked(pq);
+	pq = vm_page_pagequeue_deferred(m);
+	if (m->flags & PG_PAQUEUE) {
+		m->flags &= ~PG_PAQUEUE;
+		atomic_add_int(&vm_cnt.v_inactive_deferred_count, -1);
+	} else
+		vm_pagequeue_assert_locked(pq);
 	m->queue = PQ_NONE;
 	TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
 	vm_pagequeue_cnt_dec(pq);
@@ -2133,12 +2252,25 @@ vm_page_enqueue(uint8_t queue, vm_page_t m)
 	KASSERT(queue < PQ_COUNT,
 	    ("vm_page_enqueue: invalid queue %u request for page %p",
 	    queue, m));
-	pq = &vm_phys_domain(m)->vmd_pagequeues[queue];
-	vm_pagequeue_lock(pq);
-	m->queue = queue;
-	TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
-	vm_pagequeue_cnt_inc(pq);
-	vm_pagequeue_unlock(pq);
+	if (queue == PQ_INACTIVE) {
+		/* look up deferred queue */
+		pq = &vm_phys_domain(m)->vmd_pagequeues[vm_page_queue_idx(m)];
+		m->queue = queue;
+		/* mark page as on physically addressed deferred queue */
+		m->flags |= PG_PAQUEUE;
+		TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
+		vm_pagequeue_cnt_inc(pq);
+		atomic_fetchadd_int(&vm_cnt.v_inactive_deferred_count, 1);
+		if (pq->pq_cnt >= vm_paqlenthresh_lwm)
+			vm_page_queue_fixup(m);
+	} else {
+		pq = &vm_phys_domain(m)->vmd_pagequeues[queue];
+		vm_pagequeue_lock(pq);
+		m->queue = queue;
+		TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
+		vm_pagequeue_cnt_inc(pq);
+		vm_pagequeue_unlock(pq);
+	}
 }
 
 /*
@@ -2156,11 +2288,16 @@ vm_page_requeue(vm_page_t m)
 	vm_page_lock_assert(m, MA_OWNED);
 	KASSERT(m->queue != PQ_NONE,
 	    ("vm_page_requeue: page %p is not queued", m));
-	pq = vm_page_pagequeue(m);
-	vm_pagequeue_lock(pq);
-	TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
-	TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
-	vm_pagequeue_unlock(pq);
+	pq = vm_page_pagequeue_deferred(m);
+	if (m->flags & PG_PAQUEUE) {
+		TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
+		TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
+	} else {
+		vm_pagequeue_lock(pq);
+		TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
+		TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
+		vm_pagequeue_unlock(pq);
+	}
 }
 
 /*
@@ -2177,6 +2314,11 @@ vm_page_requeue_locked(vm_page_t m)
 
 	KASSERT(m->queue != PQ_NONE,
 	    ("vm_page_requeue_locked: page %p is not queued", m));
+	/* the page lock isn't held and the page isn't on
+	* the inactive queue it should be moved by fixup
+	*/
+	if (m->flags & PG_PAQUEUE)
+		   return;
 	pq = vm_page_pagequeue(m);
 	vm_pagequeue_assert_locked(pq);
 	TAILQ_REMOVE(&pq->pq_pl, m, plinks.q);
@@ -2456,15 +2598,22 @@ _vm_page_deactivate(vm_page_t m, int athead)
 		if (queue != PQ_NONE)
 			vm_page_dequeue(m);
 		m->flags &= ~PG_WINATCFLS;
-		pq = &vm_phys_domain(m)->vmd_pagequeues[PQ_INACTIVE];
-		vm_pagequeue_lock(pq);
 		m->queue = PQ_INACTIVE;
-		if (athead)
+		if (athead) {
+			pq = &vm_phys_domain(m)->vmd_pagequeues[PQ_INACTIVE];
+			vm_pagequeue_lock(pq);
 			TAILQ_INSERT_HEAD(&pq->pq_pl, m, plinks.q);
-		else
+			vm_pagequeue_cnt_inc(pq);
+			vm_pagequeue_unlock(pq);
+		} else {
+			m->flags |= PG_PAQUEUE;
+			pq = &vm_phys_domain(m)->vmd_pagequeues[vm_page_queue_idx(m)];
 			TAILQ_INSERT_TAIL(&pq->pq_pl, m, plinks.q);
-		vm_pagequeue_cnt_inc(pq);
-		vm_pagequeue_unlock(pq);
+			vm_pagequeue_cnt_inc(pq);
+			atomic_add_int(&vm_cnt.v_inactive_deferred_count, 1);
+			if (pq->pq_cnt > vm_paqlenthresh_lwm)
+				vm_page_queue_fixup(m);
+		}
 	}
 }
 

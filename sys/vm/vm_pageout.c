@@ -281,6 +281,7 @@ vm_pageout_fallback_object_lock(vm_page_t m, vm_page_t *next)
 	u_short queue;
 	vm_object_t object;
 
+	VM_ASSERT((m->flags & PG_PAQUEUE) == 0);
 	queue = m->queue;
 	vm_pageout_init_marker(&marker, queue);
 	pq = vm_page_pagequeue(m);
@@ -323,6 +324,7 @@ vm_pageout_page_lock(vm_page_t m, vm_page_t *next)
 	if (vm_page_trylock(m))
 		return (TRUE);
 
+	VM_ASSERT((m->flags & PG_PAQUEUE) == 0);
 	queue = m->queue;
 	vm_pageout_init_marker(&marker, queue);
 	pq = vm_page_pagequeue(m);
@@ -1178,6 +1180,7 @@ vm_pageout_scan(struct vm_domain *vmd, int pass)
 			vm_page_unlock(m);
 			continue;
 		}
+		vm_page_queue_fixup_locked(m);
 		object = m->object;
 		if (!VM_OBJECT_TRYWLOCK(object) &&
 		    !vm_pageout_fallback_object_lock(m, &next)) {

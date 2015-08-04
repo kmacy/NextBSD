@@ -303,6 +303,7 @@ VM_STATS_VM(v_wire_count, "Wired pages");
 VM_STATS_VM(v_active_count, "Active pages");
 VM_STATS_VM(v_inactive_target, "Desired inactive pages");
 VM_STATS_VM(v_inactive_count, "Inactive pages");
+VM_STATS_VM(v_inactive_deferred_count, "Inactive pages on a PA deferred queue");
 VM_STATS_VM(v_pageout_free_min, "Min pages reserved for kernel");
 VM_STATS_VM(v_interrupt_free_min, "Reserved pages for interrupt code");
 VM_STATS_VM(v_forks, "Number of fork() calls");
