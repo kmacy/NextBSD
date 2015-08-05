@@ -206,7 +206,8 @@ struct iflib_txq {
 	struct mtx              ift_mtx;
 #define MTX_NAME_LEN 16
 	char                    ift_mtx_name[MTX_NAME_LEN];
-	struct mbuf				*ift_mp[32];
+#define BATCH_SIZE 32
+	struct mbuf				*ift_mp[BATCH_SIZE];
 	int                     ift_id;
 	iflib_sd_t              ift_sds;
 	int                     ift_nbr;
@@ -1776,7 +1777,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 	int i, count, pkt_sent, bytes_sent, mcast_sent;
 
 	if (ctx->ifc_flags & IFC_QFLUSH) {
-		while ((count = buf_ring_sc_peek(br, (void **)mp, 16)) > 0)
+		while ((count = buf_ring_sc_peek(br, (void **)mp, BATCH_SIZE)) > 0)
 			for (i = 0; i < count; i++)
 				m_freem(mp[i]);
 		DBG_COUNTER_INC(txq_drain_flushing);
@@ -1792,8 +1793,8 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		return (0);
 	}
 	mcast_sent = bytes_sent = pkt_sent = 0;
-	count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, 16));
-	KASSERT(count <= MIN(avail, 32), ("invalid count returned"));
+	count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, BATCH_SIZE));
+	KASSERT(count <= MIN(avail, BATCH_SIZE), ("invalid count returned"));
 	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 	if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
 		!LINK_ACTIVE(ctx)) {
