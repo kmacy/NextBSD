@@ -408,7 +408,9 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 		inuse = brsc_get_inuse(br, cidx, pidx, gen);
 		prod_avail = min(inuse, budget);
 		DBG_COUNTER_INC(drain_handled);
+		MPASS(br->br_owner == curthread);
 		n = br->br_drain(br, prod_avail, br->br_sc);
+		MPASS(br->br_owner == curthread);
 		KASSERT(n <= prod_avail, ("drain handler return invalid count"));
 		if (n == 0) {
 			state = BR_STALLED;
