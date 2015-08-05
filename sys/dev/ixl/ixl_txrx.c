@@ -229,7 +229,6 @@ ixl_isc_txd_flush(if_shared_ctx_t sctx, uint16_t txqid, uint32_t pidx)
 	 * hardware that this frame is available to transmit.
 	 */
 	wr32(vsi->hw, txr->tail, pidx);
-	ixl_flush(DOWNCAST(sctx)->hw);
 }
 
 /*********************************************************************
