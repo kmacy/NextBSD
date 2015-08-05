@@ -233,6 +233,8 @@ static void buf_ring_sc_lock(struct buf_ring_sc *br);
 static int buf_ring_sc_trylock(struct buf_ring_sc *br);
 static int buf_ring_sc_unlock(struct buf_ring_sc *br, br_state state);
 
+static void buf_ring_sc_advance(struct buf_ring_sc *br, int count);
+
 /*
  * Many architectures other than x86 permit speculative re-ordering
  * of loads. Unfortunately, atomic_load_acq_32() is comparatively
@@ -776,7 +778,7 @@ buf_ring_sc_putback(struct buf_ring_sc *br, void *new, int idx)
  * @count: the number of entries by which to advance the consumer index
  *
  */
-void
+static void
 buf_ring_sc_advance(struct buf_ring_sc *br, int count)
 {
 	uint32_t cons, cons_next;

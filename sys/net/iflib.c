@@ -206,6 +206,7 @@ struct iflib_txq {
 	struct mtx              ift_mtx;
 #define MTX_NAME_LEN 16
 	char                    ift_mtx_name[MTX_NAME_LEN];
+	struct mbuf				*ift_mp[32];
 	int                     ift_id;
 	iflib_sd_t              ift_sds;
 	int                     ift_nbr;
@@ -1551,7 +1552,7 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	iflib_ctx_t ctx = txq->ift_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 	bus_dma_segment_t	*segs = txq->ift_segs;
-	struct mbuf		*m, *m_head;
+	struct mbuf		*m, *m_head = *m_headp;
 	int pidx = txq->ift_pidx;
 	iflib_sd_t txsd = &txq->ift_sds[pidx];
 	bus_dmamap_t		map = txsd->ifsd_map;
@@ -1559,8 +1560,6 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	bool remap = TRUE;
 	int err, nsegs, ndesc;
 
-	m = NULL;
-	m_head = *m_headp;
 retry:
 
 	err = bus_dmamap_load_mbuf_sg(txq->ift_desc_tag, map,
@@ -1773,7 +1772,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 	iflib_txq_t txq = sc;
 	iflib_ctx_t ctx = txq->ift_ctx;
 	if_t ifp = ctx->ifc_sctx->isc_ifp;
-	struct mbuf *mp[16];
+	struct mbuf **mp = &txq->ift_mp[0];
 	int i, count, pkt_sent, bytes_sent, mcast_sent;
 
 	if (ctx->ifc_flags & IFC_QFLUSH) {
@@ -1793,30 +1792,27 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		return (0);
 	}
 	mcast_sent = bytes_sent = pkt_sent = 0;
-	while (avail) {
-		count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, 16));
-		KASSERT(count <= MIN(avail, 16), ("invalid count returned"));
-		iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
-		if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
-			!LINK_ACTIVE(ctx)) {
-			DBG_COUNTER_INC(txq_drain_notready);
-			goto skip_db;
+	count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, 16));
+	KASSERT(count <= MIN(avail, 32), ("invalid count returned"));
+	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
+	if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
+		!LINK_ACTIVE(ctx)) {
+		DBG_COUNTER_INC(txq_drain_notready);
+		goto skip_db;
+	}
+
+	for (i = 0; i < count; i++) {
+		if(iflib_encap(sc, &mp[i])) {
+			buf_ring_sc_putback(br, mp[i], i);
+			DBG_COUNTER_INC(txq_drain_encapfail);
+			goto done;
 		}
-		for (i = 0; i < count; i++) {
-			if(iflib_encap(sc, &mp[i])) {
-				buf_ring_sc_putback(br, mp[i], i);
-				DBG_COUNTER_INC(txq_drain_encapfail);
-				goto done;
-			}
-			pkt_sent++;
-			bytes_sent += mp[i]->m_pkthdr.len;
-			if (mp[i]->m_flags & M_MCAST)
-				mcast_sent++;
-			iflib_txd_db_check(ctx, txq, 0);
-			ETHER_BPF_MTAP(ifp, mp[i]);
-		}
-		buf_ring_sc_advance(br, count);
-		avail -= count;
+		pkt_sent++;
+		bytes_sent += mp[i]->m_pkthdr.len;
+		if (mp[i]->m_flags & M_MCAST)
+			mcast_sent++;
+		iflib_txd_db_check(ctx, txq, 0);
+		ETHER_BPF_MTAP(ifp, mp[i]);
 	}
 done:
 
