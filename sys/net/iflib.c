@@ -662,7 +662,7 @@ iflib_txsd_alloc(iflib_txq_t txq)
 
 	if (!(txq->ift_sds =
 	    (iflib_sd_t) malloc(sizeof(struct iflib_sw_desc) *
-	    sctx->isc_ntxd, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	    sctx->isc_ntxd, M_IFLIB, M_NOWAIT | M_ZERO))) {
 		device_printf(dev, "Unable to allocate tx_buffer memory\n");
 		err = ENOMEM;
 		goto fail;
@@ -717,7 +717,7 @@ iflib_txq_destroy(iflib_txq_t txq)
 	for (int i = 0; i < sctx->isc_ntxd; i++, sd++)
 		iflib_txsd_destroy(ctx, txq, sd);
 	if (txq->ift_sds != NULL) {
-		free(txq->ift_sds, M_DEVBUF);
+		free(txq->ift_sds, M_IFLIB);
 		txq->ift_sds = NULL;
 	}
 	if (txq->ift_desc_tag != NULL) {
@@ -820,7 +820,7 @@ iflib_rxsd_alloc(iflib_rxq_t rxq)
 	fl = rxq->ifr_fl;
 	for (int i = 0; i <  rxq->ifr_nfl; i++, fl++) {
 		fl->ifl_sds = malloc(sizeof(struct iflib_sw_desc) *
-							 sctx->isc_nrxd, M_DEVBUF, M_WAITOK | M_ZERO);
+							 sctx->isc_nrxd, M_IFLIB, M_WAITOK | M_ZERO);
 		if (fl->ifl_sds == NULL) {
 			device_printf(dev, "Unable to allocate rx sw desc memory\n");
 			return (ENOMEM);
@@ -1092,9 +1092,9 @@ iflib_rx_sds_free(iflib_rxq_t rxq)
 
 	if (rxq->ifr_fl != NULL) {
 		if (rxq->ifr_fl->ifl_sds != NULL)
-			free(rxq->ifr_fl->ifl_sds, M_DEVBUF);
+			free(rxq->ifr_fl->ifl_sds, M_IFLIB);
 
-		free(rxq->ifr_fl, M_DEVBUF);
+		free(rxq->ifr_fl, M_IFLIB);
 		rxq->ifr_fl = NULL;
 		rxq->ifr_gen = rxq->ifr_cidx = rxq->ifr_pidx = 0;
 	}
@@ -2536,7 +2536,7 @@ iflib_register(if_shared_ctx_t sctx)
 	if_t ifp;
 
 	_iflib_assert(sctx);
-	ctx = malloc(sizeof(struct iflib_ctx), M_DEVBUF, M_ZERO|M_WAITOK);
+	ctx = malloc(sizeof(struct iflib_ctx), M_IFLIB, M_ZERO|M_WAITOK);
 	if (ctx == NULL)
 		return (ENOMEM);
 
@@ -2610,7 +2610,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 
 	if (!(qset =
 	    (iflib_qset_t) malloc(sizeof(struct iflib_qset) *
-	    nqsets, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	    nqsets, M_IFLIB, M_NOWAIT | M_ZERO))) {
 		device_printf(dev, "Unable to allocate TX ring memory\n");
 		err = ENOMEM;
 		goto fail;
@@ -2619,7 +2619,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 /* Allocate the TX ring struct memory */
 	if (!(txq =
 	    (iflib_txq_t) malloc(sizeof(struct iflib_txq) *
-	    nqsets, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	    nqsets, M_IFLIB, M_NOWAIT | M_ZERO))) {
 		device_printf(dev, "Unable to allocate TX ring memory\n");
 		err = ENOMEM;
 		goto fail;
@@ -2628,12 +2628,12 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 	/* Now allocate the RX */
 	if (!(rxq =
 	    (iflib_rxq_t) malloc(sizeof(struct iflib_rxq) *
-	    nqsets, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	    nqsets, M_IFLIB, M_NOWAIT | M_ZERO))) {
 		device_printf(dev, "Unable to allocate RX ring memory\n");
 		err = ENOMEM;
 		goto rx_fail;
 	}
-	if (!(brscp = malloc(sizeof(void *) * nbuf_rings * nqsets, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	if (!(brscp = malloc(sizeof(void *) * nbuf_rings * nqsets, M_IFLIB, M_NOWAIT | M_ZERO))) {
 		device_printf(dev, "Unable to buf_ring_sc * memory\n");
 		err = ENOMEM;
 		goto rx_fail;
@@ -2650,7 +2650,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 		 i++, txconf++, rxconf++, qset++, txq++, rxq++) {
 		/* Set up some basics */
 
-		if ((ifdip = malloc(sizeof(struct iflib_dma_info) * nqs, M_DEVBUF, M_WAITOK|M_ZERO)) == NULL) {
+		if ((ifdip = malloc(sizeof(struct iflib_dma_info) * nqs, M_IFLIB, M_WAITOK|M_ZERO)) == NULL) {
 			device_printf(dev, "failed to allocate iflib_dma_info\n");
 			err = ENOMEM;
 			goto fail;
@@ -2691,7 +2691,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 		txq->ift_br = brscp + i*nbuf_rings;
 		for (j = 0; j < nbuf_rings; j++) {
 			err = mp_ring_alloc(&txq->ift_br[j], 2048, txq, iflib_txq_drain,
-								iflib_txq_can_drain, M_DEVBUF, M_WAITOK);
+								iflib_txq_can_drain, M_IFLIB, M_WAITOK);
 			if (err) {
 				/* XXX free any allocated rings */
 				device_printf(dev, "Unable to allocate buf_ring\n");
@@ -2706,7 +2706,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 		rxq->ifr_ifdi = &qset->ifq_ifdi[1];
 		rxq->ifr_nfl = nfree_lists; 
 		if (!(fl =
-			  (iflib_fl_t) malloc(sizeof(struct iflib_fl) * nfree_lists, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+			  (iflib_fl_t) malloc(sizeof(struct iflib_fl) * nfree_lists, M_IFLIB, M_NOWAIT | M_ZERO))) {
 			device_printf(dev, "Unable to allocate free list memory\n");
 			err = ENOMEM;
 			goto fail;
@@ -2730,8 +2730,8 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 		mtx_init(&rxq->ifr_mtx, rxq->ifr_mtx_name, NULL, MTX_DEF);
 	}
 
-	vaddrs = malloc(sizeof(caddr_t)*sctx->isc_nqsets*nqs, M_DEVBUF, M_WAITOK);
-	paddrs = malloc(sizeof(uint64_t)*sctx->isc_nqsets*nqs, M_DEVBUF, M_WAITOK);
+	vaddrs = malloc(sizeof(caddr_t)*sctx->isc_nqsets*nqs, M_IFLIB, M_WAITOK);
+	paddrs = malloc(sizeof(uint64_t)*sctx->isc_nqsets*nqs, M_IFLIB, M_WAITOK);
 	for (i = 0; i < sctx->isc_nqsets; i++) {
 		iflib_dma_info_t di = sctx->isc_ctx->ifc_qsets[i].ifq_ifdi;
 
@@ -2744,22 +2744,22 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 	if ((err = IFDI_QUEUES_ALLOC(sctx, vaddrs, paddrs, nqs)) != 0) {
 		device_printf(sctx->isc_dev, "device queue allocation failed\n");
 		iflib_tx_structures_free(sctx);
-		free(vaddrs, M_DEVBUF);
-		free(paddrs, M_DEVBUF);
+		free(vaddrs, M_IFLIB);
+		free(paddrs, M_IFLIB);
 		goto err_rx_desc;
 	}
-	free(vaddrs, M_DEVBUF);
-	free(paddrs, M_DEVBUF);
+	free(vaddrs, M_IFLIB);
+	free(paddrs, M_IFLIB);
 
 	return (0);
 err_rx_desc:
 err_tx_desc:
 	if (ctx->ifc_rxqs != NULL)
-		free(ctx->ifc_rxqs, M_DEVBUF);
+		free(ctx->ifc_rxqs, M_IFLIB);
 	ctx->ifc_rxqs = NULL;
 rx_fail:
 	if (ctx->ifc_txqs != NULL)
-		free(ctx->ifc_txqs, M_DEVBUF);
+		free(ctx->ifc_txqs, M_IFLIB);
 	ctx->ifc_txqs = NULL;
 fail:
 	return (err);
@@ -2791,8 +2791,8 @@ iflib_tx_structures_free(if_shared_ctx_t sctx)
 		for (j = 0; j < qset->ifq_nhwqs; j++)
 			iflib_dma_free(&qset->ifq_ifdi[j]);
 	}
-	free(ctx->ifc_txqs, M_DEVBUF);
-	free(ctx->ifc_qsets, M_DEVBUF);
+	free(ctx->ifc_txqs, M_IFLIB);
+	free(ctx->ifc_qsets, M_IFLIB);
 	ctx->ifc_txqs = NULL;
 	ctx->ifc_qsets = NULL;
 	IFDI_QUEUES_FREE(sctx);
