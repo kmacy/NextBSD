@@ -1729,14 +1729,12 @@ iflib_completed_tx_reclaim(iflib_txq_t txq, int thresh)
 	KASSERT(thresh >= 0, ("invalid threshold to reclaim"));
 	MPASS(thresh + MAX_TX_DESC(txq->ift_ctx) < txq->ift_size);
 
-	reclaim = DESC_RECLAIMABLE(txq);
 	/*
 	 * Need a rate-limiting check so that this isn't called every time
 	 */
-	if (reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
-		iflib_tx_credits_update(sctx, txq);
-
+	iflib_tx_credits_update(sctx, txq);
 	reclaim = DESC_RECLAIMABLE(txq);
+
 	if (reclaim <= thresh + MAX_TX_DESC(txq->ift_ctx))
 		return (0);
 
@@ -1795,6 +1793,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 	mcast_sent = bytes_sent = pkt_sent = 0;
 	count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, BATCH_SIZE));
 	KASSERT(count <= MIN(avail, BATCH_SIZE), ("invalid count returned"));
+
 	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 	if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
 		!LINK_ACTIVE(ctx)) {
