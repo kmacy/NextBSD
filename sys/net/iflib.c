@@ -1627,8 +1627,14 @@ retry:
 
 		MPASS(pi.ipi_m != NULL);
 		MPASS(txsd->ifsd_m == NULL);
+#ifdef INVARIANTS
+		{
+			int i;
+			for (i = 0; i < sctx->isc_ntxd; i++)
+				MPASS(txq->ift_sds[i].ifsd_m != pi.ipi_m);
+		}
+#endif
 		txsd->ifsd_m = pi.ipi_m;
-
 		if (pi.ipi_new_pidx >= pi.ipi_pidx) {
 			ndesc = pi.ipi_new_pidx - pi.ipi_pidx;
 		} else {
@@ -1691,6 +1697,9 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 			}
 			while (txsd->ifsd_m) {
 				m = txsd->ifsd_m;
+				/* XXX we don't support any drivers that batch packets yet */
+				MPASS(m->m_nextpkt == NULL);
+
 				txsd->ifsd_m = m->m_nextpkt;
 				m->m_nextpkt = NULL;
 				m_freem(m);
