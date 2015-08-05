@@ -1812,7 +1812,7 @@ iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
 	struct mbuf **mp = &txq->ift_mp[0];
 	int i, count, pkt_sent, bytes_sent, mcast_sent, avail;
 
-	avail = IDXDIFF(cidx, pidx, r->size);
+	avail = r->size - IDXDIFF(cidx, pidx, r->size);
 	if (ctx->ifc_flags & IFC_QFLUSH) {
 		DBG_COUNTER_INC(txq_drain_flushing);
 		for (i = 0; i < avail; i++) {
