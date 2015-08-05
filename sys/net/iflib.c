@@ -1551,7 +1551,7 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	iflib_ctx_t ctx = txq->ift_ctx;
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 	bus_dma_segment_t	*segs = txq->ift_segs;
-	struct mbuf		*m, *m_head = *m_headp;
+	struct mbuf		*m, *m_head;
 	int pidx = txq->ift_pidx;
 	iflib_sd_t txsd = &txq->ift_sds[pidx];
 	bus_dmamap_t		map = txsd->ifsd_map;
@@ -1559,6 +1559,8 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	bool remap = TRUE;
 	int err, nsegs, ndesc;
 
+	m = NULL;
+	m_head = *m_headp;
 retry:
 
 	err = bus_dmamap_load_mbuf_sg(txq->ift_desc_tag, map,
@@ -1813,6 +1815,7 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 			iflib_txd_db_check(ctx, txq, 0);
 			ETHER_BPF_MTAP(ifp, mp[i]);
 		}
+		buf_ring_sc_advance(br, count);
 		avail -= count;
 	}
 done:
