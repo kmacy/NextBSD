@@ -2362,9 +2362,6 @@ iflib_device_attach(device_t dev)
 			goto fail_intr_free;
 	}
 	ether_ifattach(sctx->isc_ifp, sctx->isc_mac);
-	if ((err = IFDI_INTERFACE_SETUP(sctx)) != 0)
-		goto fail_detach;
-
 	if ((err = IFDI_ATTACH_POST(sctx)) != 0)
 		goto fail_detach;
 

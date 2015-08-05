@@ -100,10 +100,6 @@ METHOD int attach_pre {
 	if_shared_ctx_t _ctx;
 };
 
-METHOD int interface_setup {
-	if_shared_ctx_t _ctx;
-};
-
 METHOD int attach_post {
 	if_shared_ctx_t _ctx;
 };

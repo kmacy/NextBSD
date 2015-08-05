@@ -201,8 +201,9 @@ static void	ixl_reset_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 #endif
 
+static int      ixl_interface_setup(if_shared_ctx_t);
+
 static int      ixl_if_attach_pre(if_shared_ctx_t);
-static int      ixl_if_interface_setup(if_shared_ctx_t);
 static int      ixl_if_attach_post(if_shared_ctx_t);
 static void     ixl_if_attach_cleanup(if_shared_ctx_t);
 static int		ixl_if_msix_intr_assign(if_shared_ctx_t, int);
@@ -264,7 +265,6 @@ MODULE_DEPEND(ixl, iflib, 1, 1, 1);
 
 static device_method_t ixl_if_methods[] = {
 	DEVMETHOD(ifdi_attach_pre, ixl_if_attach_pre),
-	DEVMETHOD(ifdi_interface_setup, ixl_if_interface_setup),
 	DEVMETHOD(ifdi_attach_post, ixl_if_attach_post),
 	DEVMETHOD(ifdi_attach_cleanup, ixl_if_attach_cleanup),
 	DEVMETHOD(ifdi_detach, ixl_if_detach),
@@ -803,7 +803,7 @@ ixl_if_attach_cleanup(if_shared_ctx_t sctx)
 }
 
 static int
-ixl_if_interface_setup(if_shared_ctx_t sctx)
+ixl_interface_setup(if_shared_ctx_t sctx)
 {
 	device_t dev;
 	struct ixl_pf	*pf;
@@ -862,6 +862,11 @@ ixl_if_attach_post(if_shared_ctx_t sctx)
 	pf = device_get_softc(dev);
 	hw = &pf->hw;
 
+	error = ixl_interface_setup(sctx);
+	if (error) {
+		device_printf(dev, "Interface setup failed: %d\n", error);
+		goto err_mac_hmc;
+	}
 	error = ixl_switch_config(pf);
 	if (error) {
 		device_printf(dev, "Initial switch config failed: %d\n", error);
