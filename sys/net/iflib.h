@@ -127,6 +127,7 @@ struct if_shared_ctx {
 	iflib_ctx_t isc_ctx;
 	device_t isc_dev;
 	if_t isc_ifp;
+	driver_t *isc_driver;
 	cpuset_t isc_cpus;
 	iflib_intr_mode_t isc_intr;
 	int isc_vectors;
@@ -172,8 +173,6 @@ typedef enum {
 
 
 #define IFLIB_HAS_CQ 0x1
-
-int iflib_register(device_t dev, driver_t *driver);
 
 
 int iflib_device_attach(device_t);

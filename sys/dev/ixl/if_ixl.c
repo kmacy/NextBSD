@@ -495,7 +495,6 @@ static int
 ixl_register(device_t dev)
 {
 	struct ixl_pf	*pf;
-	int             error = 0;
 	if_shared_ctx_t sctx;
 
 	/* Allocate, clear, and link in our primary soft structure */
@@ -529,12 +528,7 @@ ixl_register(device_t dev)
 	sctx->isc_msix_bar = PCIR_BAR(IXL_BAR);;
 	sctx->isc_admin_intrcnt = 1;
 	sctx->isc_legacy_intr = ixl_intr;
-
-	/* Setup OS specific network interface */
-	if ((error = iflib_register(dev, &ixl_if_driver)) != 0) {
-		/* ixl specific teardown */
-		return (error);
-	}
+	sctx->isc_driver = &ixl_if_driver;
 
 	return (0);
 }

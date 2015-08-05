@@ -446,6 +446,7 @@ static int iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt);
 static int iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str);
 static void iflib_txq_check_drain(iflib_txq_t txq, int budget);
 static uint32_t iflib_txq_can_drain(struct mp_ring *);
+static int iflib_register(if_shared_ctx_t sctx);
 
 
 #if IFLIB_DEBUG
@@ -2325,8 +2326,10 @@ iflib_device_attach(device_t dev)
 
 	if ((err = DEVICE_REGISTER(dev)) != 0)
 		return (err);
-
 	sctx = device_get_softc(dev);
+
+	if ((err = iflib_register(sctx)) != 0)
+		return (err);
 	if ((err = IFDI_ATTACH_PRE(sctx)) != 0)
 		return (err);
 	/*
@@ -2524,10 +2527,11 @@ _iflib_assert(if_shared_ctx_t sctx)
 	MPASS(sctx->isc_nrxd);
 }
 
-int
-iflib_register(device_t dev, driver_t *driver)
+static int
+iflib_register(if_shared_ctx_t sctx)
 {
-	if_shared_ctx_t sctx = device_get_softc(dev);
+	device_t dev = sctx->isc_dev;
+	driver_t *driver = sctx->isc_driver;
 	iflib_ctx_t ctx;
 	if_t ifp;
 
