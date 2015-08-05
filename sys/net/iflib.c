@@ -28,7 +28,6 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/bus.h>
-#include <sys/buf_ring_sc.h>
 #include <sys/eventhandler.h>
 #include <sys/sockio.h>
 #include <sys/kernel.h>
@@ -50,6 +49,7 @@
 #include <net/if_media.h>
 #include <net/bpf.h>
 #include <net/ethernet.h>
+#include <net/mp_ring.h>
 
 #include <netinet/in.h>
 #include <netinet/tcp_lro.h>
@@ -211,7 +211,7 @@ struct iflib_txq {
 	int                     ift_id;
 	iflib_sd_t              ift_sds;
 	int                     ift_nbr;
-	struct buf_ring_sc        **ift_br;
+	struct mp_ring        **ift_br;
 	struct grouptask		ift_task;
 	int			            ift_qstatus;
 	int                     ift_active;
@@ -258,6 +258,9 @@ get_inuse(int size, int cidx, int pidx, int gen)
 }
 
 #define TXQ_AVAIL(txq) (txq->ift_size - get_inuse(txq->ift_size, txq->ift_cidx, txq->ift_pidx, txq->ift_gen))
+
+#define IDXDIFF(head, tail, wrap) \
+	((head) >= (tail) ? (head) - (tail) : (wrap) - (tail) + (head))
 
 typedef struct iflib_global_context {
 	struct taskqgroup	*igc_io_tqg;		/* per-cpu taskqueues for io */
@@ -435,6 +438,8 @@ static int iflib_rxd_avail(if_shared_ctx_t sctx, iflib_rxq_t rxq, int cidx);
 static int iflib_qset_structures_setup(if_shared_ctx_t sctx);
 static int iflib_msix_init(if_shared_ctx_t sctx, int bar, int admincnt);
 static int iflib_legacy_setup(if_shared_ctx_t sctx, driver_filter_t filter, void *filterarg, int *rid, char *str);
+static void iflib_txq_check_drain(iflib_txq_t txq, int budget);
+static uint32_t iflib_txq_can_drain(struct mp_ring *);
 
 
 #if IFLIB_DEBUG
@@ -1203,9 +1208,9 @@ iflib_stop(iflib_ctx_t ctx)
 	/* Tell the stack that the interface is no longer active */
 	if_setdrvflagbits(sctx->isc_ifp, IFF_DRV_OACTIVE, IFF_DRV_RUNNING);
 
-	/* Wait for curren tx queue users to exit to disarm watchdog timer. */
+	/* Wait for current tx queue users to exit to disarm watchdog timer. */
 	for (int i = 0; i < sctx->isc_nqsets; i++, txq++)
-		buf_ring_sc_drain(txq->ift_br[0], 0);
+		iflib_txq_check_drain(txq, 0);
 	IFDI_STOP(sctx);
 }
 
@@ -1755,7 +1760,6 @@ iflib_tx_timeout(void *arg)
 
 	/* XXX */
 }
-#endif
 
 static void
 iflib_txq_deferred(struct buf_ring_sc *br __unused, void *sc)
@@ -1764,21 +1768,57 @@ iflib_txq_deferred(struct buf_ring_sc *br __unused, void *sc)
 
 	GROUPTASK_ENQUEUE(&txq->ift_task);
 }
+#endif
 
-static int
-iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
+
+static void
+_ring_peek(struct mp_ring *r, struct mbuf **m, int cidx, int count)
 {
-	iflib_txq_t txq = sc;
+	int i;
+
+	for (i = 0; i < count; i++)
+		m[i] = r->items[(cidx + i) & (r->size-1)];
+}
+
+static void
+_ring_putback(struct mp_ring *r, struct mbuf *m, int i, int cidx)
+{
+
+	r->items[(cidx + i) & (r->size-1)] = m;
+}
+
+static void
+iflib_txq_check_drain(iflib_txq_t txq, int budget)
+{
+
+	mp_ring_check_drainage(txq->ift_br[0], budget);
+}
+
+
+static uint32_t
+iflib_txq_can_drain(struct mp_ring *r)
+{
+	iflib_txq_t txq = r->cookie;
+
+	return (TXQ_AVAIL(txq) >= MAX_TX_DESC(txq->ift_ctx));
+}
+
+static uint32_t
+iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
+{
+	iflib_txq_t txq = r->cookie;
 	iflib_ctx_t ctx = txq->ift_ctx;
 	if_t ifp = ctx->ifc_sctx->isc_ifp;
 	struct mbuf **mp = &txq->ift_mp[0];
-	int i, count, pkt_sent, bytes_sent, mcast_sent;
+	int i, count, pkt_sent, bytes_sent, mcast_sent, avail;
 
+	avail = IDXDIFF(cidx, pidx, r->size);
 	if (ctx->ifc_flags & IFC_QFLUSH) {
-		while ((count = buf_ring_sc_peek(br, (void **)mp, BATCH_SIZE)) > 0)
-			for (i = 0; i < count; i++)
-				m_freem(mp[i]);
 		DBG_COUNTER_INC(txq_drain_flushing);
+		for (i = 0; i < avail; i++) {
+			m_freem(r->items[(cidx + i) & (r->size-1)]);
+			r->items[(cidx + i) & (r->size-1)] = NULL;
+		}
 		return (0);
 	}
 	if (if_getdrvflags(ctx->ifc_sctx->isc_ifp) & IFF_DRV_OACTIVE) {
@@ -1791,8 +1831,8 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 		return (0);
 	}
 	mcast_sent = bytes_sent = pkt_sent = 0;
-	count = buf_ring_sc_peek(br, (void **)mp, MIN(avail, BATCH_SIZE));
-	KASSERT(count <= MIN(avail, BATCH_SIZE), ("invalid count returned"));
+	count = MIN(avail, BATCH_SIZE);
+	_ring_peek(r, mp, cidx, count);
 
 	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 	if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
@@ -1802,8 +1842,8 @@ iflib_txq_drain(struct buf_ring_sc *br, int avail, void *sc)
 	}
 
 	for (i = 0; i < count; i++) {
-		if(iflib_encap(sc, &mp[i])) {
-			buf_ring_sc_putback(br, mp[i], i);
+		if(iflib_encap(txq, &mp[i])) {
+			_ring_putback(r, mp[i], i, cidx);
 			DBG_COUNTER_INC(txq_drain_encapfail);
 			goto done;
 		}
@@ -1839,7 +1879,7 @@ _task_fn_tx(void *context, int pending)
 	if (!(if_getdrvflags(sctx->isc_ifp) & IFF_DRV_RUNNING))
 		return;
 
-	buf_ring_sc_drain(txq->ift_br[0], IFLIB_BUDGET);
+	mp_ring_check_drainage(txq->ift_br[0], IFLIB_BUDGET);
 }
 
 static void
@@ -1891,9 +1931,8 @@ _task_fn_admin(void *context, int pending)
 
 	if (LINK_ACTIVE(ctx) == 0)
 		return;
-
 	for (txq = ctx->ifc_txqs, i = 0; i < sctx->isc_nqsets; i++, txq++)
-		buf_ring_sc_drain(txq->ift_br[0], IFLIB_RESTART_BUDGET);
+		iflib_txq_check_drain(txq, IFLIB_RESTART_BUDGET);
 }
 
 #if 0
@@ -2002,7 +2041,7 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	 */
 	txq = &ctx->ifc_txqs[qidx];
 
-	err = buf_ring_sc_enqueue(txq->ift_br[0], (void **)mp, count, IFLIB_BUDGET);
+	err = mp_ring_enqueue(txq->ift_br[0], (void **)mp, count, IFLIB_BUDGET);
 	/* drain => err = iflib_txq_transmit(ifp, txq, m); */
 
 	if (count > 16)
@@ -2015,10 +2054,13 @@ iflib_if_qflush(if_t ifp)
 {
 	iflib_ctx_t ctx = if_getsoftc(ifp);
 	iflib_txq_t txq = ctx->ifc_txqs;
+	int i;
 
 	ctx->ifc_flags |= IFC_QFLUSH;
-	for (int i = 0; i < NQSETS(ctx); i++, txq++)
-		buf_ring_sc_drain(txq->ift_br[0], 0);
+
+	for (i = 0; i < NQSETS(ctx); i++, txq++)
+		iflib_txq_check_drain(txq, 0);
+
 	if_qflush(ifp);
 	ctx->ifc_flags &= ~IFC_QFLUSH;
 }
@@ -2397,7 +2439,7 @@ iflib_device_resume(device_t dev)
 	iflib_init_locked(sctx->isc_ctx);
 	SCTX_UNLOCK(sctx);
 	for (int i = 0; i < sctx->isc_nqsets; i++, txq++)
-		buf_ring_sc_drain(txq->ift_br[0], IFLIB_RESTART_BUDGET);
+		iflib_txq_check_drain(txq, IFLIB_RESTART_BUDGET);
 
 	return (bus_generic_resume(dev));
 }
@@ -2441,14 +2483,6 @@ iflib_module_event_handler(module_t mod, int what, void *arg)
 
 	return (0);
 }
-
-struct buf_ring_sc_consumer brsc = {
-	iflib_txq_drain,
-	iflib_txq_deferred,
-	NULL,
-	0
-};
-
 
 /*********************************************************************
  *
@@ -2555,7 +2589,7 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 	int nfree_lists = sctx->isc_nfl ? sctx->isc_nfl : 1;
 	caddr_t *vaddrs;
 	uint64_t *paddrs;
-	struct buf_ring_sc **brscp;
+	struct mp_ring **brscp;
 	int nbuf_rings = 1; /* XXX determine dynamically */
 
 	KASSERT(nqs > 0, ("number of queues must be at least 1"));
@@ -2640,15 +2674,16 @@ iflib_queues_alloc(if_shared_ctx_t sctx)
 		callout_init_mtx(&txq->ift_db_check, &txq->ift_mtx, 0);
 
 		/* Allocate a buf ring */
-		brsc.brsc_sc = txq;
-		txq->ift_br = brscp + i*nbuf_rings;;
-		for (j = 0; j < nbuf_rings; j++)
-			if ((txq->ift_br[j] = buf_ring_sc_alloc(4096, M_DEVBUF,
-													M_WAITOK, &brsc)) == NULL) {
+		txq->ift_br = brscp + i*nbuf_rings;
+		for (j = 0; j < nbuf_rings; j++) {
+			err = mp_ring_alloc(&txq->ift_br[j], 2048, txq, iflib_txq_drain,
+								iflib_txq_can_drain, M_DEVBUF, M_WAITOK);
+			if (err) {
+				/* XXX free any allocated rings */
 				device_printf(dev, "Unable to allocate buf_ring\n");
-				err = ENOMEM;
 				goto fail;
 			}
+		}
 		/*
      * Next the RX queues...
 	 */
