@@ -859,7 +859,7 @@ buf_ring_sc_full(struct buf_ring_sc *br)
 }
 
 /*
- * Not currently being used - but leave here for now
+ * currently being used only for flushing all buffers
  */
 static void
 buf_ring_sc_lock(struct buf_ring_sc *br)
@@ -890,10 +890,13 @@ buf_ring_sc_trylock(struct buf_ring_sc *br)
 	uint32_t value;
 
 	do {
-		if ((value = br->br_prod_head) & (BR_RING_OWNED|BR_RING_PENDING))
+		value = br->br_prod_head;
+		if (value & (BR_RING_OWNED|BR_RING_PENDING))
 			return (0);
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, value, value | BR_RING_OWNED));
 
+	MPASS(br->br_owner == NULL);
+	MPASS((br->br_prod_head & (BR_RING_OWNED|BR_RING_PENDING)) == BR_RING_OWNED);
 	br->br_owner = curthread;
 	if (br->br_cons & BR_RING_IDLE)
 		counter_u64_add(br->br_starts, 1);
