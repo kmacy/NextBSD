@@ -404,9 +404,10 @@ buf_ring_sc_drain_locked(struct buf_ring_sc *br, int budget)
 	MPASS(br->br_prod_head & BR_RING_OWNED);
 	MPASS(br->br_owner == curthread);
 	state = BR_IDLE;
-	while (cidx != pidx || (gen && (pidx == cidx))) {
+	while (budget && (cidx != pidx || (gen && (pidx == cidx)))) {
 		inuse = brsc_get_inuse(br, cidx, pidx, gen);
 		prod_avail = min(inuse, budget);
+		MPASS(prod_avail > 0);
 		DBG_COUNTER_INC(drain_handled);
 		MPASS(br->br_owner == curthread);
 		n = br->br_drain(br, prod_avail, br->br_sc);
