@@ -351,6 +351,7 @@ SYSCTL_INT(_net_iflib, OID_AUTO, min_tx_latency, CTLFLAG_RW,
 
 static int iflib_tx_seen;
 static int iflib_tx_sent;
+static int iflib_tx_encap;
 static int iflib_rx_allocs;
 static int iflib_fl_refills;
 static int iflib_fl_refills_large;
@@ -359,7 +360,9 @@ static int iflib_tx_frees;
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_sent, CTLFLAG_RD,
-		   &iflib_tx_seen, 0, "# tx mbufs sent");
+		   &iflib_tx_sent, 0, "# tx mbufs sent");
+SYSCTL_INT(_net_iflib, OID_AUTO, tx_encap, CTLFLAG_RD,
+		   &iflib_tx_encap, 0, "# tx mbufs encapped");
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
 		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_allocs, CTLFLAG_RD,
@@ -1635,6 +1638,7 @@ retry:
 		bus_dmamap_sync(txq->ift_ifdi->idi_tag, txq->ift_ifdi->idi_map,
 						BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 
+		DBG_COUNTER_INC(tx_encap);
 		MPASS(pi.ipi_m != NULL);
 		MPASS(txsd->ifsd_m == NULL);
 #ifdef INVARIANTS
