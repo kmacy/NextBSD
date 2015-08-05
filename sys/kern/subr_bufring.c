@@ -685,6 +685,8 @@ buf_ring_sc_enqueue(struct buf_ring_sc *br, void *ents[], int count, int budget)
 		rc = EOWNED;
 	}
 	if (rc == EOWNED) {
+		MPASS(br->br_owner == NULL);
+		MPASS((br->br_prod_head & BR_RING_OWNED) == BR_RING_OWNED);
 		/* clear the flags bits from cons */
 		br->br_cons &= ~BR_RING_FLAGS_MASK;
 		br->br_owner = curthread;
@@ -893,18 +895,12 @@ buf_ring_sc_trylock(struct buf_ring_sc *br)
 		value = br->br_prod_head;
 		if (value & (BR_RING_OWNED|BR_RING_PENDING))
 			return (0);
-	} while (!atomic_cmpset_acq_32(&br->br_prod_head, value, value | BR_RING_OWNED));
+	} while (!atomic_cmpset_acq_32(&br->br_prod_head, value, value | BR_RING_OWNED | BR_RING_PENDING));
 
 	MPASS(br->br_owner == NULL);
-	MPASS((br->br_prod_head & BR_RING_OWNED) == BR_RING_OWNED);
-	if (br->br_prod_head & BR_RING_PENDING) {
-		/* another thread is ready to do this work - let it */
-		do {
-			value = br->br_prod_head;
-		} while (!atomic_cmpset_rel_32(&br->br_prod_head, value, value & ~BR_RING_OWNED));
-		return (0);
-	}
+	MPASS((br->br_prod_head & (BR_RING_OWNED|BR_RING_PENDING)) == (BR_RING_OWNED|BR_RING_PENDING));
 	br->br_cons &= ~(BR_RING_IDLE|BR_RING_ABDICATING|BR_RING_STALLED);
+	atomic_clear_rel_32(&br->br_prod_head, BR_RING_PENDING);
 	br->br_owner = curthread;
 	if (br->br_cons & BR_RING_IDLE)
 		counter_u64_add(br->br_starts, 1);
