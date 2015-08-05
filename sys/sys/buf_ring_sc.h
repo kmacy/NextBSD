@@ -98,6 +98,15 @@ void buf_ring_sc_drain(struct buf_ring_sc *br, int budget);
  */
 int buf_ring_sc_peek(struct buf_ring_sc *br, void *ents[], uint16_t count);
 
+
+/**
+ * buf_ring_sc_advance - advance the consumer index after doing a peek
+ * @count: the number of entries to advance by
+ *
+ * To be used only by the user specified drain function.
+ */
+void buf_ring_sc_advance(struct buf_ring_sc *br, int count);
+
 /**
  * buf_ring_sc_putback - return a buffer to the ring
  * @new: buffer to return
