@@ -252,7 +252,7 @@ brsc_get_inuse(struct buf_ring_sc *br, int cidx, int pidx, int gen)
 {
 	int used;
 
-	if (gen == 1 && pidx == cidx)
+	if (gen && pidx == cidx)
 		used = br->br_size;
 	else if (pidx >= cidx)
 		used = pidx - cidx; /* encompasses gen == 0 && pidx == cidx */
