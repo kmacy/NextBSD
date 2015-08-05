@@ -3417,6 +3417,7 @@ net/if_vlan.c			optional vlan
 net/if_vxlan.c			optional vxlan inet | vxlan inet6
 net/iflib.c				optional ether inet | ether inet6
 net/ifdi_if.m			standard
+net/mp_ring.c			optional ether inet | ether inet6
 net/mppcc.c			optional netgraph_mppc_compression
 net/mppcd.c			optional netgraph_mppc_compression
 net/netisr.c			standard
