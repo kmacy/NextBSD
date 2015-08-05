@@ -896,13 +896,21 @@ buf_ring_sc_trylock(struct buf_ring_sc *br)
 	} while (!atomic_cmpset_acq_32(&br->br_prod_head, value, value | BR_RING_OWNED));
 
 	MPASS(br->br_owner == NULL);
-	MPASS((br->br_prod_head & (BR_RING_OWNED|BR_RING_PENDING)) == BR_RING_OWNED);
+	MPASS((br->br_prod_head & BR_RING_OWNED) == BR_RING_OWNED);
+	if (br->br_prod_head & BR_RING_PENDING) {
+		/* another thread is ready to do this work - let it */
+		do {
+			value = br->br_prod_head;
+		} while (!atomic_cmpset_rel_32(&br->br_prod_head, value, value & ~BR_RING_OWNED));
+		return (0);
+	}
+	br->br_cons &= ~(BR_RING_IDLE|BR_RING_ABDICATING|BR_RING_STALLED);
 	br->br_owner = curthread;
 	if (br->br_cons & BR_RING_IDLE)
 		counter_u64_add(br->br_starts, 1);
 	else if (br->br_cons & BR_RING_STALLED)
 		counter_u64_add(br->br_restarts, 1);
-	br->br_cons &= ~(BR_RING_IDLE|BR_RING_ABDICATING|BR_RING_STALLED);
+
 	return (1);
 }
 
