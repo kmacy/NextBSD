@@ -350,15 +350,18 @@ SYSCTL_INT(_net_iflib, OID_AUTO, min_tx_latency, CTLFLAG_RW,
 #if IFLIB_DEBUG_COUNTERS
 
 static int iflib_tx_seen;
+static int iflib_tx_sent;
 static int iflib_rx_allocs;
 static int iflib_fl_refills;
 static int iflib_fl_refills_large;
 static int iflib_tx_frees;
 
-SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
-		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, tx_seen, CTLFLAG_RD,
 		   &iflib_tx_seen, 0, "# tx mbufs seen");
+SYSCTL_INT(_net_iflib, OID_AUTO, tx_sent, CTLFLAG_RD,
+		   &iflib_tx_seen, 0, "# tx mbufs sent");
+SYSCTL_INT(_net_iflib, OID_AUTO, tx_frees, CTLFLAG_RD,
+		   &iflib_tx_frees, 0, "# tx frees");
 SYSCTL_INT(_net_iflib, OID_AUTO, rx_allocs, CTLFLAG_RD,
 		   &iflib_rx_allocs, 0, "# rx allocations");
 SYSCTL_INT(_net_iflib, OID_AUTO, fl_refills, CTLFLAG_RD,
@@ -1812,7 +1815,7 @@ iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
 	struct mbuf **mp = &txq->ift_mp[0];
 	int i, count, pkt_sent, bytes_sent, mcast_sent, avail;
 
-	avail = r->size - IDXDIFF(cidx, pidx, r->size);
+	avail = IDXDIFF(pidx, cidx, r->size);
 	if (ctx->ifc_flags & IFC_QFLUSH) {
 		DBG_COUNTER_INC(txq_drain_flushing);
 		for (i = 0; i < avail; i++) {
@@ -1821,7 +1824,8 @@ iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
 		}
 		return (0);
 	}
-	if (if_getdrvflags(ctx->ifc_sctx->isc_ifp) & IFF_DRV_OACTIVE) {
+	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
+	if (if_getdrvflags(ctx->ifc_sctx->isc_ifp) & IFF_DRV_OACTIVE ) {
 		txq->ift_qstatus = IFLIB_QUEUE_IDLE;
 		TX_LOCK(txq);
 		callout_stop(&txq->ift_timer);
@@ -1834,7 +1838,6 @@ iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
 	count = MIN(avail, BATCH_SIZE);
 	_ring_peek(r, mp, cidx, count);
 
-	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 	if (!(if_getdrvflags(ifp) & IFF_DRV_RUNNING) ||
 		!LINK_ACTIVE(ctx)) {
 		DBG_COUNTER_INC(txq_drain_notready);
@@ -1847,6 +1850,7 @@ iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
 			DBG_COUNTER_INC(txq_drain_encapfail);
 			goto done;
 		}
+		DBG_COUNTER_INC(tx_sent);
 		pkt_sent++;
 		bytes_sent += mp[i]->m_pkthdr.len;
 		if (mp[i]->m_flags & M_MCAST)
