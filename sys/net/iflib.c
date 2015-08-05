@@ -2014,7 +2014,6 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	struct mbuf *marr[16], **mp, *next;
 	int err, i, count, qidx;
 
-	DBG_COUNTER_INC(tx_seen);
 
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0 || !LINK_ACTIVE(ctx)) {
 		DBG_COUNTER_INC(tx_frees);
@@ -2049,11 +2048,17 @@ iflib_if_transmit(if_t ifp, struct mbuf *m)
 	 */
 	txq = &ctx->ifc_txqs[qidx];
 
+	DBG_COUNTER_INC(tx_seen);
 	err = mp_ring_enqueue(txq->ift_br[0], (void **)mp, count, IFLIB_BUDGET);
 	/* drain => err = iflib_txq_transmit(ifp, txq, m); */
-
+	if (err) {
+		for (i = 0; i < count; i++)
+			m_freem(mp[i]);
+		mp_ring_check_drainage(txq->ift_br[0], BATCH_SIZE);
+	}
 	if (count > 16)
 		free(mp, M_IFLIB);
+
 	return (err);
 }
 
