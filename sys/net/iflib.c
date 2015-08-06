@@ -2319,15 +2319,57 @@ iflib_led_func(void *arg, int onoff)
  **********************************************************************/
 
 int
+iflib_device_probe(device_t dev)
+{
+	pci_vendor_info_t *ent;
+
+	uint16_t	pci_vendor_id, pci_device_id;
+	uint16_t	pci_subvendor_id, pci_subdevice_id;
+	char	device_name[256];
+	if_shared_ctx_t sctx;
+	int err;
+
+	if ((err = DEVICE_REGISTER(dev)) != 0)
+		return (err);
+
+	sctx = device_get_softc(dev);
+
+	pci_vendor_id = pci_get_vendor(dev);
+	if (pci_vendor_id != sctx->isc_vendor_id)
+		return (ENXIO);
+
+	pci_device_id = pci_get_device(dev);
+	pci_subvendor_id = pci_get_subvendor(dev);
+	pci_subdevice_id = pci_get_subdevice(dev);
+
+	ent = sctx->isc_vendor_info;
+	while (ent->pvi_vendor_id != 0) {
+		if ((pci_vendor_id == ent->pvi_vendor_id) &&
+		    (pci_device_id == ent->pvi_device_id) &&
+
+		    ((pci_subvendor_id == ent->pvi_subvendor_id) ||
+		     (ent->pvi_subvendor_id == 0)) &&
+
+		    ((pci_subdevice_id == ent->pvi_subdevice_id) ||
+		     (ent->pvi_subdevice_id == 0))) {
+			sprintf(device_name, "%s, Version - %s",
+				sctx->isc_vendor_strings[ent->pvi_index],
+				sctx->isc_driver_version);
+			device_set_desc_copy(dev, device_name);
+			return (BUS_PROBE_DEFAULT);
+		}
+		ent++;
+	}
+	return (ENXIO);
+}
+
+int
 iflib_device_attach(device_t dev)
 {
 	int err, rid, msix;
 	if_shared_ctx_t sctx;
 
-	if ((err = DEVICE_REGISTER(dev)) != 0)
-		return (err);
 	sctx = device_get_softc(dev);
-
 	if ((err = iflib_register(sctx)) != 0)
 		return (err);
 	if ((err = IFDI_ATTACH_PRE(sctx)) != 0)

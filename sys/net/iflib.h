@@ -104,6 +104,18 @@ typedef enum {
 } iflib_intr_mode_t;
 
 /*
+ * This really belongs in pciio.h or some place more general
+ * but this is the only consumer for now.
+ */
+typedef struct pci_vendor_info {
+	unsigned int    pvi_vendor_id;
+	unsigned int    pvi_device_id;
+	unsigned int    pvi_subvendor_id;
+	unsigned int    pvi_subdevice_id;
+	unsigned int    pvi_index;
+} pci_vendor_info_t;
+
+/*
  * Context shared between the driver and the iflib layer
  * Is treated as a superclass of the driver's softc, so
  * must be the first element
@@ -120,7 +132,8 @@ struct if_shared_ctx {
 
 	int (*isc_rxd_available) (if_shared_ctx_t, uint16_t qsidx, uint32_t pidx);
 	int (*isc_rxd_pkt_get) (if_shared_ctx_t sctx, if_rxd_info_t ri);
-	void (*isc_rxd_refill) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs, uint16_t count);
+	void (*isc_rxd_refill) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx,
+							uint64_t *paddrs, caddr_t *vaddrs, uint16_t count);
 	void (*isc_rxd_flush) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx);
 
 	int (*isc_legacy_intr) (void *);
@@ -156,6 +169,12 @@ struct if_shared_ctx {
 	int isc_watchdog_events;
 	int isc_tx_reclaim_thresh;
 
+	/* fields necessary for probe */
+	pci_vendor_info_t *isc_vendor_info;
+	int isc_vendor_id;
+	char **isc_vendor_strings;
+	char *isc_driver_version;
+
 	struct ifmedia	isc_media;
 	struct if_common_stats isc_common_stats;
 };
@@ -175,6 +194,7 @@ typedef enum {
 #define IFLIB_HAS_CQ 0x1
 
 
+int iflib_device_probe(device_t);
 int iflib_device_attach(device_t);
 int iflib_device_detach(device_t);
 int iflib_device_suspend(device_t);

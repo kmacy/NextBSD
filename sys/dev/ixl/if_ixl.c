@@ -63,7 +63,7 @@ char ixl_driver_version[] = "1.4.3";
  *  { Vendor ID, Device ID, SubVendor ID, SubDevice ID, String Index }
  *********************************************************************/
 
-static ixl_vendor_info_t ixl_vendor_info_array[] =
+static pci_vendor_info_t ixl_vendor_info_array[] =
 {
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_SFP_XL710, 0, 0, 0},
 	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_A, 0, 0, 0},
@@ -97,7 +97,6 @@ static char    *ixl_strings[] = {
 /*********************************************************************
  *  Function prototypes
  *********************************************************************/
-static int      ixl_probe(device_t);
 static int      ixl_register(device_t);
 static int	ixl_get_hw_capabilities(struct ixl_pf *);
 static void     ixl_update_link_status(struct ixl_pf *);
@@ -238,8 +237,8 @@ static void ixl_if_vlan_unregister(if_shared_ctx_t sctx, u16 vtag);
 
 static device_method_t ixl_methods[] = {
 	/* Device interface */
-	DEVMETHOD(device_probe, ixl_probe),
 	DEVMETHOD(device_register, ixl_register),
+	DEVMETHOD(device_probe, iflib_device_probe),
 	DEVMETHOD(device_attach, iflib_device_attach),
 	DEVMETHOD(device_detach, iflib_device_detach),
 	DEVMETHOD(device_shutdown, iflib_device_suspend),
@@ -452,46 +451,6 @@ static uint8_t ixl_bcast_addr[ETHER_ADDR_LEN] =
  *********************************************************************/
 
 static int
-ixl_probe(device_t dev)
-{
-	ixl_vendor_info_t *ent;
-
-	u16	pci_vendor_id, pci_device_id;
-	u16	pci_subvendor_id, pci_subdevice_id;
-	char	device_name[256];
-
-	INIT_DEBUGOUT("ixl_probe: begin");
-
-	pci_vendor_id = pci_get_vendor(dev);
-	if (pci_vendor_id != I40E_INTEL_VENDOR_ID)
-		return (ENXIO);
-
-	pci_device_id = pci_get_device(dev);
-	pci_subvendor_id = pci_get_subvendor(dev);
-	pci_subdevice_id = pci_get_subdevice(dev);
-
-	ent = ixl_vendor_info_array;
-	while (ent->vendor_id != 0) {
-		if ((pci_vendor_id == ent->vendor_id) &&
-		    (pci_device_id == ent->device_id) &&
-
-		    ((pci_subvendor_id == ent->subvendor_id) ||
-		     (ent->subvendor_id == 0)) &&
-
-		    ((pci_subdevice_id == ent->subdevice_id) ||
-		     (ent->subdevice_id == 0))) {
-			sprintf(device_name, "%s, Version - %s",
-				ixl_strings[ent->index],
-				ixl_driver_version);
-			device_set_desc_copy(dev, device_name);
-			return (BUS_PROBE_DEFAULT);
-		}
-		ent++;
-	}
-	return (ENXIO);
-}
-
-static int
 ixl_register(device_t dev)
 {
 	struct ixl_pf	*pf;
@@ -529,7 +488,10 @@ ixl_register(device_t dev)
 	sctx->isc_admin_intrcnt = 1;
 	sctx->isc_legacy_intr = ixl_intr;
 	sctx->isc_driver = &ixl_if_driver;
-
+	sctx->isc_vendor_id = 	I40E_INTEL_VENDOR_ID;
+	sctx->isc_vendor_info = ixl_vendor_info_array;
+	sctx->isc_driver_version = ixl_driver_version;
+	sctx->isc_vendor_strings = ixl_strings;
 	return (0);
 }
 
