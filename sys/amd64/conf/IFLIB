@@ -23,7 +23,7 @@ ident		IFLIB
 
 makeoptions	DEBUG=-g		# Build kernel with gdb(1) debug symbols
 makeoptions	WITH_CTF=1		# Run ctfconvert(1) for DTrace support
-makeoptions MODULES_OVERRIDE="dtrace ixl"
+makeoptions MODULES_OVERRIDE="dtrace ixl opensolaris zfs"
 
 options 	SCHED_ULE		# ULE scheduler
 options 	PREEMPTION		# Enable kernel thread preemption
