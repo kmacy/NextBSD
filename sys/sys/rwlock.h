@@ -166,7 +166,10 @@ void	__rw_assert(const volatile uintptr_t *c, int what, const char *file,
 	    int line);
 #endif
 
-
+#ifdef WITNESS
+#define __rw_rlock(c, file, line) 	__rw_rlock_hard(c, file, line)
+#define __rw_runlock(c, file, line) _rw_runlock_cookie(c, file, line)
+#else
 static inline void
 __rw_rlock(volatile uintptr_t *c, const char *file, int line)
 {
@@ -207,7 +210,7 @@ __rw_runlock(volatile uintptr_t *c, const char *file, int line)
 	}
 	_rw_runlock_cookie(c, file, line);
 }
-
+#endif
 /*
  * Top-level macros to provide lock cookie once the actual rwlock is passed.
  * They will also prevent passing a malformed object to the rwlock KPI by
