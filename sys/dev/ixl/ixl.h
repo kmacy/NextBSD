@@ -463,15 +463,14 @@ struct ixl_queue {
 SLIST_HEAD(ixl_ftl_head, ixl_mac_filter);
 
 struct ixl_vsi {
-	/* this must be first */
-	struct if_shared_ctx shared;
-#define media shared.isc_media
-#define hwdev shared.isc_dev
-#define hwifp shared.isc_ifp
-#define pause_frames shared.isc_pause_frames
-#define common_stats shared.isc_common_stats
-#define max_frame_size shared.isc_max_frame_size
-#define num_queues shared.isc_nqsets
+	if_ctx_t ctx;
+	if_softc_ctx_t shared;
+
+	struct ifnet *ifp;
+	struct ifmedia *media;
+
+#define num_queues shared->isc_nqsets
+#define max_frame_size shared->isc_max_frame_size
 
 	void 			*back;
 	struct i40e_hw		*hw;

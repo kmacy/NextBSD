@@ -58,32 +58,33 @@ static int	ixl_tx_setup_offload(struct ixl_queue *,
 static bool	ixl_tso_setup(struct ixl_queue *, struct mbuf *);
 
 
-static int ixl_isc_txd_encap(if_shared_ctx_t sctx, if_pkt_info_t pi);
-static void ixl_isc_txd_flush(if_shared_ctx_t sctx, uint16_t txqid, uint32_t pidx);
-static int ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx);
+static int ixl_isc_txd_encap(void *arg, if_pkt_info_t pi);
+static void ixl_isc_txd_flush(void *arg, uint16_t txqid, uint32_t pidx);
+static int ixl_isc_txd_credits_update(void *arg, uint16_t qid, uint32_t cidx);
 #ifdef DEV_NETMAP
 #include <dev/netmap/if_ixl_netmap.h>
 #endif /* DEV_NETMAP */
 
-static void ixl_isc_rxd_refill(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused,
+static void ixl_isc_rxd_refill(void *arg, uint16_t rxqid, uint8_t flid __unused,
 				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint16_t count);
-static void ixl_isc_rxd_flush(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx);
-static int ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx);
-static int ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri);
+static void ixl_isc_rxd_flush(void *arg, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx);
+static int ixl_isc_rxd_available(void *arg, uint16_t rxqid, uint32_t idx);
+static int ixl_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri);
 
+extern int ixl_intr(void *arg);
 
-void
-ixl_txrx_init(if_shared_ctx_t sctx)
-{
-	sctx->isc_txd_encap = ixl_isc_txd_encap;
-	sctx->isc_txd_flush = ixl_isc_txd_flush;
-	sctx->isc_txd_credits_update = ixl_isc_txd_credits_update;
+struct if_txrx ixl_txrx  = {
+	ixl_isc_txd_encap,
+	ixl_isc_txd_flush,
+	ixl_isc_txd_credits_update,
+	ixl_isc_rxd_available,
+	ixl_isc_rxd_pkt_get,
+	ixl_isc_rxd_refill,
+	ixl_isc_rxd_flush,
+	ixl_intr
+};
 
-	sctx->isc_rxd_available = ixl_isc_rxd_available;
-	sctx->isc_rxd_pkt_get = ixl_isc_rxd_pkt_get;
-	sctx->isc_rxd_refill = ixl_isc_rxd_refill;
-	sctx->isc_rxd_flush = ixl_isc_rxd_flush;
-}
+extern if_shared_ctx_t ixl_sctx;
 
 
 #ifdef notyet
@@ -126,9 +127,9 @@ ixl_tso_detect_sparse(struct mbuf *mp)
 #define IXL_TXD_CMD (I40E_TX_DESC_CMD_EOP | I40E_TX_DESC_CMD_RS)
 
 static int
-ixl_isc_txd_encap(if_shared_ctx_t sctx, if_pkt_info_t pi)
+ixl_isc_txd_encap(void *arg, if_pkt_info_t pi)
 {
-	struct ixl_vsi		*vsi = DOWNCAST(sctx);
+	struct ixl_vsi		*vsi = arg;
 	struct ixl_queue	*que = &vsi->queues[pi->ipi_qsidx];
 	struct tx_ring		*txr = &que->txr;
 	struct mbuf		*m_head = pi->ipi_m;
@@ -200,7 +201,7 @@ ixl_isc_txd_encap(if_shared_ctx_t sctx, if_pkt_info_t pi)
 
 		last = i; /* descriptor that will get completion IRQ */
 
-		if (++i == sctx->isc_ntxd)
+		if (++i == ixl_sctx->isc_ntxd)
 			i = 0;
 
 		buf->eop_index = -1;
@@ -220,9 +221,9 @@ ixl_isc_txd_encap(if_shared_ctx_t sctx, if_pkt_info_t pi)
 }
 
 static void
-ixl_isc_txd_flush(if_shared_ctx_t sctx, uint16_t txqid, uint32_t pidx)
+ixl_isc_txd_flush(void *arg, uint16_t txqid, uint32_t pidx)
 {
-	struct ixl_vsi *vsi = DOWNCAST(sctx);
+	struct ixl_vsi *vsi = arg;
 	struct tx_ring *txr = &vsi->queues[txqid].txr;
 	/*
 	 * Advance the Transmit Descriptor Tail (Tdt), this tells the
@@ -241,13 +242,12 @@ ixl_isc_txd_flush(if_shared_ctx_t sctx, uint16_t txqid, uint32_t pidx)
 void
 ixl_init_tx_ring(struct ixl_queue *que)
 {
-	if_shared_ctx_t sctx = UPCAST(que->vsi);
 	struct tx_ring *txr = &que->txr;
 	struct ixl_tx_buf *buf;
 
 	/* Clear the old ring contents */
 	bzero((void *)txr->tx_base,
-	      (sizeof(struct i40e_tx_desc)) * UPCAST(que->vsi)->isc_ntxd);
+	      (sizeof(struct i40e_tx_desc)) * ixl_sctx->isc_ntxd);
 #ifdef DEV_NETMAP
 	struct netmap_adapter *na = NA(que->vsi->ifp);
 	struct netmap_slot *slot;
@@ -268,7 +268,7 @@ ixl_init_tx_ring(struct ixl_queue *que)
 
 
 	buf = txr->tx_buffers;
-	for (int i = 0; i < sctx->isc_ntxd; i++, buf++) {
+	for (int i = 0; i < ixl_sctx->isc_ntxd; i++, buf++) {
 #ifdef DEV_NETMAP
 		/*
 		 * In netmap mode, set the map for the packet buffer.
@@ -491,7 +491,7 @@ ixl_tso_setup(struct ixl_queue *que, struct mbuf *mp)
 	TXD->tunneling_params = htole32(0);
 	buf->eop_index = -1;
 
-	if (++idx == UPCAST(que->vsi)->isc_ntxd)
+	if (++idx == ixl_sctx->isc_ntxd)
 		idx = 0;
 
 	txr->avail--;
@@ -508,7 +508,7 @@ static inline u32
 ixl_get_tx_head(struct ixl_queue *que)
 {
 	struct tx_ring  *txr = &que->txr;
-	void *head = &txr->tx_base[UPCAST(que->vsi)->isc_ntxd];
+	void *head = &txr->tx_base[ixl_sctx->isc_ntxd];
 
 	return LE32_TO_CPU(*(volatile __le32 *)head);
 }
@@ -521,9 +521,10 @@ ixl_get_tx_head(struct ixl_queue *que)
  *
  **********************************************************************/
 static int
-ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
+ixl_isc_txd_credits_update(void *arg, uint16_t qid, uint32_t cidx)
 {
-	struct ixl_queue	*que = &DOWNCAST(sctx)->queues[qid];
+	struct ixl_vsi		*vsi = arg;
+	struct ixl_queue	*que = &vsi->queues[qid];
 	struct tx_ring		*txr = &que->txr;
 	u32			first, last, head, done, processed;
 	struct ixl_tx_buf	*buf;
@@ -547,7 +548,7 @@ ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
 	** I do this so the comparison in the
 	** inner while loop below can be simple
 	*/
-	if (++last == sctx->isc_ntxd) last = 0;
+	if (++last == ixl_sctx->isc_ntxd) last = 0;
 	done = last;
 
 	/*
@@ -561,7 +562,7 @@ ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
 			++processed;
 
 			buf->eop_index = -1;
-			if (++first == sctx->isc_ntxd)
+			if (++first == ixl_sctx->isc_ntxd)
 				first = 0;
 
 			buf = &txr->tx_buffers[first];
@@ -574,7 +575,7 @@ ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
 			break;
 		eop_desc = &txr->tx_base[last];
 		/* Get next done point */
-		if (++last == sctx->isc_ntxd) last = 0;
+		if (++last == ixl_sctx->isc_ntxd) last = 0;
 			done = last;
 
 	}
@@ -591,41 +592,42 @@ ixl_isc_txd_credits_update(if_shared_ctx_t sctx, uint16_t qid, uint32_t cidx)
  *
  **********************************************************************/
 static void
-ixl_isc_rxd_refill(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused,
+ixl_isc_rxd_refill(void *arg, uint16_t rxqid, uint8_t flid __unused,
 				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint16_t count)
 
 {
-	struct ixl_vsi		*vsi = DOWNCAST(sctx);
+	struct ixl_vsi		*vsi = arg;
 	struct rx_ring		*rxr = &vsi->queues[rxqid].rxr;
 	int			i;
 	uint32_t next_pidx;
 
 	for (i = 0, next_pidx = pidx; i < count; i++) {
 		rxr->rx_base[next_pidx].read.pkt_addr = htole64(paddrs[i]);
-		if (++next_pidx == sctx->isc_nrxd)
+		if (++next_pidx == ixl_sctx->isc_nrxd)
 			next_pidx = 0;
 	}
 }
 
 static void
-ixl_isc_rxd_flush(if_shared_ctx_t sctx, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx)
+ixl_isc_rxd_flush(void * arg, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx)
 {
-	struct ixl_vsi		*vsi = DOWNCAST(sctx);
+	struct ixl_vsi		*vsi = arg;
 	struct rx_ring		*rxr = &vsi->queues[rxqid].rxr;
 
 	wr32(vsi->hw, rxr->tail, pidx);
 }
 
 static int
-ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx)
+ixl_isc_rxd_available(void *arg, uint16_t rxqid, uint32_t idx)
 {
-	struct rx_ring *rxr = &DOWNCAST(sctx)->queues[rxqid].rxr;
+	struct ixl_vsi *vsi = arg;
+	struct rx_ring *rxr = &vsi->queues[rxqid].rxr;
 	union i40e_rx_desc	*cur;
 	u64 qword;
 	uint32_t status;
 	int cnt, i;
 
-	for (cnt = 0, i = idx; cnt < sctx->isc_nrxd;) {
+	for (cnt = 0, i = idx; cnt < ixl_sctx->isc_nrxd;) {
 		cur = &rxr->rx_base[i];
 		qword = le64toh(cur->wb.qword1.status_error_len);
 		status = (qword & I40E_RXD_QW1_STATUS_MASK)
@@ -633,7 +635,7 @@ ixl_isc_rxd_available(if_shared_ctx_t sctx, uint16_t rxqid, uint32_t idx)
 		if ((status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT)) == 0)
 			break;
 		cnt++;
-		if (++i == sctx->isc_nrxd)
+		if (++i == ixl_sctx->isc_nrxd)
 			i = 0;
 	}
 
@@ -752,9 +754,9 @@ ixl_ptype_to_hash(u8 ptype)
  *********************************************************************/
 
 static int
-ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
+ixl_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 {
-	struct ixl_vsi		*vsi = DOWNCAST(sctx);
+	struct ixl_vsi		*vsi = arg;
 	struct ixl_queue	*que = &vsi->queues[ri->iri_qsidx];
 	struct rx_ring		*rxr = &que->rxr;
 	union i40e_rx_desc	*cur;
@@ -820,7 +822,7 @@ ixl_isc_rxd_pkt_get(if_shared_ctx_t sctx, if_rxd_info_t ri)
 		rxr->rx_packets++;
 		/* capture data for dynamic ITR adjustment */
 		rxr->packets++;
-		if ((sctx->isc_ifp->if_capenable & IFCAP_RXCSUM) != 0)
+		if ((vsi->ifp->if_capenable & IFCAP_RXCSUM) != 0)
 			ixl_rx_checksum(ri, status, error, ptype);
 #ifdef RSS
 		ri->iri_flowid =

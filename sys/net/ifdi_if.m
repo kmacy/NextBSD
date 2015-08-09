@@ -42,50 +42,50 @@ INTERFACE ifdi;
 CODE {
 
 	static void
-	null_void_op(if_shared_ctx_t _ctx __unused)
+	null_void_op(if_ctx_t _ctx __unused)
 	{
 	}
 
 	static void
-	null_timer_op(if_shared_ctx_t _ctx __unused, uint16_t _qsidx __unused)
+	null_timer_op(if_ctx_t _ctx __unused, uint16_t _qsidx __unused)
 	{
 	}
 
 	static int
-	null_int_op(if_shared_ctx_t _ctx __unused)
+	null_int_op(if_ctx_t _ctx __unused)
 	{
 		return (0);
 	}
 
 	static void
-	null_queue_intr_enable(if_shared_ctx_t _ctx __unused, uint16_t _qid __unused)
+	null_queue_intr_enable(if_ctx_t _ctx __unused, uint16_t _qid __unused)
 	{
 	}
 
 	static void
-	null_led_func(if_shared_ctx_t _ctx __unused, int _onoff __unused)
+	null_led_func(if_ctx_t _ctx __unused, int _onoff __unused)
 	{
 	}
 
 	static void
-	null_vlan_register_op(if_shared_ctx_t _ctx __unused, uint16_t vtag __unused)
+	null_vlan_register_op(if_ctx_t _ctx __unused, uint16_t vtag __unused)
 	{
 	}
 
 	static int
-	null_q_setup(if_shared_ctx_t _ctx __unused, uint32_t _qid __unused)
+	null_q_setup(if_ctx_t _ctx __unused, uint32_t _qid __unused)
 	{
 		return (0);
 	}
 
 	static int
-	null_i2c_req(if_shared_ctx_t _sctx __unused, struct ifi2creq *_i2c __unused)
+	null_i2c_req(if_ctx_t _sctx __unused, struct ifi2creq *_i2c __unused)
 	{
 		return (ENOTSUP);
 	}
 
 	static int
-	null_sysctl_int_delay(if_shared_ctx_t _sctx __unused, if_int_delay_info_t _iidi __unused)
+	null_sysctl_int_delay(if_ctx_t _sctx __unused, if_int_delay_info_t _iidi __unused)
 	{
 		return (0);
 	}
@@ -97,27 +97,27 @@ CODE {
 #
 
 METHOD int attach_pre {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD int attach_post {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD void attach_cleanup {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
-METHOD int detach {
-	if_shared_ctx_t _ctx;
+METHOD void detach {
+	if_ctx_t _ctx;
 };
 
 METHOD int suspend {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 } DEFAULT null_int_op;
 
 METHOD int resume {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 } DEFAULT null_int_op;
 
 #
@@ -126,14 +126,14 @@ METHOD int resume {
 #
 
 METHOD int queues_alloc {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	caddr_t *_vaddrs;
 	uint64_t *_paddrs;
 	int nqs;
 };
 
 METHOD void queues_free {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 #
@@ -141,11 +141,11 @@ METHOD void queues_free {
 #
 
 METHOD void init {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD void stop {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 #
@@ -153,25 +153,25 @@ METHOD void stop {
 #
 
 METHOD int msix_intr_assign {
-	if_shared_ctx_t _sctx;
+	if_ctx_t _sctx;
 	int msix;
 };
 
 METHOD void intr_enable {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD void intr_disable {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD void rx_intr_enable {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint16_t _rxqid;
 } DEFAULT null_queue_intr_enable;
 
 METHOD void link_intr_enable {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 } DEFAULT null_void_op;
 
 #
@@ -179,20 +179,20 @@ METHOD void link_intr_enable {
 #
 
 METHOD void multi_set {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD int mtu_set {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint32_t _mtu;
 };
 
 METHOD void media_set{
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 } DEFAULT null_void_op;
 
 METHOD int promisc_set {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	int _flags;
 };
 
@@ -201,20 +201,20 @@ METHOD int promisc_set {
 #
 
 METHOD void update_admin_status {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD void media_status {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	struct ifmediareq *_ifm;
 };
 
 METHOD int media_change {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 };
 
 METHOD uint64_t get_counter {
-	if_shared_ctx_t _sctx;
+	if_ctx_t _sctx;
 	ift_counter cnt;
 };
 
@@ -223,46 +223,46 @@ METHOD uint64_t get_counter {
 #
 
 METHOD int i2c_req {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	struct ifi2creq *_req;
 } DEFAULT null_i2c_req;
 
 METHOD int txq_setup {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint32_t _txqid;
 } DEFAULT null_q_setup;
 
 METHOD int rxq_setup {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint32_t _txqid;
 } DEFAULT null_q_setup;
 
 METHOD void timer {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint16_t _txqid;
 } DEFAULT null_timer_op;
 
 METHOD void watchdog_reset {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 } DEFAULT null_void_op;
 
 METHOD void led_func {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	int _onoff;
 } DEFAULT null_led_func;
 
 METHOD void vlan_register {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint16_t _vtag;
 } DEFAULT null_vlan_register_op;
 
 METHOD void vlan_unregister {
-	if_shared_ctx_t _ctx;
+	if_ctx_t _ctx;
 	uint16_t _vtag;
 } DEFAULT null_vlan_register_op;
 
 METHOD int sysctl_int_delay {
-	if_shared_ctx_t _sctx;
+	if_ctx_t _sctx;
 	if_int_delay_info_t _iidi;
 } DEFAULT null_sysctl_int_delay;
 

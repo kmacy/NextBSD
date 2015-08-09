@@ -34,7 +34,7 @@
 #include <sys/bus_dma.h>
 
 struct iflib_ctx;
-typedef struct iflib_ctx *iflib_ctx_t;
+typedef struct iflib_ctx *if_ctx_t;
 struct if_shared_ctx;
 typedef struct if_shared_ctx *if_shared_ctx_t;
 struct if_int_delay_info;
@@ -77,12 +77,6 @@ typedef struct if_pkt_info {
 	uint32_t			ipi_new_pidx;	/* next available pidx post-encap */
 } *if_pkt_info_t;
 
-struct if_common_stats {
-	uint64_t ics_colls;
-	uint64_t ics_ierrs;
-	uint64_t ics_oerrs;
-};
-
 typedef struct if_irq {
 	struct resource  *ii_res;
 	int               ii_rid;
@@ -90,7 +84,7 @@ typedef struct if_irq {
 } *if_irq_t;
 
 struct if_int_delay_info {
-	if_shared_ctx_t iidi_sctx;	/* Back-pointer to the shared ctx (softc) */
+	if_ctx_t iidi_ctx;	/* Back-pointer to the iflib ctx (softc) */
 	int iidi_offset;			/* Register offset to read/write */
 	int iidi_value;			/* Current value in usecs */
 	struct sysctl_oid *iidi_oidp;
@@ -108,43 +102,42 @@ typedef enum {
  * but this is the only consumer for now.
  */
 typedef struct pci_vendor_info {
-	unsigned int    pvi_vendor_id;
-	unsigned int    pvi_device_id;
-	unsigned int    pvi_subvendor_id;
-	unsigned int    pvi_subdevice_id;
-	unsigned int    pvi_index;
+	uint32_t    pvi_vendor_id;
+	uint32_t    pvi_device_id;
+	uint32_t    pvi_subvendor_id;
+	uint32_t    pvi_subdevice_id;
+	uint32_t    pvi_class_mask;
+	uint32_t    pvi_index;
 } pci_vendor_info_t;
 
+
+typedef struct if_txrx {
+	int (*ift_txd_encap) (void *, if_pkt_info_t);
+	void (*ift_txd_flush) (void *, uint16_t, uint32_t);
+	int (*ift_txd_credits_update) (void *, uint16_t, uint32_t);
+
+	int (*ift_rxd_available) (void *, uint16_t qsidx, uint32_t pidx);
+	int (*ift_rxd_pkt_get) (void *, if_rxd_info_t ri);
+	void (*ift_rxd_refill) (void * , uint16_t qsidx, uint8_t flidx, uint32_t pidx,
+							uint64_t *paddrs, caddr_t *vaddrs, uint16_t count);
+	void (*ift_rxd_flush) (void *, uint16_t qsidx, uint8_t flidx, uint32_t pidx);
+	int (*ift_legacy_intr) (void *);
+} *if_txrx_t;
+
+typedef struct if_softc_ctx {
+	int isc_vectors; /* 0 unless pre-allocated by driver */
+	int isc_nqsets;
+	iflib_intr_mode_t isc_intr;
+	uint16_t isc_max_frame_size;
+} *if_softc_ctx_t;
+
 /*
- * Context shared between the driver and the iflib layer
- * Is treated as a superclass of the driver's softc, so
- * must be the first element
+ * Initialization values for device
  */
 struct if_shared_ctx {
-	/*
-	 * KOBJ requires that the following be the first field
-	 * Do not move
-	 */
-	KOBJ_FIELDS;
-	int (*isc_txd_encap) (if_shared_ctx_t, if_pkt_info_t);
-	void (*isc_txd_flush) (if_shared_ctx_t, uint16_t, uint32_t);
-	int (*isc_txd_credits_update) (if_shared_ctx_t, uint16_t, uint32_t);
-
-	int (*isc_rxd_available) (if_shared_ctx_t, uint16_t qsidx, uint32_t pidx);
-	int (*isc_rxd_pkt_get) (if_shared_ctx_t sctx, if_rxd_info_t ri);
-	void (*isc_rxd_refill) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx,
-							uint64_t *paddrs, caddr_t *vaddrs, uint16_t count);
-	void (*isc_rxd_flush) (if_shared_ctx_t, uint16_t qsidx, uint8_t flidx, uint32_t pidx);
-
-	int (*isc_legacy_intr) (void *);
-	iflib_ctx_t isc_ctx;
-	device_t isc_dev;
-	if_t isc_ifp;
+	int isc_magic;
+	if_txrx_t isc_txrx;
 	driver_t *isc_driver;
-	cpuset_t isc_cpus;
-	iflib_intr_mode_t isc_intr;
-	int isc_vectors;
-	int isc_nqsets;
 	int isc_ntxd;
 	int isc_nrxd;
 	int isc_nfl;
@@ -157,16 +150,13 @@ struct if_shared_ctx {
 	bus_size_t isc_rx_maxsegsize;
 	int isc_rx_nsegments;
 	int isc_rx_process_limit;
-	uint16_t isc_max_frame_size;
 
-	uint32_t *isc_qsizes;
-	uint8_t isc_mac[6];
+
+	uint32_t isc_qsizes[8];
 	int isc_nqs;
 	int isc_msix_bar;
 	int isc_admin_intrcnt;
 
-	int isc_pause_frames;
-	int isc_watchdog_events;
 	int isc_tx_reclaim_thresh;
 
 	/* fields necessary for probe */
@@ -175,9 +165,10 @@ struct if_shared_ctx {
 	char **isc_vendor_strings;
 	char *isc_driver_version;
 
-	struct ifmedia	isc_media;
-	struct if_common_stats isc_common_stats;
+
 };
+
+#define IFLIB_MAGIC 0xCAFEF00D
 
 typedef enum {
 	IFLIB_INTR_TX,
@@ -185,15 +176,46 @@ typedef enum {
 	IFLIB_INTR_ADMIN,
 } iflib_intr_type_t;
 
-#define UPCAST(sc) ((if_shared_ctx_t)(sc))
 #ifndef ETH_ADDR_LEN
 #define ETH_ADDR_LEN 6
 #endif
 
 
-#define IFLIB_HAS_CQ 0x1
+/*
+ * Interface has a separate command queue
+ */
+#define IFLIB_HAS_CQ		0x1
+/*
+ * Driver has already allocated vectors
+ */
+#define IFLIB_SKIP_MSIX		0x2
+/*
+ * Driver doesn't own softc field in device
+ */
+#define IFLIB_DEV_PRIVATE	0x4
 
 
+/*
+ * field accessors
+ */
+void *iflib_get_softc(if_ctx_t ctx);
+
+device_t iflib_get_dev(if_ctx_t ctx);
+
+if_t iflib_get_ifp(if_ctx_t ctx);
+
+struct ifmedia *iflib_get_media(if_ctx_t ctx);
+
+if_softc_ctx_t iflib_get_softc_ctx(if_ctx_t ctx);
+
+void iflib_set_mac(if_ctx_t ctx, uint8_t mac[ETHER_ADDR_LEN]);
+
+
+
+
+/*
+ * If the driver can plug cleanly in to newbus use these
+ */
 int iflib_device_probe(device_t);
 int iflib_device_attach(device_t);
 int iflib_device_detach(device_t);
@@ -201,32 +223,41 @@ int iflib_device_suspend(device_t);
 int iflib_device_resume(device_t);
 
 
-int iflib_irq_alloc(if_shared_ctx_t, if_irq_t, int, driver_filter_t, void *filter_arg, driver_intr_t, void *arg, char *name);
-int iflib_irq_alloc_generic(if_shared_ctx_t ctx, if_irq_t irq, int rid,
+/*
+ * If the driver can't plug cleanly in to newbus
+ * use these
+ */
+int iflib_device_register(device_t, if_ctx_t *, void *);
+int iflib_device_deregister(if_ctx_t);
+
+
+
+int iflib_irq_alloc(if_ctx_t, if_irq_t, int, driver_filter_t, void *filter_arg, driver_intr_t, void *arg, char *name);
+int iflib_irq_alloc_generic(if_ctx_t ctx, if_irq_t irq, int rid,
 							iflib_intr_type_t type, driver_filter_t *filter,
 							void *filter_arg, int qid, char *name);
-void iflib_softirq_alloc_generic(if_shared_ctx_t sctx, int rid, iflib_intr_type_t type,  void *arg, int qid, char *name);
+void iflib_softirq_alloc_generic(if_ctx_t ctx, int rid, iflib_intr_type_t type,  void *arg, int qid, char *name);
 
-void iflib_irq_free(if_shared_ctx_t sctx, if_irq_t irq);
-
-
-void iflib_tx_intr_deferred(if_shared_ctx_t sctx, int txqid);
-void iflib_rx_intr_deferred(if_shared_ctx_t sctx, int rxqid);
-void iflib_admin_intr_deferred(if_shared_ctx_t sctx);
+void iflib_irq_free(if_ctx_t ctx, if_irq_t irq);
 
 
-void iflib_link_state_change(if_shared_ctx_t sctx, int linkstate);
+void iflib_tx_intr_deferred(if_ctx_t ctx, int txqid);
+void iflib_rx_intr_deferred(if_ctx_t ctx, int rxqid);
+void iflib_admin_intr_deferred(if_ctx_t ctx);
 
 
+void iflib_link_state_change(if_ctx_t ctx, int linkstate);
 
 
 
-struct mtx *iflib_sctx_lock_get(if_shared_ctx_t);
-struct mtx *iflib_qset_lock_get(if_shared_ctx_t, uint16_t);
 
-void iflib_led_create(if_shared_ctx_t sctx);
 
-void iflib_add_int_delay_sysctl(if_shared_ctx_t, const char *, const char *,
+struct mtx *iflib_ctx_lock_get(if_ctx_t);
+struct mtx *iflib_qset_lock_get(if_ctx_t, uint16_t);
+
+void iflib_led_create(if_ctx_t ctx);
+
+void iflib_add_int_delay_sysctl(if_ctx_t, const char *, const char *,
 								if_int_delay_info_t, int, int);
 
 #endif /*  __IFLIB_H_ */
