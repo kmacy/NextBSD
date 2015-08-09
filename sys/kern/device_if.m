@@ -63,9 +63,9 @@ CODE {
 	    return 0;
 	}
 
-	static int null_register(device_t dev)
+	static void * null_register(device_t dev)
 	{
-		return EOPNOTSUPP;
+		return NULL;
 	}
 };
 	
@@ -335,10 +335,10 @@ METHOD int quiesce {
  *
  * @param dev		the device for which handlers are being registered
  *
- * @retval 0		success
- * @retval non-zero	an error occurred while attempting to register the handlers
+ * @retval NULL     method not implemented
+ * @retval non-NULL	a pointer to implementation specific static driver state
  *
  */
-METHOD int register {
+METHOD void * register {
 	device_t dev;
 } DEFAULT null_register;
