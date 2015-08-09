@@ -2430,16 +2430,12 @@ iflib_device_probe(device_t dev)
 }
 
 int
-iflib_device_register(device_t dev, if_ctx_t *ctxp, void *sc)
+iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ctxp)
 {
 	int err, rid, msix;
 	if_ctx_t ctx;
-	if_shared_ctx_t sctx;
 	if_softc_ctx_t scctx;
 
-
-	if ((sctx = DEVICE_REGISTER(dev)) == NULL || sctx->isc_magic != IFLIB_MAGIC)
-		return (ENOTSUP);
 
 	ctx = malloc(sizeof(* ctx), M_IFLIB, M_WAITOK|M_ZERO);
 
@@ -2515,8 +2511,12 @@ int
 iflib_device_attach(device_t dev)
 {
 	if_ctx_t ctx;
+	if_shared_ctx_t sctx;
 
-	return (iflib_device_register(dev, &ctx, NULL));
+	if ((sctx = DEVICE_REGISTER(dev)) == NULL || sctx->isc_magic != IFLIB_MAGIC)
+		return (ENOTSUP);
+
+	return (iflib_device_register(dev, NULL, sctx, &ctx));
 }
 
 int

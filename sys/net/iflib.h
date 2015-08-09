@@ -189,10 +189,6 @@ typedef enum {
  * Driver has already allocated vectors
  */
 #define IFLIB_SKIP_MSIX		0x2
-/*
- * Driver doesn't own softc field in device
- */
-#define IFLIB_DEV_PRIVATE	0x4
 
 
 /*
@@ -227,7 +223,7 @@ int iflib_device_resume(device_t);
  * If the driver can't plug cleanly in to newbus
  * use these
  */
-int iflib_device_register(device_t, if_ctx_t *, void *);
+int iflib_device_register(device_t dev, void *softc, if_shared_ctx_t sctx, if_ctx_t *ctxp);
 int iflib_device_deregister(if_ctx_t);
 
 
