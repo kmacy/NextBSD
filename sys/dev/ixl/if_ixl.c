@@ -289,7 +289,7 @@ static device_method_t ixl_if_methods[] = {
 };
 
 static driver_t ixl_if_driver = {
-	"ixl_if", ixl_if_methods, sizeof(struct if_shared_ctx),
+	"ixl_if", ixl_if_methods, sizeof(struct ixl_pf),
 };
 
 #ifdef DEV_NETMAP

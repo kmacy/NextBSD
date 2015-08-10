@@ -1040,7 +1040,7 @@ _iflib_fl_refill(if_ctx_t ctx, iflib_fl_t fl, int count)
 done:
 #endif
 	DBG_COUNTER_INC(rxd_flush);
-	ctx->isc_rxd_flush(ctx, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
+	ctx->isc_rxd_flush(ctx->ifc_softc, fl->ifl_rxq->ifr_id, fl->ifl_id, fl->ifl_pidx);
 }
 
 static __inline void
@@ -2695,7 +2695,7 @@ iflib_register(if_ctx_t ctx)
 	/*
 	 * Initialize our context's device specific methods
 	 */
-	kobj_init((kobj_t) sctx, (kobj_class_t) driver);
+	kobj_init((kobj_t) ctx, (kobj_class_t) driver);
 	kobj_class_compile((kobj_class_t) driver);
 	driver->refs++;
 
