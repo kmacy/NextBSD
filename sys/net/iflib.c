@@ -1444,7 +1444,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	MPASS(budget > 0);
 	rx_pkts	= rx_bytes = 0;
 
-	if ((avail = iflib_rxd_avail(ctx->ifc_softc, rxq, cidx)) == 0) {
+	if ((avail = iflib_rxd_avail(ctx, rxq, cidx)) == 0) {
 		for (i = 0, fl = &rxq->ifr_fl[0]; i < sctx->isc_nfl; i++, fl++)
 			__iflib_fl_refill_lt(ctx, fl, budget + 8);
 		DBG_COUNTER_INC(rx_unavail);
@@ -1520,7 +1520,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 		fl->ifl_gen = fl_gen;
 
 		if (avail == 0 && budget_left)
-			avail = iflib_rxd_avail(ctx->ifc_softc, rxq, cidx);
+			avail = iflib_rxd_avail(ctx, rxq, cidx);
 
 		if (m == NULL) {
 			DBG_COUNTER_INC(rx_mbuf_null);
@@ -1568,7 +1568,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	if (sctx->isc_flags & IFLIB_HAS_CQ)
 		*cidxp = cidx;
 	*genp = gen;
-	return (iflib_rxd_avail(ctx->ifc_softc, rxq, cidx));
+	return (iflib_rxd_avail(ctx, rxq, cidx));
 }
 
 #define M_CSUM_FLAGS(m) ((m)->m_pkthdr.csum_flags)
