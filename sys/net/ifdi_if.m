@@ -116,6 +116,10 @@ METHOD int suspend {
 	if_ctx_t _ctx;
 } DEFAULT null_int_op;
 
+METHOD int shutdown {
+	if_ctx_t _ctx;
+} DEFAULT null_int_op;
+
 METHOD int resume {
 	if_ctx_t _ctx;
 } DEFAULT null_int_op;

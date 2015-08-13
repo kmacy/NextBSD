@@ -217,6 +217,7 @@ int iflib_device_attach(device_t);
 int iflib_device_detach(device_t);
 int iflib_device_suspend(device_t);
 int iflib_device_resume(device_t);
+int iflib_device_shutdown(device_t);
 
 
 /*

@@ -2586,6 +2586,18 @@ iflib_device_suspend(device_t dev)
 
 	return bus_generic_suspend(dev);
 }
+int
+iflib_device_shutdown(device_t dev)
+{
+	if_ctx_t ctx = device_get_softc(dev);
+
+	CTX_LOCK(ctx);
+	IFDI_SHUTDOWN(ctx);
+	CTX_UNLOCK(ctx);
+
+	return bus_generic_suspend(dev);
+}
+
 
 int
 iflib_device_resume(device_t dev)
