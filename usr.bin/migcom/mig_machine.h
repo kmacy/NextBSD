@@ -22,11 +22,7 @@
  * cmk1.1
  */
 
-#if defined(__ILP32__)
-#define	machine_alignment(SZ,ESZ) 					\
-	(((SZ) = ((SZ) + 3) & ~3), (SZ) += (ESZ))
-
-#elif defined(__LP64__)
+#if defined(__LP64__)
 
 #define	machine_alignment(SZ,ESZ) 					\
  	(((((ESZ) > 4) && ((SZ) & 7)) ?  				\
@@ -34,7 +30,9 @@
 	(SZ) = ((SZ) + 3) & ~3 : 0)), (SZ) += (ESZ))
 
 #else
-#error "unknown type size"
+#define	machine_alignment(SZ,ESZ) 					\
+	(((SZ) = ((SZ) + 3) & ~3), (SZ) += (ESZ))
+
 #endif
 
 #define	machine_padding(BYTES)						\
