@@ -159,12 +159,12 @@ static vm_page_t
 ttm_vm_page_alloc_dma32(int req, vm_memattr_t memattr)
 {
 	vm_page_t p;
-	int tries;
+	int level;
 
-	for (tries = 0; ; tries++) {
+	for (level = 0; ; level++) {
 		p = vm_page_alloc_contig(NULL, 0, req, 1, 0, 0xffffffff,
 		    PAGE_SIZE, 0, memattr);
-		if (p != NULL || tries > 2)
+		if (p != NULL || level > 2)
 			return (p);
 
 		/*
@@ -172,7 +172,12 @@ ttm_vm_page_alloc_dma32(int req, vm_memattr_t memattr)
 		 * memory shortage.
 		 */
 		VM_WAIT;
-		vm_pageout_grow_cache(tries, 0, 0xffffffff);
+#ifdef VM_LEGACY
+			vm_pageout_grow_cache(level, 0, 0xffffffff);
+#else
+			vm_pageout_reclaim_contig(1, 0, 0xffffffff, PAGE_SIZE, 0, level);
+#endif
+
 	}
 }
 

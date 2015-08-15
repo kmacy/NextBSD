@@ -132,11 +132,14 @@ __FBSDID("$FreeBSD$");
 /* Define this to check for blessed mutexes */
 #undef BLESSING
 
+
+#define WITNESS_DISABLED	-2
+
 #ifndef WITNESS_COUNT
 #define	WITNESS_COUNT 		1536
 #endif
 #define	WITNESS_HASH_SIZE	251	/* Prime, gives load factor < 2 */
-#define	WITNESS_PENDLIST	(1024 + MAXCPU)
+#define	WITNESS_PENDLIST	(1536 + MAXCPU)
 
 /* Allocate 256 KB of stack data space */
 #define	WITNESS_LO_DATA_COUNT	2048
@@ -748,6 +751,10 @@ witness_initialize(void *dummy __unused)
 	struct witness *w, *w1;
 	int i;
 
+	if (witness_watch == WITNESS_DISABLED) {
+		printf("WITNESS disabled\n");
+		return;
+	}
 	w_data = malloc(sizeof (struct witness) * witness_count, M_WITNESS,
 	    M_WAITOK | M_ZERO);
 
@@ -860,10 +867,12 @@ witness_init(struct lock_object *lock, const char *type)
 	else if (witness_cold) {
 		pending_locks[pending_cnt].wh_lock = lock;
 		pending_locks[pending_cnt++].wh_type = type;
-		if (pending_cnt > WITNESS_PENDLIST)
-			panic("%s: pending locks list is too small, "
-			    "increase WITNESS_PENDLIST\n",
-			    __func__);
+		if (pending_cnt > WITNESS_PENDLIST) {
+			printf("%s: pending locks list is too small, "
+			    "increase WITNESS_PENDLIST - disabling witness\n",
+				   __func__);
+			witness_watch = WITNESS_DISABLED;
+		}
 	} else
 		lock->lo_witness = enroll(type, class);
 }
@@ -875,6 +884,9 @@ witness_destroy(struct lock_object *lock)
 	struct witness *w;
 
 	class = LOCK_CLASS(lock);
+
+	if (witness_watch == WITNESS_DISABLED)
+		return;
 
 	if (witness_cold)
 		panic("lock (%s) %s destroyed while witness_cold",
@@ -988,6 +1000,9 @@ static void
 witness_ddb_display(int(*prnt)(const char *fmt, ...))
 {
 	struct witness *w;
+
+	if (witness_watch == WITNESS_DISABLED)
+		return;
 
 	KASSERT(witness_cold == 0, ("%s: witness_cold", __func__));
 	witness_ddb_compute_levels();
@@ -1473,6 +1488,9 @@ witness_upgrade(struct lock_object *lock, int flags, const char *file, int line)
 	struct lock_instance *instance;
 	struct lock_class *class;
 
+	if (witness_watch == WITNESS_DISABLED)
+		return;
+
 	KASSERT(witness_cold == 0, ("%s: witness_cold", __func__));
 	if (lock->lo_witness == NULL || witness_watch == -1 || panicstr != NULL)
 		return;
@@ -1518,6 +1536,9 @@ witness_downgrade(struct lock_object *lock, int flags, const char *file,
 {
 	struct lock_instance *instance;
 	struct lock_class *class;
+
+	if (witness_watch == WITNESS_DISABLED)
+		return;
 
 	KASSERT(witness_cold == 0, ("%s: witness_cold", __func__));
 	if (lock->lo_witness == NULL || witness_watch == -1 || panicstr != NULL)
@@ -2251,6 +2272,8 @@ witness_save(struct lock_object *lock, const char **filep, int *linep)
 	 * Giant, SCHEDULER_STOPPED() check can be removed here after Giant
 	 * is gone.
 	 */
+	if (witness_watch == WITNESS_DISABLED)
+		return;
 	if (SCHEDULER_STOPPED())
 		return;
 	KASSERT(witness_cold == 0, ("%s: witness_cold", __func__));
@@ -2286,6 +2309,8 @@ witness_restore(struct lock_object *lock, const char *file, int line)
 	 * Giant, SCHEDULER_STOPPED() check can be removed here after Giant
 	 * is gone.
 	 */
+	if (witness_watch == WITNESS_DISABLED)
+		return;
 	if (SCHEDULER_STOPPED())
 		return;
 	KASSERT(witness_cold == 0, ("%s: witness_cold", __func__));
@@ -2432,6 +2457,9 @@ witness_releaseok(struct lock_object *lock)
 static void
 witness_ddb_list(struct thread *td)
 {
+
+	if (witness_watch == WITNESS_DISABLED)
+		return;
 
 	KASSERT(witness_cold == 0, ("%s: witness_cold", __func__));
 	KASSERT(kdb_active, ("%s: not in the debugger", __func__));

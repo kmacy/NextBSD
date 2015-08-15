@@ -67,6 +67,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
 #include <vm/vm_phys.h>
+#include <vm/vm_pageout.h>
 
 #include <vm/vm_domain.h>
 
@@ -1256,7 +1257,7 @@ vm_phys_zero_pages_idle(void)
 	for (;;) {
 		TAILQ_FOREACH_REVERSE(m, &fl[oind].pl, pglist, plinks.q) {
 			for (m_tmp = m; m_tmp < &m[1 << oind]; m_tmp++) {
-				if ((m_tmp->flags & (PG_CACHED | PG_ZERO)) == 0) {
+				if ((m_tmp->flags & PG_ZERO) == 0) {
 					vm_phys_unfree_page(m_tmp);
 					vm_phys_freecnt_adj(m, -1);
 					mtx_unlock(&vm_page_queue_free_mtx);
@@ -1403,6 +1404,85 @@ done:
 		vm_phys_free_contig(&m_ret[npages], npages_end - npages);
 	return (m_ret);
 }
+
+/*
+ * Find a range of contiguous free pages that can be easily reclaimed
+ * with the set of properties matching those defined by
+ * vm_phys_alloc_contig().
+ */
+vm_page_t
+vm_phys_reclaim_contig(u_long npages, vm_paddr_t low, vm_paddr_t high,
+    u_long alignment, vm_paddr_t boundary, int level)
+{
+	struct vm_freelist *fl;
+	struct vm_phys_seg *seg;
+	vm_paddr_t pa, size;
+	vm_page_t m_ret, m_min;
+	u_long min_workpages, workpages;
+	int dom, domain, flind, oind, order, pind;
+
+	mtx_assert(&vm_page_queue_free_mtx, MA_OWNED);
+	size = npages << PAGE_SHIFT;
+	KASSERT(size != 0,
+	    ("vm_phys_reclaim_contig: size must not be 0"));
+	KASSERT((alignment & (alignment - 1)) == 0,
+	    ("vm_phys_reclaim_contig: alignment must be a power of 2"));
+	KASSERT((boundary & (boundary - 1)) == 0,
+	    ("vm_phys_reclaim_contig: boundary must be a power of 2"));
+	/* Compute the queue that is the best fit for npages. */
+	for (order = 0; (1 << order) < npages; order++);
+	order--;
+	m_min = NULL;
+	workpages = 0;
+	dom = 0;
+restartdom:
+	domain = vm_rr_selectdomain();
+	for (flind = 0; flind < vm_nfreelists; flind++) {
+		for (oind = min(order, VM_NFREEORDER-1); oind >= 0; oind--) {
+			for (pind = 0; pind < VM_NFREEPOOL; pind++) {
+				fl = &vm_phys_free_queues[domain][flind][pind][0];
+				TAILQ_FOREACH(m_ret, &fl[oind].pl, plinks.q) {
+					/*
+					 * A free list may contain physical pages
+					 * from one or more segments.
+					 */
+					seg = &vm_phys_segs[m_ret->segind];
+					if (seg->start > high ||
+					    low >= seg->end)
+						continue;
+
+					/*
+					 * Determine if the blocks are within the given range,
+					 * satisfy the given alignment, and do not cross the
+					 * given boundary.
+					 */
+					pa = VM_PAGE_TO_PHYS(m_ret);
+					if (pa < low ||
+					    pa + size > high ||
+					    pa + size > seg->end ||
+					    (pa & (alignment - 1)) != 0 ||
+					    ((pa ^ (pa + size - 1)) & ~(boundary - 1)) != 0)
+						continue;
+
+					workpages = vm_pageout_count_pages(&m_ret[1 << oind],
+					    npages - (1 << oind), level);
+					/* Don't scan further if we found an easy match. */
+					if (workpages == 0)
+						return (m_ret);
+					if (workpages != -1 &&
+					    (m_min == NULL || workpages < min_workpages)) {
+						m_min = m_ret;
+						min_workpages = workpages;
+					}
+				}
+			}
+		}
+	}
+	if (++dom < vm_ndomains)
+		goto restartdom;
+	return (m_min);
+}
+
 
 #ifdef DDB
 /*

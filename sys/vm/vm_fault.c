@@ -1536,8 +1536,7 @@ vm_fault_additional_pages(m, rbehind, rahead, marray, reqpage)
 		for (i = 0, tpindex = pindex - 1; tpindex >= startpindex &&
 		    tpindex < pindex; i++, tpindex--) {
 
-			rtm = vm_page_alloc(object, tpindex, VM_ALLOC_NORMAL |
-			    VM_ALLOC_IFNOTCACHED);
+			rtm = vm_page_alloc(object, tpindex, VM_ALLOC_NORMAL);
 			if (rtm == NULL) {
 				/*
 				 * Shift the allocated pages to the
@@ -1575,8 +1574,7 @@ vm_fault_additional_pages(m, rbehind, rahead, marray, reqpage)
 
 	for (; tpindex < endpindex; i++, tpindex++) {
 
-		rtm = vm_page_alloc(object, tpindex, VM_ALLOC_NORMAL |
-		    VM_ALLOC_IFNOTCACHED);
+		rtm = vm_page_alloc(object, tpindex, VM_ALLOC_NORMAL);
 		if (rtm == NULL) {
 			break;
 		}

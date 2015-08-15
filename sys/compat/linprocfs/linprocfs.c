@@ -144,7 +144,7 @@ linprocfs_domeminfo(PFS_FILL_ARGS)
 	unsigned long memused;		/* used memory in bytes */
 	unsigned long memfree;		/* free memory in bytes */
 	unsigned long memshared;	/* shared memory ??? */
-	unsigned long buffers, cached;	/* buffer / cache memory ??? */
+	unsigned long buffers;		/* buffer */
 	unsigned long long swaptotal;	/* total swap space in bytes */
 	unsigned long long swapused;	/* used swap space in bytes */
 	unsigned long long swapfree;	/* free swap space in bytes */
@@ -184,23 +184,21 @@ linprocfs_domeminfo(PFS_FILL_ARGS)
 	 * like unstaticizing it just for linprocfs's sake.
 	 */
 	buffers = 0;
-	cached = vm_cnt.v_cache_count * PAGE_SIZE;
 
 	sbuf_printf(sb,
-	    "	     total:    used:	free:  shared: buffers:	 cached:\n"
-	    "Mem:  %lu %lu %lu %lu %lu %lu\n"
+	    "	     total:    used:	free:  shared: buffers:	 \n"
+	    "Mem:  %lu %lu %lu %lu %lu\n"
 	    "Swap: %llu %llu %llu\n"
 	    "MemTotal: %9lu kB\n"
 	    "MemFree:  %9lu kB\n"
 	    "MemShared:%9lu kB\n"
 	    "Buffers:  %9lu kB\n"
-	    "Cached:   %9lu kB\n"
 	    "SwapTotal:%9llu kB\n"
 	    "SwapFree: %9llu kB\n",
-	    memtotal, memused, memfree, memshared, buffers, cached,
+	    memtotal, memused, memfree, memshared, buffers,
 	    swaptotal, swapused, swapfree,
 	    B2K(memtotal), B2K(memfree),
-	    B2K(memshared), B2K(buffers), B2K(cached),
+	    B2K(memshared), B2K(buffers),
 	    B2K(swaptotal), B2K(swapfree));
 
 	return (0);

@@ -54,9 +54,9 @@ void		vm_reserv_break_all(vm_object_t object);
 boolean_t	vm_reserv_free_page(vm_page_t m);
 void		vm_reserv_init(void);
 int		vm_reserv_level_iffullpop(vm_page_t m);
-boolean_t	vm_reserv_reactivate_page(vm_page_t m);
 boolean_t	vm_reserv_reclaim_contig(u_long npages, vm_paddr_t low,
 		    vm_paddr_t high, u_long alignment, vm_paddr_t boundary);
+boolean_t	vm_reserv_reclaim_page(vm_page_t m);
 boolean_t	vm_reserv_reclaim_inactive(void);
 void		vm_reserv_rename(vm_page_t m, vm_object_t new_object,
 		    vm_object_t old_object, vm_pindex_t old_object_offset);

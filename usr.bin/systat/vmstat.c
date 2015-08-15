@@ -107,7 +107,6 @@ static struct Info {
 	u_int v_wire_count;	/* number of pages wired down */
 	u_int v_active_count;	/* number of pages active */
 	u_int v_inactive_count;	/* number of pages inactive */
-	u_int v_cache_count;	/* number of pages on buffer cache queue */
 	struct	vmtotal Total;
 	struct	nchstats nchstats;
 	long	nchcount;
@@ -511,7 +510,6 @@ showkre(void)
 	putint(pgtokb(s.v_wire_count), VMSTATROW + 12, VMSTATCOL, 8);
 	putint(pgtokb(s.v_active_count), VMSTATROW + 13, VMSTATCOL, 8);
 	putint(pgtokb(s.v_inactive_count), VMSTATROW + 14, VMSTATCOL, 8);
-	putint(pgtokb(s.v_cache_count), VMSTATROW + 15, VMSTATCOL, 8);
 	putint(pgtokb(s.v_free_count), VMSTATROW + 16, VMSTATCOL, 8);
 	if (LINES - 1 > VMSTATROW + 17)
 		putint(s.bufspace / 1024, VMSTATROW + 17, VMSTATCOL, 8);
@@ -786,7 +784,6 @@ getinfo(struct Info *ls)
 	GETSYSCTL("vm.stats.vm.v_wire_count", ls->v_wire_count);
 	GETSYSCTL("vm.stats.vm.v_active_count", ls->v_active_count);
 	GETSYSCTL("vm.stats.vm.v_inactive_count", ls->v_inactive_count);
-	GETSYSCTL("vm.stats.vm.v_cache_count", ls->v_cache_count);
 	GETSYSCTL("vfs.bufspace", ls->bufspace);
 	GETSYSCTL("kern.maxvnodes", ls->desiredvnodes);
 	GETSYSCTL("vfs.numvnodes", ls->numvnodes);

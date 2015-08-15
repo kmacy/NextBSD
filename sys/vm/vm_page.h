@@ -185,7 +185,7 @@ struct vm_page {
  * The algorithm is taken mostly by rwlock(9) and sx(9) locks implementation,
  * even if the support for owner identity is removed because of size
  * constraints.  Checks on lock recursion are then not possible, while the
- * lock assertions effectiveness is someway reduced.
+ * lock assertions effectiveness is somewhat reduced.
  */
 #define	VPB_BIT_SHARED		0x01
 #define	VPB_BIT_EXCLUSIVE	0x02
@@ -208,6 +208,10 @@ struct vm_page {
 #define	PQ_ACTIVE	1
 #define	PQ_COUNT	2
 
+#include <vm/vm_param.h> /* PA_LOCK_COUNT */
+
+#define VM_ASSERT(exp) KASSERT(exp, (#exp))
+
 TAILQ_HEAD(pglist, vm_page);
 SLIST_HEAD(spglist, vm_page);
 
@@ -221,7 +225,7 @@ struct vm_pagequeue {
 
 
 struct vm_domain {
-	struct vm_pagequeue vmd_pagequeues[PQ_COUNT];
+	struct vm_pagequeue vmd_pagequeues[PQ_COUNT + PA_LOCK_COUNT];
 	u_int vmd_page_count;
 	u_int vmd_free_count;
 	long vmd_segs;	/* bitmask of the segments */
@@ -230,11 +234,14 @@ struct vm_domain {
 	int vmd_last_active_scan;
 	struct vm_page vmd_marker; /* marker for pagedaemon private use */
 };
+#define	vm_page_queue_idx(m)  	\
+    (PQ_COUNT + (pa_index(VM_PAGE_TO_PHYS((m))) % PA_LOCK_COUNT))
 
 extern struct vm_domain vm_dom[MAXMEMDOM];
 
 #define	vm_pagequeue_assert_locked(pq)	mtx_assert(&(pq)->pq_mutex, MA_OWNED)
 #define	vm_pagequeue_lock(pq)		mtx_lock(&(pq)->pq_mutex)
+#define	vm_pagequeue_trylock(pq)		mtx_trylock(&(pq)->pq_mutex)
 #define	vm_pagequeue_unlock(pq)		mtx_unlock(&(pq)->pq_mutex)
 
 #ifdef _KERNEL
@@ -322,7 +329,7 @@ extern struct mtx_padalign pa_lock[];
  * Page flags.  If changed at any other time than page allocation or
  * freeing, the modification must be protected by the vm_page lock.
  */
-#define	PG_CACHED	0x0001		/* page is cached */
+#define	PG_PAQUEUE	0x0001		/* page has inactivation pending */
 #define	PG_FICTITIOUS	0x0004		/* physical page doesn't exist */
 #define	PG_ZERO		0x0008		/* page is zeroed */
 #define	PG_MARKER	0x0010		/* special queue marker page */
@@ -349,10 +356,6 @@ extern struct mtx_padalign pa_lock[];
  *
  *	free
  *		Available for allocation now.
- *
- *	cache
- *		Almost available for allocation. Still associated with
- *		an object, but clean and immediately freeable.
  *
  * The following lists are LRU sorted:
  *
@@ -401,8 +404,8 @@ vm_page_t PHYS_TO_VM_PAGE(vm_paddr_t pa);
 #define	VM_ALLOC_ZERO		0x0040	/* (acfg) Try to obtain a zeroed page */
 #define	VM_ALLOC_NOOBJ		0x0100	/* (acg) No associated object */
 #define	VM_ALLOC_NOBUSY		0x0200	/* (acg) Do not busy the page */
-#define	VM_ALLOC_IFCACHED	0x0400	/* (ag) Fail if page is not cached */
-#define	VM_ALLOC_IFNOTCACHED	0x0800	/* (ag) Fail if page is cached */
+#define	VM_ALLOC_UNUSED11	0x0400	/* unused */
+#define	VM_ALLOC_UNUSED12	0x0800	/* unused */
 #define	VM_ALLOC_IGN_SBUSY	0x1000	/* (g) Ignore shared busy flag */
 #define	VM_ALLOC_NODUMP		0x2000	/* (ag) don't include in dump */
 #define	VM_ALLOC_SBUSY		0x4000	/* (acg) Shared busy the page */
@@ -445,10 +448,6 @@ vm_page_t vm_page_alloc_contig(vm_object_t object, vm_pindex_t pindex, int req,
     vm_paddr_t boundary, vm_memattr_t memattr);
 vm_page_t vm_page_alloc_freelist(int, int);
 vm_page_t vm_page_grab (vm_object_t, vm_pindex_t, int);
-void vm_page_cache(vm_page_t);
-void vm_page_cache_free(vm_object_t, vm_pindex_t, vm_pindex_t);
-void vm_page_cache_transfer(vm_object_t, vm_pindex_t, vm_object_t);
-int vm_page_try_to_cache (vm_page_t);
 int vm_page_try_to_free (vm_page_t);
 void vm_page_deactivate (vm_page_t);
 void vm_page_dequeue(vm_page_t m);
@@ -457,11 +456,11 @@ vm_page_t vm_page_find_least(vm_object_t, vm_pindex_t);
 vm_page_t vm_page_getfake(vm_paddr_t paddr, vm_memattr_t memattr);
 void vm_page_initfake(vm_page_t m, vm_paddr_t paddr, vm_memattr_t memattr);
 int vm_page_insert (vm_page_t, vm_object_t, vm_pindex_t);
-boolean_t vm_page_is_cached(vm_object_t object, vm_pindex_t pindex);
 vm_page_t vm_page_lookup (vm_object_t, vm_pindex_t);
 vm_page_t vm_page_next(vm_page_t m);
 int vm_page_pa_tryrelock(pmap_t, vm_paddr_t, vm_paddr_t *);
 struct vm_pagequeue *vm_page_pagequeue(vm_page_t m);
+struct vm_pagequeue *vm_page_pagequeue_deferred(vm_page_t m);
 vm_page_t vm_page_prev(vm_page_t m);
 boolean_t vm_page_ps_is_valid(vm_page_t m);
 void vm_page_putfake(vm_page_t m);
@@ -494,6 +493,8 @@ void vm_page_zero_invalid(vm_page_t m, boolean_t setvalid);
 void vm_page_free_toq(vm_page_t m);
 void vm_page_zero_idle_wakeup(void);
 
+int vm_page_queue_fixup(struct vm_page *m);
+int vm_page_queue_fixup_locked(struct vm_page *m);
 void vm_page_dirty_KBI(vm_page_t m);
 void vm_page_lock_KBI(vm_page_t m, const char *file, int line);
 void vm_page_unlock_KBI(vm_page_t m, const char *file, int line);

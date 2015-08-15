@@ -79,16 +79,6 @@
  *
  *	vm_object_t		Virtual memory object.
  *
- *	The root of cached pages pool is protected by both the per-object lock
- *	and the free pages queue mutex.
- *	On insert in the cache radix trie, the per-object lock is expected
- *	to be already held and the free pages queue mutex will be
- *	acquired during the operation too.
- *	On remove and lookup from the cache radix trie, only the free
- *	pages queue mutex is expected to be locked.
- *	These rules allow for reliably checking for the presence of cached
- *	pages with only the per-object lock held, thereby reducing contention
- *	for the free pages queue mutex.
  *
  * List of locks
  *	(c)	const until freed
@@ -118,7 +108,6 @@ struct vm_object {
 	vm_ooffset_t backing_object_offset;/* Offset in backing object */
 	TAILQ_ENTRY(vm_object) pager_object_list; /* list of all objects of this pager type */
 	LIST_HEAD(, vm_reserv) rvq;	/* list of reservations */
-	struct vm_radix cache;		/* (o + f) root of the cache page radix trie */
 	void *handle;
 	union {
 		/*
@@ -287,13 +276,6 @@ void vm_object_pip_wakeup(vm_object_t object);
 void vm_object_pip_wakeupn(vm_object_t object, short i);
 void vm_object_pip_wait(vm_object_t object, char *waitid);
 
-static __inline boolean_t
-vm_object_cache_is_empty(vm_object_t object)
-{
-
-	return (vm_radix_is_empty(&object->cache));
-}
-
 vm_object_t vm_object_allocate (objtype_t, vm_pindex_t);
 boolean_t vm_object_coalesce(vm_object_t, vm_ooffset_t, vm_size_t, vm_size_t,
    boolean_t);
@@ -304,8 +286,6 @@ void vm_object_terminate (vm_object_t);
 void vm_object_set_writeable_dirty (vm_object_t);
 void vm_object_init (void);
 void vm_object_madvise(vm_object_t, vm_pindex_t, vm_pindex_t, int);
-void vm_object_page_cache(vm_object_t object, vm_pindex_t start,
-    vm_pindex_t end);
 boolean_t vm_object_page_clean(vm_object_t object, vm_ooffset_t start,
     vm_ooffset_t end, int flags);
 void vm_object_page_remove(vm_object_t object, vm_pindex_t start,

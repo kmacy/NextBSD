@@ -456,10 +456,6 @@ vnode_pager_setsize(struct vnode *vp, vm_ooffset_t nsize)
 			 * replacement from working properly.
 			 */
 			vm_page_clear_dirty(m, base, PAGE_SIZE - base);
-		} else if ((nsize & PAGE_MASK) &&
-		    vm_page_is_cached(object, OFF_TO_IDX(nsize))) {
-			vm_page_cache_free(object, OFF_TO_IDX(nsize),
-			    nobjsize);
 		}
 	}
 	object->un_pager.vnp.vnp_size = nsize;
@@ -1134,8 +1130,7 @@ vnode_pager_putpages(vm_object_t object, vm_page_t *m, int count,
 	 * daemon up.  This should be probably be addressed XXX.
 	 */
 
-	if (vm_cnt.v_free_count + vm_cnt.v_cache_count <
-	    vm_cnt.v_pageout_free_min)
+	if (vm_cnt.v_free_count < vm_cnt.v_pageout_free_min)
 		flags |= VM_PAGER_PUT_SYNC;
 
 	/*
