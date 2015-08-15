@@ -44,8 +44,12 @@ typedef struct {
 	int fts_rfd;			/* fd for root */
 	__size_t fts_pathlen;		/* sizeof(path) */
 	__size_t fts_nitems;		/* elements in the sort array */
-	int (*fts_compar)		/* compare function */
-	    (const struct _ftsent * const *, const struct _ftsent * const *);
+	union {
+		int (*fts_compar)	/* compare function */
+		    (const struct _ftsent * const *,
+		       const struct _ftsent * const *);
+		void *fts_compar_b;	/* compare block */
+	};
 
 #define	FTS_COMFOLLOW	0x001		/* follow command line symlinks */
 #define	FTS_LOGICAL	0x002		/* logical walk */
@@ -59,6 +63,7 @@ typedef struct {
 
 #define	FTS_NAMEONLY	0x100		/* (private) child names only */
 #define	FTS_STOP	0x200		/* (private) unrecoverable error */
+#define	FTS_COMPAR_B	0x400		/* (private) use block compare */
 	int fts_options;		/* fts_open options, global flags */
 	void *fts_clientptr;		/* thunk for sort function */
 } FTS;
@@ -128,6 +133,10 @@ FTS	*fts_get_stream(FTSENT *);
 #define	 fts_get_stream(ftsent)	((ftsent)->fts_fts)
 FTS	*fts_open(char * const *, int,
 	    int (*)(const FTSENT * const *, const FTSENT * const *));
+#ifdef __BLOCKS__
+FTS	*fts_open_b(char * const *, int,
+	    int (^)(const FTSENT * const *, const FTSENT * const *));
+#endif /* __BLOCKS__ */
 FTSENT	*fts_read(FTS *);
 int	 fts_set(FTS *, FTSENT *, int);
 void	 fts_set_clientptr(FTS *, void *);

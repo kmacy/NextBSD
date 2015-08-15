@@ -319,6 +319,7 @@ MLINKS+=dlopen.3 fdlopen.3 \
 	dlopen.3 dlfunc.3 \
 	dlopen.3 dlsym.3
 MLINKS+=err.3 err_set_exit.3 \
+	err.3 err_set_exit_b.3 \
 	err.3 err_set_file.3 \
 	err.3 errc.3 \
 	err.3 errx.3 \
@@ -349,6 +350,7 @@ MLINKS+=frexp.3 frexpf.3 \
 MLINKS+=fts.3 fts_children.3 \
 	fts.3 fts_close.3 \
 	fts.3 fts_open.3 \
+	fts.3 fts_open_b.3 \
 	fts.3 fts_read.3 \
 	fts.3 fts_set.3 \
 	fts.3 fts_set_clientptr.3 \
@@ -413,7 +415,8 @@ MLINKS+=getutxent.3 endutxent.3 \
 	getutxent.3 setutxdb.3 \
 	getutxent.3 setutxent.3 \
 	getutxent.3 utmpx.3
-MLINKS+=glob.3 globfree.3
+MLINKS+=glob.3 globfree.3 \
+	glob.3 glob_b.3
 MLINKS+=isgreater.3 isgreaterequal.3 \
 	isgreater.3 isless.3 \
 	isgreater.3 islessequal.3 \

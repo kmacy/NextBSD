@@ -410,6 +410,9 @@ FBSD_1.3 {
 };
 
 FBSD_1.4 {
+	err_set_exit_b;
+	fts_open_b;
+	glob_b;
 	scandir_b;
 };
 

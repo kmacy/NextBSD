@@ -50,9 +50,14 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "block_abi.h"
 #include "un-namespace.h"
 
 #include "gen-private.h"
+
+/* fts_block_t */
+typedef DECLARE_BLOCK(int, fts_block_t, const FTSENT * const *,
+		const FTSENT * const *);
 
 static FTSENT	*fts_alloc(FTS *, char *, size_t);
 static FTSENT	*fts_build(FTS *, int);
@@ -109,36 +114,15 @@ static const char *ufslike_filesystems[] = {
 	0
 };
 
-FTS *
-fts_open(argv, options, compar)
+static FTS *
+_fts_open_common(argv, priv)
 	char * const *argv;
-	int options;
-	int (*compar)(const FTSENT * const *, const FTSENT * const *);
-{
 	struct _fts_private *priv;
-	FTS *sp;
+{
+	FTS *sp = &priv->ftsp_fts;
 	FTSENT *p, *root;
 	FTSENT *parent, *tmp;
 	size_t len, nitems;
-
-	/* Options check. */
-	if (options & ~FTS_OPTIONMASK) {
-		errno = EINVAL;
-		return (NULL);
-	}
-
-	/* fts_open() requires at least one path */
-	if (*argv == NULL) {
-		errno = EINVAL;
-		return (NULL);
-	}
-
-	/* Allocate/initialize the stream. */
-	if ((priv = calloc(1, sizeof(*priv))) == NULL)
-		return (NULL);
-	sp = &priv->ftsp_fts;
-	sp->fts_compar = compar;
-	sp->fts_options = options;
 
 	/* Shush, GCC. */
 	tmp = NULL;
@@ -177,7 +161,7 @@ fts_open(argv, options, compar)
 		 * If comparison routine supplied, traverse in sorted
 		 * order; otherwise traverse in the order specified.
 		 */
-		if (compar) {
+		if (sp->fts_compar) {
 			p->fts_link = root;
 			root = p;
 		} else {
@@ -190,7 +174,7 @@ fts_open(argv, options, compar)
 			}
 		}
 	}
-	if (compar && nitems > 1)
+	if (sp->fts_compar && nitems > 1)
 		root = fts_sort(sp, root, nitems);
 
 	/*
@@ -221,6 +205,66 @@ mem3:	fts_lfree(root);
 mem2:	free(sp->fts_path);
 mem1:	free(sp);
 	return (NULL);
+}
+
+static int
+_fts_open_argcheck(char * const *argv, int options)
+{
+
+	/*
+	 * Check for illegal options and for at least one path.
+	 */
+	if (options & ~FTS_OPTIONMASK || *argv == NULL)
+		return (EINVAL);
+
+	return (0);
+}
+
+FTS *
+fts_open(char * const *argv, int options, int (*compar)(const FTSENT * const *,
+    const FTSENT * const *))
+{
+	FTS *sp;
+	struct _fts_private *priv;
+
+	/* Check arguments. */
+	if ((errno = _fts_open_argcheck(argv, options)) != 0)
+		return (NULL);
+
+	/* Allocate/initialize the stream. */
+	if ((priv = calloc(1, sizeof(*priv))) == NULL)
+		return (NULL);
+	sp = &priv->ftsp_fts;
+	sp->fts_compar = compar;
+	sp->fts_options = options;
+
+	return (_fts_open_common(argv, priv));
+}
+
+FTS *
+fts_open_b(char * const *argv, int options, fts_block_t compar)
+{
+	FTS *sp;
+	struct _fts_private *priv;
+
+	/* Check arguments. */
+	if ((errno = _fts_open_argcheck(argv, options)) != 0)
+		return (NULL);
+
+	/* Check to make sure we have the block runtime. */
+	if (_Block_copy == 0) {
+		errno = ENOSYS;
+		return (NULL);
+	}
+
+	/* Allocate/initialize the stream. */
+	if ((priv = calloc(1, sizeof(*priv))) == NULL)
+		return (NULL);
+	sp = &priv->ftsp_fts;
+	sp->fts_compar_b = _Block_copy(compar);
+	sp->fts_options = options | FTS_COMPAR_B;
+
+	return (_fts_open_common(argv, priv));
 }
 
 static void
@@ -273,6 +317,11 @@ fts_close(FTS *sp)
 	if (sp->fts_array)
 		free(sp->fts_array);
 	free(sp->fts_path);
+
+	/* Free block pointer, if any. */
+	if (ISSET(FTS_COMPAR_B) && sp->fts_compar_b != NULL &&
+	    _Block_release != 0)
+		_Block_release(sp->fts_compar_b);
 
 	/* Return to original directory, save errno if necessary. */
 	if (!ISSET(FTS_NOCHDIR)) {
@@ -973,6 +1022,17 @@ fts_compar(const void *a, const void *b)
 	return (*parent->fts_compar)(a, b);
 }
 
+static int
+fts_compar_b(void *thunk, const void *a, const void *b)
+{
+	FTS *sp = (FTS *)thunk;
+	int (*funcp)(const void *, const void *);
+
+	funcp = (int (*)(const void *, const void *))
+	    GET_BLOCK_FUNCTION(sp->fts_compar_b);
+	return (*funcp)(a, b);
+}
+
 static FTSENT *
 fts_sort(FTS *sp, FTSENT *head, size_t nitems)
 {
@@ -995,7 +1055,11 @@ fts_sort(FTS *sp, FTSENT *head, size_t nitems)
 	}
 	for (ap = sp->fts_array, p = head; p; p = p->fts_link)
 		*ap++ = p;
-	qsort(sp->fts_array, nitems, sizeof(FTSENT *), fts_compar);
+	if (ISSET(FTS_COMPAR_B))
+		qsort_r(sp->fts_array, nitems, sizeof(FTSENT *),
+			sp->fts_compar_b, fts_compar_b);
+	else
+		qsort(sp->fts_array, nitems, sizeof(FTSENT *), fts_compar);
 	for (head = *(ap = sp->fts_array); --nitems; ++ap)
 		ap[0]->fts_link = ap[1];
 	ap[0]->fts_link = NULL;
