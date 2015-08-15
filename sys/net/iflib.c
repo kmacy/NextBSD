@@ -704,9 +704,11 @@ iflib_txsd_alloc(iflib_txq_t txq)
 	if_shared_ctx_t sctx = ctx->ifc_sctx;
 	device_t dev = ctx->ifc_dev;
 	iflib_sd_t txsd;
-	int err, i;
+	int err, i, nsegments;
 
+	nsegments = ctx->ifc_softc_ctx.isc_tx_nsegments;
 	MPASS(sctx->isc_ntxd > 0);
+	MPASS(nsegments > 0);
 	/*
 	 * Setup DMA descriptor areas.
 	 */
@@ -716,7 +718,7 @@ iflib_txsd_alloc(iflib_txq_t txq)
 			       BUS_SPACE_MAXADDR,	/* highaddr */
 			       NULL, NULL,		/* filter, filterarg */
 			       sctx->isc_tx_maxsize,		/* maxsize */
-			       sctx->isc_tx_nsegments,	/* nsegments */
+			       nsegments,	/* nsegments */
 			       sctx->isc_tx_maxsegsize,	/* maxsegsize */
 			       0,			/* flags */
 			       NULL,			/* lockfunc */
@@ -724,7 +726,7 @@ iflib_txsd_alloc(iflib_txq_t txq)
 			       &txq->ift_desc_tag))) {
 		device_printf(dev,"Unable to allocate TX DMA tag: %d\n", err);
 		device_printf(dev,"maxsize: %ld nsegments: %d maxsegsize: %ld\n",
-					  sctx->isc_tx_maxsize, sctx->isc_tx_nsegments, sctx->isc_tx_maxsegsize);
+					  sctx->isc_tx_maxsize, nsegments, sctx->isc_tx_maxsegsize);
 		goto fail;
 	}
 
@@ -1181,7 +1183,7 @@ iflib_timer(void *arg)
 {
 	iflib_txq_t txq = arg;
 	if_ctx_t ctx = txq->ift_ctx;
-	if_shared_ctx_t sctx = ctx->ifc_sctx;
+	if_softc_ctx_t scctx = &ctx->ifc_softc_ctx;
 	if_t ifp = ctx->ifc_ifp;
 
 	/*
@@ -1194,7 +1196,7 @@ iflib_timer(void *arg)
 		(ctx->ifc_pause_frames == 0))
 		goto hung;
 
-	if (TXQ_AVAIL(txq) <= sctx->isc_tx_nsegments)
+	if (TXQ_AVAIL(txq) <= scctx->isc_tx_nsegments)
 		GROUPTASK_ENQUEUE(&txq->ift_task);
 
 	ctx->ifc_pause_frames = 0;
@@ -1735,9 +1737,9 @@ retry:
 #define NQSETS(ctx) ((ctx)->ifc_softc_ctx.isc_nqsets)
 #define QIDX(ctx, m) ((((m)->m_pkthdr.flowid >> BRBITS) % NQSETS(ctx)) + FIRST_QSET(ctx))
 #define BRIDX(txq, m) ((m)->m_pkthdr.flowid % txq->ift_nbr)
-#define DESC_RECLAIMABLE(q) ((int)((q)->ift_processed - (q)->ift_cleaned - (q)->ift_ctx->ifc_sctx->isc_tx_nsegments))
+#define DESC_RECLAIMABLE(q) ((int)((q)->ift_processed - (q)->ift_cleaned - (q)->ift_ctx->ifc_softc_ctx.isc_tx_nsegments))
 #define RECLAIM_THRESH(ctx) ((ctx)->ifc_sctx->isc_tx_reclaim_thresh)
-#define MAX_TX_DESC(ctx) ((ctx)->ifc_sctx->isc_tx_nsegments)
+#define MAX_TX_DESC(ctx) ((ctx)->ifc_softc_ctx.isc_tx_nsegments)
 
 
 
@@ -2432,7 +2434,7 @@ iflib_device_probe(device_t dev)
 int
 iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ctxp)
 {
-	int err, rid, msix;
+	int err, rid, msix, msix_bar;
 	if_ctx_t ctx;
 	if_softc_ctx_t scctx;
 
@@ -2455,14 +2457,15 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 		return (err);
 
 	scctx = &ctx->ifc_softc_ctx;
+	msix_bar = scctx->isc_msix_bar;
 	/*
 	** Now setup MSI or MSI/X, should
 	** return us the number of supported
 	** vectors. (Will be 1 for MSI)
 	*/
 	if (sctx->isc_flags & IFLIB_SKIP_MSIX) {
-		msix = ctx->ifc_softc_ctx.isc_vectors;
-	} else if (sctx->isc_msix_bar != 0)
+		msix = scctx->isc_vectors;
+	} else if (scctx->isc_msix_bar != 0)
 		msix = iflib_msix_init(ctx);
 	else {
 		scctx->isc_intr = IFLIB_INTR_LEGACY;
@@ -2667,7 +2670,6 @@ static void
 _iflib_assert(if_shared_ctx_t sctx)
 {
 	MPASS(sctx->isc_tx_maxsize);
-	MPASS(sctx->isc_tx_nsegments);
 	MPASS(sctx->isc_tx_maxsegsize);
 
 	MPASS(sctx->isc_rx_maxsize);
@@ -2681,7 +2683,6 @@ _iflib_assert(if_shared_ctx_t sctx)
 	MPASS(sctx->isc_txrx->ift_rxd_pkt_get);
 	MPASS(sctx->isc_txrx->ift_rxd_refill);
 	MPASS(sctx->isc_txrx->ift_rxd_flush);
-	MPASS(sctx->isc_ntxd > 2*sctx->isc_tx_nsegments);
 	MPASS(sctx->isc_nrxd);
 }
 
@@ -3280,7 +3281,7 @@ iflib_msix_init(if_ctx_t ctx)
 	int vectors, queues, queuemsgs, msgs;
 	int err, admincnt, bar;
 
-	bar = sctx->isc_msix_bar;
+	bar = ctx->ifc_softc_ctx.isc_msix_bar;
 	admincnt = sctx->isc_admin_intrcnt;
 	/* Override by tuneable */
 	if (enable_msix == 0)

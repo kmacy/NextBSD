@@ -379,12 +379,12 @@ static char *ixl_fc_string[6] = {
 };
 
 extern struct if_txrx ixl_txrx;
-
+	
 static struct if_shared_ctx ixl_sctx_init = {
 	.isc_magic = IFLIB_MAGIC,
 	.isc_q_align = PAGE_SIZE,/* max(DBA_ALIGN, PAGE_SIZE) */
 	.isc_tx_maxsize = IXL_TSO_SIZE,
-	.isc_tx_nsegments = IXL_MAX_TX_SEGS,
+
 	.isc_tx_maxsegsize = PAGE_SIZE*4,
 
 	.isc_rx_maxsize = PAGE_SIZE*4,
@@ -398,7 +398,6 @@ static struct if_shared_ctx ixl_sctx_init = {
 	.isc_qsizes[1] = roundup2(DEFAULT_RING *
 							  sizeof(union i40e_rx_desc), DBA_ALIGN),
 	.isc_nqs = 2,
-	.isc_msix_bar = PCIR_BAR(IXL_BAR),
 	.isc_admin_intrcnt = 1,
 	.isc_vendor_id = 	I40E_INTEL_VENDOR_ID,
 	.isc_vendor_info = ixl_vendor_info_array,
@@ -524,6 +523,12 @@ ixl_if_attach_pre(if_ctx_t ctx)
 	vsi->media = iflib_get_media(ctx);
 	vsi->shared = iflib_get_softc_ctx(ctx);
 
+	/*
+	 * These are the same across all current ixl models
+	 */
+	vsi->shared->isc_tx_nsegments = IXL_MAX_TX_SEGS;
+	vsi->shared->isc_msix_bar = PCIR_BAR(IXL_BAR);
+	
 #ifdef PCI_IOV
 	TASK_INIT(&pf->vflr_task, 0, ixl_handle_vflr, pf);
 #endif

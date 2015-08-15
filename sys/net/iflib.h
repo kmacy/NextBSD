@@ -125,10 +125,13 @@ typedef struct if_txrx {
 } *if_txrx_t;
 
 typedef struct if_softc_ctx {
-	int isc_vectors; /* 0 unless pre-allocated by driver */
+	int isc_vectors;
 	int isc_nqsets;
+	int isc_msix_bar;			/* can be model specific - initialize in attach_pre */
+	int isc_tx_nsegments;		/* can be model specific - initialize in attach_pre */
 	iflib_intr_mode_t isc_intr;
-	uint16_t isc_max_frame_size;
+	uint16_t isc_max_frame_size; /* set at init time by driver */
+	pci_vendor_info_t isc_vendor_info;	/* set by iflib prior to attach_pre */
 } *if_softc_ctx_t;
 
 /*
@@ -145,7 +148,6 @@ struct if_shared_ctx {
 	bus_size_t isc_q_align;
 	bus_size_t isc_tx_maxsize;
 	bus_size_t isc_tx_maxsegsize;
-	int isc_tx_nsegments;
 	bus_size_t isc_rx_maxsize;
 	bus_size_t isc_rx_maxsegsize;
 	int isc_rx_nsegments;
@@ -154,7 +156,6 @@ struct if_shared_ctx {
 
 	uint32_t isc_qsizes[8];
 	int isc_nqs;
-	int isc_msix_bar;
 	int isc_admin_intrcnt;
 
 	int isc_tx_reclaim_thresh;
