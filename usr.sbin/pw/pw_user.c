@@ -214,7 +214,7 @@ pw_userlock(char *arg1, int mode)
 	if (arg1 == NULL)
 		errx(EX_DATAERR, "username or id required");
 
-	if (strspn(arg1, "0123456789") == strlen(arg1))
+	if (arg1[strspn(arg1, "0123456789")] == '\0')
 		id = pw_checkid(arg1, UID_MAX);
 	else
 		name = arg1;
@@ -677,7 +677,7 @@ pw_user_next(int argc, char **argv, char *name __unused)
 			cfg = optarg;
 			break;
 		case 'q':
-			quiet;
+			quiet = true;
 			break;
 		}
 	}
@@ -700,7 +700,7 @@ pw_user_show(int argc, char **argv, char *arg1)
 {
 	struct passwd *pwd = NULL;
 	char *name = NULL;
-	uid_t id = -1;
+	intmax_t id = -1;
 	int ch;
 	bool all = false;
 	bool pretty = false;
@@ -709,7 +709,7 @@ pw_user_show(int argc, char **argv, char *arg1)
 	bool quiet = false;
 
 	if (arg1 != NULL) {
-		if (strspn(arg1, "0123456789") == strlen(arg1))
+		if (arg1[strspn(arg1, "0123456789")] == '\0')
 			id = pw_checkid(arg1, UID_MAX);
 		else
 			name = arg1;
@@ -786,14 +786,14 @@ pw_user_del(int argc, char **argv, char *arg1)
 	char home[MAXPATHLEN];
 	const char *cfg = NULL;
 	struct stat st;
-	uid_t id;
+	intmax_t id = -1;
 	int ch, rc;
 	bool nis = false;
 	bool deletehome = false;
 	bool quiet = false;
 
 	if (arg1 != NULL) {
-		if (strspn(arg1, "0123456789") == strlen(arg1))
+		if (arg1[strspn(arg1, "0123456789")] == '\0')
 			id = pw_checkid(arg1, UID_MAX);
 		else
 			name = arg1;
@@ -1124,7 +1124,7 @@ pw_user_add(int argc, char **argv, char *arg1)
 		err(EXIT_FAILURE, "calloc()");
 
 	if (arg1 != NULL) {
-		if (strspn(arg1, "0123456789") == strlen(arg1))
+		if (arg1[strspn(arg1, "0123456789")] == '\0')
 			id = pw_checkid(arg1, UID_MAX);
 		else
 			name = arg1;
@@ -1423,8 +1423,9 @@ pw_user_mod(int argc, char **argv, char *arg1)
 	int ch, fd = -1;
 	size_t i, j;
 	bool quiet, createhome, pretty, dryrun, nis, edited, docreatehome;
+	bool precrypted;
 	mode_t homemode = 0;
-	time_t expire_days, password_days, now, precrypted;
+	time_t expire_days, password_days, now;
 
 	expire_days = password_days = -1;
 	gecos = homedir = grname = name = newname = skel = shell =NULL;
@@ -1434,7 +1435,7 @@ pw_user_mod(int argc, char **argv, char *arg1)
 	edited = docreatehome = false;
 
 	if (arg1 != NULL) {
-		if (strspn(arg1, "0123456789") == strlen(arg1))
+		if (arg1[strspn(arg1, "0123456789")] == '\0')
 			id = pw_checkid(arg1, UID_MAX);
 		else
 			name = arg1;
@@ -1644,6 +1645,8 @@ pw_user_mod(int argc, char **argv, char *arg1)
 		if (lc == NULL || login_setcryptfmt(lc, "sha512", NULL) == NULL)
 			warn("setting crypt(3) format");
 		login_close(lc);
+		cnf->default_password = boolean_val(passwd,
+		    cnf->default_password);
 		pwd->pw_passwd = pw_password(cnf, pwd->pw_name, dryrun);
 		edited = true;
 	}
