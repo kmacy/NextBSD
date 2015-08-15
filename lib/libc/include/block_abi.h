@@ -26,6 +26,8 @@
  * $FreeBSD$
  */
 
+#include <sys/cdefs.h>
+
 #ifdef __BLOCKS__
 /**
  * Declares a block variable.  This macro is defined in the trivial way for
@@ -61,3 +63,9 @@
 		int reserved;\
 		void (*invoke)(void *, ...);\
 	}*)(void*)x)->invoke)
+
+/*
+ * _Block_copy() and _Block_release() are provided by libBlocksRuntime.
+ */
+__weak_symbol void *_Block_copy(void *);
+__weak_symbol void  _Block_release(void *);

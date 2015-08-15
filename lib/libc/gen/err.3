@@ -28,7 +28,7 @@
 .\"	From: @(#)err.3	8.1 (Berkeley) 6/9/93
 .\" $FreeBSD$
 .\"
-.Dd March 29, 2012
+.Dd June 25, 2015
 .Dt ERR 3
 .Os
 .Sh NAME
@@ -45,6 +45,7 @@
 .Nm warnx ,
 .Nm vwarnx ,
 .Nm err_set_exit ,
+.Nm err_set_exit_b ,
 .Nm err_set_file
 .Nd formatted error messages
 .Sh LIBRARY
@@ -54,7 +55,9 @@
 .Ft void
 .Fn err "int eval" "const char *fmt" "..."
 .Ft void
-.Fn err_set_exit "void (*exitf)(int)"
+.Fn err_set_exit "void (*exitfunc)(int)"
+.Ft void
+.Fn err_set_exit_b "void (^exitblock)(int)"
 .Ft void
 .Fn err_set_file "void *vfp"
 .Ft void
@@ -162,9 +165,22 @@ The
 .Fn err_set_exit
 function can be used to specify a function which is called before
 .Xr exit 3
-to perform any necessary cleanup; passing a null function pointer for
-.Va exitf
+to perform any necessary cleanup.
+Passing a null function pointer for
+.Va exitfunc
 resets the hook to do nothing.
+The
+.Fn err_set_exit_b
+function is like
+.Fn err_set_exit ,
+except it takes the block pointer,
+.Va exitblock ,
+instead of a function pointer.
+Note that the
+.Fn Block_copy
+function is used by
+.Fn err_set_exit_b
+to make a copy in case the block is freed or goes out of scope.
 The
 .Fn err_set_file
 function sets the output stream used by the other functions.
@@ -243,3 +259,8 @@ and
 .Fn warnc
 functions first appeared in
 .Fx 3.0 .
+The
+.Fn err_set_exit_b
+function first appeared in Mac OS X.  This implementation was
+created by Stacey Son for
+.Fx 11.0 .
