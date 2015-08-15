@@ -92,7 +92,11 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <wchar.h>
 
+#include "block_abi.h"
 #include "collate.h"
+
+/* errblock_t */
+typedef DECLARE_BLOCK(int, errblock_t, const char *, int);
 
 /*
  * glob(3) expansion limits. Stop the expansion if any of these limits
@@ -189,9 +193,9 @@ static int	 match(Char *, Char *, Char *);
 static void	 qprintf(const char *, Char *);
 #endif
 
-int
-glob(const char * __restrict pattern, int flags,
-	 int (*errfunc)(const char *, int), glob_t * __restrict pglob)
+static int
+_glob_common(const char * __restrict pattern, int flags,
+    glob_t * __restrict pglob)
 {
 	struct glob_limit limit = { 0, 0, 0, 0, 0 };
 	const char *patnext;
@@ -212,8 +216,6 @@ glob(const char * __restrict pattern, int flags,
 		if (limit.l_path_lim == 0)
 			limit.l_path_lim = GLOB_LIMIT_PATH;
 	}
-	pglob->gl_flags = flags & ~GLOB_MAGCHAR;
-	pglob->gl_errfunc = errfunc;
 	pglob->gl_matchc = 0;
 
 	bufnext = patbuf;
@@ -256,6 +258,28 @@ glob(const char * __restrict pattern, int flags,
 	    return (globexp1(patbuf, pglob, &limit));
 	else
 	    return (glob0(patbuf, pglob, &limit));
+}
+
+int
+glob(const char * __restrict pattern, int flags,
+    int (*errfunc)(const char *, int), glob_t * __restrict pglob)
+{
+
+	pglob->gl_flags = flags & ~(GLOB_MAGCHAR | _GLOB_ERRBLK);
+	pglob->gl_errfunc = errfunc;
+	return (_glob_common(pattern, flags, pglob));
+}
+
+int
+glob_b(const char * __restrict pattern, int flags, errblock_t errblock,
+    glob_t * __restrict pglob)
+{
+
+	pglob->gl_flags = flags & ~GLOB_MAGCHAR;
+	pglob->gl_flags |= _GLOB_ERRBLK;
+	pglob->gl_errblk = (void *)errblock;
+
+	return (_glob_common(pattern, flags, pglob));
 }
 
 /*
@@ -649,6 +673,7 @@ glob3(Char *pathbuf, Char *pathend, Char *pathend_last,
 	DIR *dirp;
 	int err;
 	char buf[MAXPATHLEN];
+	int (*errfunc)(const char *, int);
 
 	/*
 	 * The readdirfunc declaration can't be prototyped, because it is
@@ -668,7 +693,13 @@ glob3(Char *pathbuf, Char *pathend, Char *pathend_last,
 		if (pglob->gl_errfunc) {
 			if (g_Ctoc(pathbuf, buf, sizeof(buf)))
 				return (GLOB_ABORTED);
-			if (pglob->gl_errfunc(buf, errno) ||
+printf("glob3: %p %d\n", buf, errno);
+			if (pglob->gl_flags & _GLOB_ERRBLK)
+				errfunc = (int (*)(const char *, int))
+				    GET_BLOCK_FUNCTION(pglob->gl_errblk);
+			else
+				errfunc = pglob->gl_errfunc;
+			if ((*errfunc)(buf, errno) ||
 			    pglob->gl_flags & GLOB_ERR)
 				return (GLOB_ABORTED);
 		}

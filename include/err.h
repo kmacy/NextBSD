@@ -59,6 +59,9 @@ void	warnx(const char *, ...) __printflike(1, 2);
 void	vwarnx(const char *, __va_list) __printflike(1, 0);
 void	err_set_file(void *);
 void	err_set_exit(void (*)(int));
+#ifdef __BLOCKS__
+void	err_set_exit_b(void (^)(int));
+#endif /* __BLOCKS__ */
 __END_DECLS
 
 #endif /* !_ERR_H_ */

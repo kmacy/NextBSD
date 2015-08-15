@@ -28,7 +28,7 @@
 .\"     @(#)fts.3	8.5 (Berkeley) 4/16/94
 .\" $FreeBSD$
 .\"
-.Dd January 12, 2014
+.Dd May 5, 2014
 .Dt FTS 3
 .Os
 .Sh NAME
@@ -40,6 +40,8 @@
 .In fts.h
 .Ft FTS *
 .Fn fts_open "char * const *path_argv" "int options" "int (*compar)(const FTSENT * const *, const FTSENT * const *)"
+.Ft FTS *
+.Fn fts_open_b "char * const *path_argv" "int options" "int (^compar)(const FTSENT * const *, const FTSENT * const *)"
 .Ft FTSENT *
 .Fn fts_read "FTS *ftsp"
 .Ft FTSENT *
@@ -62,7 +64,9 @@ functions are provided for traversing
 file hierarchies.
 A simple overview is that the
 .Fn fts_open
-function returns a
+and
+.Fn fts_open_b
+functions return a
 .Dq handle
 on a file hierarchy, which is then supplied to
 the other
@@ -189,6 +193,8 @@ or
 .Ql ..\&
 which was not specified as a file name to
 .Fn fts_open
+or
+.Fn fts_open_b
 (see
 .Dv FTS_SEEDOT ) .
 .It Dv FTS_DP
@@ -237,6 +243,8 @@ A path for accessing the file from the current directory.
 The path for the file relative to the root of the traversal.
 This path contains the path specified to
 .Fn fts_open
+or
+.Fn fts_open_b
 as a prefix.
 .It Fa fts_pathlen
 The length of the string referenced by
@@ -521,6 +529,14 @@ the directory traversal order is in the order listed in
 .Fa path_argv
 for the root paths, and in the order listed in the directory for
 everything else.
+.Sh FTS_OPEN_B
+.Fn fts_open_b
+is a block-based version of
+.Fn fts_open
+where
+.Fa compar
+is a block pointer that is passed to
+.Xr qsort_b 3 .
 .Sh FTS_READ
 The
 .Fn fts_read
@@ -775,7 +791,8 @@ The options were invalid, or the list were empty.
 .Xr chdir 2 ,
 .Xr stat 2 ,
 .Xr ftw 3 ,
-.Xr qsort 3
+.Xr qsort 3 ,
+.Xr qsort_b 3
 .Sh HISTORY
 The
 .Nm
@@ -791,10 +808,17 @@ functions were introduced in
 principally to provide for alternative interfaces to the
 .Nm
 functionality using different data structures.
+The
+.Fn fts_open_b
+function first appeared in Mac OS X.
+This implementation was created by Stacey Son for
+.Fx 11.0 .
 .Sh BUGS
 The
 .Fn fts_open
-function will automatically set the
+and
+.Fn fts_open_b
+functions will automatically set the
 .Dv FTS_NOCHDIR
 option if the
 .Dv FTS_LOGICAL
