@@ -181,29 +181,29 @@ user_add_expiration_body() {
 	populate_etc_skel
 
 	atf_check -s exit:0 \
-		${PW} useradd foo -e 20-03-2043
-	atf_check -o inline:"foo:*:1001:1001::0:2310422400:User &:/home/foo:/bin/sh\n" \
+		${PW} useradd foo -e 20-03-2037
+	atf_check -o inline:"foo:*:1001:1001::0:2121120000:User &:/home/foo:/bin/sh\n" \
 		-s exit:0 grep "^foo" ${HOME}/master.passwd
 	atf_check -s exit:0 ${PW} userdel foo
 	atf_check -s exit:0 \
-		${PW} useradd foo -e 20-03-43
-	atf_check -o inline:"foo:*:1001:1001::0:2310422400:User &:/home/foo:/bin/sh\n" \
+		${PW} useradd foo -e 20-03-37
+	atf_check -o inline:"foo:*:1001:1001::0:2121120000:User &:/home/foo:/bin/sh\n" \
 		-s exit:0 grep "^foo" ${HOME}/master.passwd
 	atf_check -s exit:0 ${PW} userdel foo
 	atf_check -s exit:0 \
-		${PW} useradd foo -e 20-Mar-2043
-	atf_check -o inline:"foo:*:1001:1001::0:2310422400:User &:/home/foo:/bin/sh\n" \
+		${PW} useradd foo -e 20-Mar-2037
+	atf_check -o inline:"foo:*:1001:1001::0:2121120000:User &:/home/foo:/bin/sh\n" \
 		-s exit:0 grep "^foo" ${HOME}/master.passwd
 	atf_check -s exit:0 ${PW} userdel foo
 	atf_check -e inline:"pw: Invalid date\n" -s exit:1 \
-		${PW} useradd foo -e 20-Foo-2043
+		${PW} useradd foo -e 20-Foo-2037
 	atf_check -e inline:"pw: Invalid date\n" -s exit:1 \
-		${PW} useradd foo -e 20-13-2043
-	atf_check -s exit:0 ${PW} useradd foo -e "12:00 20-03-2043"
+		${PW} useradd foo -e 20-13-2037
+	atf_check -s exit:0 ${PW} useradd foo -e "12:00 20-03-2037"
 	atf_check -s exit:0 ${PW} userdel foo
 	atf_check -e inline:"pw: Invalid date\n" -s exit:1 \
-		${PW} useradd foo -e "12 20-03-2043"
-	atf_check -s exit:0 ${PW} useradd foo -e "20-03-2043	12:00"
+		${PW} useradd foo -e "12 20-03-2037"
+	atf_check -s exit:0 ${PW} useradd foo -e "20-03-2037	12:00"
 	atf_check -s exit:0 ${PW} userdel foo
 }
 
@@ -314,6 +314,19 @@ user_add_already_exists_body() {
 		${PW} useradd foo
 }
 
+atf_test_case user_add_w_yes
+user_add_w_yes_body() {
+	populate_etc_skel
+	atf_check -s exit:0 ${PW} useradd foo -w yes
+	atf_check -s exit:0 \
+		-o match:'^foo:\$.*' \
+		grep "^foo" ${HOME}/master.passwd
+	atf_check -s exit:0 ${PW} usermod foo -w yes
+	atf_check -s exit:0 \
+		-o match:'^foo:\$.*' \
+		grep "^foo" ${HOME}/master.passwd
+}
+
 atf_init_test_cases() {
 	atf_add_test_case user_add
 	atf_add_test_case user_add_noupdate
@@ -341,4 +354,5 @@ atf_init_test_cases() {
 	atf_add_test_case user_add_uid_too_large
 	atf_add_test_case user_add_bad_shell
 	atf_add_test_case user_add_already_exists
+	atf_add_test_case user_add_w_yes
 }

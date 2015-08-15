@@ -96,6 +96,8 @@ TASKQUEUE_DEFINE_THREAD(kqueue);
 
 static int _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 			struct kevent_copyops *k_ops, const struct timespec *timeout, int v1);
+static int _kern_kevent_kq(struct thread *td, struct kqueue *kq, int nchanges, int nevents,
+			struct kevent_copyops *k_ops, const struct timespec *timeout, int v1);
 static int	kevent_copyout(void *arg, void *kevp, int count);
 static int	kevent_copyin(void *arg, void *kevp, int count);
 static int	kevent64_copyout(void *arg, void *kevp, int count);
@@ -104,6 +106,8 @@ static int	kqueue_register(struct kqueue *kq, struct kevent64_s *kev,
 		    struct thread *td, int waitok);
 static int	kqueue_acquire(struct file *fp, struct kqueue **kqp);
 static void	kqueue_release(struct kqueue *kq, int locked);
+static void	kqueue_destroy(struct kqueue *kq);
+static void	kqueue_drain(struct kqueue *kq, struct thread *td);
 static int	kqueue_expand(struct kqueue *kq, struct filterops *fops,
 		    uintptr_t ident, int waitok);
 static void	kqueue_task(void *arg, int pending);
@@ -749,11 +753,21 @@ int
 sys_kqueue(struct thread *td, struct kqueue_args *uap)
 {
 
-	return (kern_kqueue(td, 0));
+	return (kern_kqueue(td, 0, NULL));
+}
+
+static void
+kqueue_init(struct kqueue *kq)
+{
+
+	mtx_init(&kq->kq_lock, "kqueue", NULL, MTX_DEF | MTX_DUPOK);
+	TAILQ_INIT(&kq->kq_head);
+	knlist_init_mtx(&kq->kq_sel.si_note, &kq->kq_lock);
+	TASK_INIT(&kq->kq_task, 0, kqueue_task, kq);
 }
 
 int
-kern_kqueue(struct thread *td, int flags)
+kern_kqueue(struct thread *td, int flags, struct filecaps *fcaps)
 {
 	struct filedesc *fdp;
 	struct kqueue *kq;
@@ -771,18 +785,15 @@ kern_kqueue(struct thread *td, int flags)
 	}
 
 	fdp = p->p_fd;
-	error = falloc(td, &fp, &fd, flags);
+	error = falloc_caps(td, &fp, &fd, flags, fcaps);
 	if (error)
 		goto done2;
 
 	/* An extra reference on `fp' has been held for us by falloc(). */
 	kq = malloc(sizeof *kq, M_KQUEUE, M_WAITOK | M_ZERO);
-	mtx_init(&kq->kq_lock, "kqueue", NULL, MTX_DEF|MTX_DUPOK);
-	TAILQ_INIT(&kq->kq_head);
+	kqueue_init(kq);
 	kq->kq_fdp = fdp;
 	kq->kq_cred = cred;
-	knlist_init_mtx(&kq->kq_sel.si_note, &kq->kq_lock);
-	TASK_INIT(&kq->kq_task, 0, kqueue_task, kq);
 
 	FILEDESC_XLOCK(fdp);
 	TAILQ_INSERT_HEAD(&fdp->fd_kqlist, kq, kq_list);
@@ -1030,18 +1041,26 @@ kern_kevent_fp64(struct thread *td, struct file *fp, int nchanges, int nevents,
 
 static int
 _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
-			   struct kevent_copyops *k_ops, const struct timespec *timeout, int v1)
+				struct kevent_copyops *k_ops, const struct timespec *timeout, int version)
 {
-	struct kevent keva[KQ_NEVENTS];
+	struct kqueue *kq;
+	int error;
+
+	if ((error = kqueue_acquire(fp, &kq)))
+		return (error);
+	error = _kern_kevent_kq(td, kq, nchanges, nevents, k_ops, timeout, version);
+	kqueue_release(kq, 0);
+	return (error);
+}
+
+static int
+_kern_kevent_kq(struct thread *td, struct kqueue *kq, int nchanges, int nevents,
+			   struct kevent_copyops *k_ops, const struct timespec *timeout, int v1)
+{	struct kevent keva[KQ_NEVENTS];
 	struct kevent64_s keva64[KQ_NEVENTS];
 	struct kevent *changes;
 	struct kevent64_s kevtmp, *kevp;
-	struct kqueue *kq;
 	int i, n, nerrors, error;
-
-	error = kqueue_acquire(fp, &kq);
-	if (error != 0)
-		return (error);
 
 	nerrors = 0;
 	if (v1) {
@@ -1050,7 +1069,7 @@ _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 			n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
 			error = k_ops->k_copyin(k_ops->arg, keva64, n);
 			if (error)
-				goto done;
+				return (error);
 			changes = keva64;
 			for (i = 0; i < n; i++) {
 				kevp = &changes[i];
@@ -1067,7 +1086,7 @@ _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 						nevents--;
 						nerrors++;
 					} else {
-						goto done;
+						return (error);
 					}
 				}
 			}
@@ -1081,7 +1100,7 @@ _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 		n = nchanges > KQ_NEVENTS ? KQ_NEVENTS : nchanges;
 		error = k_ops->k_copyin(k_ops->arg, keva, n);
 		if (error)
-			goto done;
+			return (error);
 		changes = keva;
 		for (i = 0; i < n; i++) {
 			kevp = (struct kevent64_s *)&changes[i];
@@ -1092,16 +1111,13 @@ _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 			kevp->flags &= ~EV_SYSFLAGS;
 			error = kqueue_register(kq, kevp, td, 1);
 			if (error || (kevp->flags & EV_RECEIPT)) {
-				if (nevents != 0) {
-					kevp->flags = EV_ERROR;
-					kevp->data = error;
-					(void) k_ops->k_copyout(k_ops->arg,
-					    kevp, 1);
-					nevents--;
-					nerrors++;
-				} else {
-					goto done;
-				}
+				if (nevents == 0)
+					return (error);
+				kevp->flags = EV_ERROR;
+				kevp->data = error;
+				(void)k_ops->k_copyout(k_ops->arg, kevp, 1);
+				nevents--;
+				nerrors++;
 			}
 		}
 		nchanges -= n;
@@ -1109,17 +1125,32 @@ _kern_kevent_fp(struct thread *td, struct file *fp, int nchanges, int nevents,
 check_errors:
 	if (nerrors) {
 		td->td_retval[0] = nerrors;
-		error = 0;
-		goto done;
+		return (0);
 	}
 	if (v1 == 0)
 		for (i = 0; i < KQ_NEVENTS; i++) {
 			struct kevent *k = &keva[i];
 			EV_SET64(&keva64[i], k->ident, k->filter, k->flags, k->fflags, k->data, (uint64_t)k->udata, 0, 0);
 		}
-	error = kqueue_scan(kq, nevents, k_ops, timeout, keva64, td);
-done:
-	kqueue_release(kq, 0);
+	return (kqueue_scan(kq, nevents, k_ops, timeout, keva64, td));
+}
+
+/*
+ * Performs a kevent() call on a temporarily created kqueue. This can be
+ * used to perform one-shot polling, similar to poll() and select().
+ */
+int
+kern_kevent_anonymous(struct thread *td, int nevents,
+    struct kevent_copyops *k_ops)
+{
+	struct kqueue kq = {};
+	int error;
+
+	kqueue_init(&kq);
+	kq.kq_refcnt = 1;
+	error = _kern_kevent_kq(td, &kq, nevents, nevents, k_ops, NULL, 0);
+	kqueue_drain(&kq, td);
+	kqueue_destroy(&kq);
 	return (error);
 }
 
@@ -1903,21 +1934,12 @@ kqueue_stat(struct file *fp, struct stat *st, struct ucred *active_cred,
 	return (0);
 }
 
-/*ARGSUSED*/
-static int
-kqueue_close(struct file *fp, struct thread *td)
+static void
+kqueue_drain(struct kqueue *kq, struct thread *td)
 {
-	struct kqueue *kq = fp->f_data;
-	struct filedesc *fdp;
 	struct knote *kn;
 	int i;
-	int error;
-	int filedesc_unlock;
 
-	if ((error = kqueue_acquire(fp, &kq)))
-		return error;
-
-	filedesc_unlock = 0;
 	KQ_LOCK(kq);
 
 	KASSERT((kq->kq_state & KQ_CLOSING) != KQ_CLOSING,
@@ -1927,7 +1949,6 @@ kqueue_close(struct file *fp, struct thread *td)
 		msleep(&kq->kq_refcnt, &kq->kq_lock, PSOCK, "kqclose", 0);
 
 	KASSERT(kq->kq_refcnt == 1, ("other refs are out there!"));
-	fdp = kq->kq_fdp;
 
 	KASSERT(knlist_empty(&kq->kq_sel.si_note),
 	    ("kqueue's knlist not empty"));
@@ -1978,6 +1999,38 @@ kqueue_close(struct file *fp, struct thread *td)
 	}
 
 	KQ_UNLOCK(kq);
+}
+
+static void
+kqueue_destroy(struct kqueue *kq)
+{
+
+	KASSERT(kq->kq_fdp == NULL,
+	    ("kqueue still attached to a file descriptor"));
+	seldrain(&kq->kq_sel);
+	knlist_destroy(&kq->kq_sel.si_note);
+	mtx_destroy(&kq->kq_lock);
+
+	if (kq->kq_knhash != NULL)
+		free(kq->kq_knhash, M_KQUEUE);
+	if (kq->kq_knlist != NULL)
+		free(kq->kq_knlist, M_KQUEUE);
+
+	funsetown(&kq->kq_sigio);
+}
+
+/*ARGSUSED*/
+static int
+kqueue_close(struct file *fp, struct thread *td)
+{
+	struct kqueue *kq = fp->f_data;
+	struct filedesc *fdp;
+	int error;
+	int filedesc_unlock;
+
+	if ((error = kqueue_acquire(fp, &kq)))
+		return error;
+	kqueue_drain(kq, td);
 
 	/*
 	 * We could be called due to the knote_drop() doing fdrop(),
@@ -1985,6 +2038,8 @@ kqueue_close(struct file *fp, struct thread *td)
 	 * lock is owned, and filedesc sx is locked before, to not
 	 * take the sleepable lock after non-sleepable.
 	 */
+	fdp = kq->kq_fdp;
+	kq->kq_fdp = NULL;
 	if (!sx_xlocked(FILEDESC_LOCK(fdp))) {
 		FILEDESC_XLOCK(fdp);
 		filedesc_unlock = 1;
@@ -1994,17 +2049,7 @@ kqueue_close(struct file *fp, struct thread *td)
 	if (filedesc_unlock)
 		FILEDESC_XUNLOCK(fdp);
 
-	seldrain(&kq->kq_sel);
-	knlist_destroy(&kq->kq_sel.si_note);
-	mtx_destroy(&kq->kq_lock);
-	kq->kq_fdp = NULL;
-
-	if (kq->kq_knhash != NULL)
-		free(kq->kq_knhash, M_KQUEUE);
-	if (kq->kq_knlist != NULL)
-		free(kq->kq_knlist, M_KQUEUE);
-
-	funsetown(&kq->kq_sigio);
+	kqueue_destroy(kq);
 	chgkqcnt(kq->kq_cred->cr_ruidinfo, -1, 0);
 	crfree(kq->kq_cred);
 	free(kq, M_KQUEUE);
