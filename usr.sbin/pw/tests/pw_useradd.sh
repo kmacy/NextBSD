@@ -250,9 +250,9 @@ user_add_R_body() {
 	test -d ${HOME}/home/bar || atf_fail "Directory not created"
 	atf_check -s exit:0 ${RPW} userdel bar
 	test -d ${HOME}/home/bar || atf_fail "Directory removed"
-#	atf_check -s exit:0 ${RPW} useradd bar
-#	atf_check -s exit:0 ${RPW} userdel bar -r
-#	test -d ${HOME}/home/bar && atf_fail "Directory not removed"
+	atf_check -s exit:0 ${RPW} useradd bar
+	atf_check -s exit:0 ${RPW} userdel bar -r
+	[ ! -d ${HOME}/home/bar ] || atf_fail "Directory not removed"
 }
 
 atf_test_case user_add_skel
@@ -296,6 +296,24 @@ user_add_uid_too_large_body() {
 		${PW} useradd -n test1 -u 9999999999999
 }
 
+atf_test_case user_add_bad_shell
+user_add_bad_shell_body() {
+	populate_etc_skel
+
+	atf_check -s exit:0 ${PW} useradd foo -s sh
+	atf_check -s exit:78 -e ignore ${PW} useradd bar -s badshell
+}
+
+atf_test_case user_add_already_exists
+user_add_already_exists_body() {
+	populate_etc_skel
+
+	atf_check -s exit:0 ${PW} useradd foo
+	atf_check -s exit:65 \
+		-e inline:"pw: login name \`foo' already exists\n" \
+		${PW} useradd foo
+}
+
 atf_init_test_cases() {
 	atf_add_test_case user_add
 	atf_add_test_case user_add_noupdate
@@ -321,4 +339,6 @@ atf_init_test_cases() {
 	atf_add_test_case user_add_skel
 	atf_add_test_case user_add_uid0
 	atf_add_test_case user_add_uid_too_large
+	atf_add_test_case user_add_bad_shell
+	atf_add_test_case user_add_already_exists
 }

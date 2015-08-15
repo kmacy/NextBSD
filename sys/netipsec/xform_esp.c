@@ -115,8 +115,6 @@ esp_algorithm_lookup(int alg)
 		return &enc_xform_blf;
 	case SADB_X_EALG_CAST128CBC:
 		return &enc_xform_cast5;
-	case SADB_X_EALG_SKIPJACK:
-		return &enc_xform_skipjack;
 	case SADB_EALG_NULL:
 		return &enc_xform_null;
 	case SADB_X_EALG_CAMELLIACBC:
@@ -536,7 +534,7 @@ esp_input_cb(struct cryptop *crp)
 		ptr = (caddr_t) (tc + 1);
 
 		/* Verify authenticator */
-		if (bcmp(ptr, aalg, alen) != 0) {
+		if (timingsafe_bcmp(ptr, aalg, alen) != 0) {
 			DPRINTF(("%s: authentication hash mismatch for "
 			    "packet in SA %s/%08lx\n", __func__,
 			    ipsec_address(&saidx->dst, buf, sizeof(buf)),
