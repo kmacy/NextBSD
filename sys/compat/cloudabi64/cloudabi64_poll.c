@@ -82,13 +82,15 @@ struct cloudabi64_kevent_args {
 
 /* Converts CloudABI's subscription objects to FreeBSD's struct kevent. */
 static int
-cloudabi64_kevent_copyin(void *arg, struct kevent *kevp, int count)
+cloudabi64_kevent_copyin(void *arg, void *_kevp, int count)
 {
 	cloudabi64_subscription_t sub;
 	struct cloudabi64_kevent_args *args;
 	cloudabi_timestamp_t ts;
+	struct kevent *kevp;
 	int error;
 
+	kevp = _kevp;
 	args = arg;
 	while (count-- > 0) {
 		/* TODO(ed): Copy in multiple entries at once. */
@@ -161,12 +163,14 @@ cloudabi64_kevent_copyin(void *arg, struct kevent *kevp, int count)
 
 /* Converts FreeBSD's struct kevent to CloudABI's event objects. */
 static int
-cloudabi64_kevent_copyout(void *arg, struct kevent *kevp, int count)
+cloudabi64_kevent_copyout(void *arg, void *_kevp, int count)
 {
 	cloudabi64_event_t ev;
 	struct cloudabi64_kevent_args *args;
+	struct kevent *kevp;
 	int error;
 
+	kevp = _kevp;
 	args = arg;
 	while (count-- > 0) {
 		/* Convert fields that should always be present. */
