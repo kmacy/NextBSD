@@ -242,7 +242,6 @@ mach_vm_inherit(vm_map_t target_task, mach_vm_address_t address, mach_vm_size_t 
 
 	cup.addr = (void *)address;
 	cup.len = size;
-	/* Flags map well between Mach and NetBSD */
 	cup.inherit = new_inheritance;
 
 	if ((error = sys_minherit(curthread, &cup)) != 0)
@@ -554,7 +553,7 @@ vm_map_copyin_internal(
 			(void) vm_map_remove(
 				src_map,
 				trunc_page(src_addr),
-				round_page(src_addr));
+				round_page(src_addr + len));
 		}
 	}
 	*copy_result = copy;
@@ -767,6 +766,7 @@ kern_return_t	vm_map_copyin(
 		vm_object_reference_locked(object);
 		vm_object_split(tmp_entry);
 		object = tmp_entry->object.vm_object;
+		vm_object_reference_locked(object);
 		VM_OBJECT_WUNLOCK(object);
 		vm_map_delete(src_map, src_start, src_end);
 		vm_map_unlock(src_map);
@@ -817,6 +817,7 @@ vm_map_copyout(
 						    copy, FALSE));
 	}
 	if (copy->type == VM_MAP_COPY_OBJECT) {
+		*dst_addr = 0;
 		cow = copy->cpy_object->ref_count > 1 ? MAP_COPY_ON_WRITE : 0;
 		return vm_map_find(dst_map, copy->cpy_object, copy->offset,
 		    dst_addr, round_page(copy->size), 0, VMFS_ANY_SPACE,
