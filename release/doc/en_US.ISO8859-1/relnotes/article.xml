@@ -511,6 +511,11 @@
 
       <para revision="285329"><application>OpenSSL</application> has
 	been updated to version 1.0.1p.</para>
+
+      <para revision="285642" contrib="sponsor" sponsor="&dell;">The
+	&man.ssh.1; utility has been updated to re-implement hostname
+	canonicalization before locating the host in
+	<filename>known_hosts</filename>.</para>
     </sect2>
 
     <sect2 xml:id="userland-installer">
@@ -540,6 +545,24 @@
       <para revision="275874">The &man.bsdinstall.8; utility has been
 	updated to use the new &man.dpv.3; library to display progress
 	when extracting the &os; distributions.</para>
+
+      <para revision="285557" contrib="sponsor"
+	sponsor="&scaleengine;">Support for detecting and implementing
+	aligning partitions on 1Mb boundaries has been added to
+	&man.bsdinstall.8;.</para>
+
+      <para revision="285679" contrib="sponsor"
+	sponsor="&scaleengine;">Support for detecting and implementing
+	a workaround for various laptops and motherboards that do not
+	boot properly from <acronym>GPT</acronym>-partitioned disks
+	has been added to &man.bsdinstall.8;.  Additionally, the
+	<literal>active</literal> flag will be set on the partition
+	when needed.</para>
+
+      <para revision="285679" contrib="sponsor"
+	sponsor="&scaleengine;">Support for selecting the partitioning
+	scheme when installing on the <acronym>UFS</acronym>
+	filesystem has been added to &man.bsdinstall.8;.</para>
     </sect2>
 
     <sect2 xml:id="userland-rc">
@@ -803,13 +826,16 @@
       <para revision="281495" contrib="sponsor" sponsor="&ff;">The
 	<literal>PAE_TABLES</literal> kernel configuration option has
 	been added for &os;/&arch.i386;, which instructs &man.pmap.9;
-	to use <acronym>PAE</acronym> format for page tables with
-	32-bit physical addresses.  Unlike the <literal>PAE</literal>
-	option, <literal>PAE_TABLES</literal> preserves kernel binary
-	interface (<acronym>KBI</acronym>) compatibility with
-	non-<literal>PAE</literal> kernels, allowing
-	non-<literal>PAE</literal> kernel modules and drivers to work
-	with a <literal>PAE_TABLES</literal>-enabled kernel.
+	to use <acronym>PAE</acronym> format for page tables while
+	maintaining a 32-bit physical address size elsewhere in the
+	kernel.  The use of this option can enhance application-level
+	security by enabling the creation of <quote>no execute</quote>
+	mappings on modern &arch.i386; processors.  Unlike the
+	<literal>PAE</literal> option, <literal>PAE_TABLES</literal>
+	preserves kernel binary interface (<acronym>KBI</acronym>)
+	compatibility with non-<literal>PAE</literal> kernels,
+	allowing non-<literal>PAE</literal> kernel modules and drivers
+	to work with a <literal>PAE_TABLES</literal>-enabled kernel.
 	Additionally, system limits are tuned for 4GB maximum
 	<acronym>RAM</acronym>, avoiding kernel virtual address space
 	(<acronym>KVA</acronym>) exhaustion.</para>
@@ -1023,7 +1049,7 @@
       <para revision="272730">The &man.alc.4; driver has been updated
 	to support AR816x and AR817x ethernet controllers.</para>
 
-      <para revision="272906">The &man.pfil.9; interface default hash
+      <para revision="272906">The &man.pf.4; packet filter default hash
 	has been changed from <literal>Jenkins</literal> to
 	<literal>Murmur3</literal>, providing a 3-percent performance
 	increase in packets-per-second.</para>
@@ -1379,7 +1405,7 @@
       &os;.</para>
 
     <sect2 xml:id="network-protocols">
-      <title>Network Procols</title>
+      <title>Network Protocols</title>
 
       <para revision="263140">Support for the IPX network transport
 	protocol has been removed, and will not be supported in
