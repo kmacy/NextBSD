@@ -83,37 +83,6 @@ SYSCTL_INT(_dev_netmap, OID_AUTO, ixl_rx_miss_bufs,
 
 
 /*
- * Register/unregister. We are already under netmap lock.
- * Only called on the first register or the last unregister.
- */
-static int
-ixl_netmap_reg(struct netmap_adapter *na, int onoff)
-{
-	struct ifnet *ifp = na->ifp;
-        struct ixl_vsi  *vsi = ifp->if_softc;
-        struct ixl_pf   *pf = (struct ixl_pf *)vsi->back;
-
-	IXL_PF_LOCK(pf);
-	ixl_disable_intr(vsi);
-
-	/* Tell the stack that the interface is no longer active */
-	ifp->if_drv_flags &= ~(IFF_DRV_RUNNING | IFF_DRV_OACTIVE);
-
-	//set_crcstrip(&adapter->hw, onoff);
-	/* enable or disable flags and callbacks in na and ifp */
-	if (onoff) {
-		nm_set_native_flags(na);
-	} else {
-		nm_clear_native_flags(na);
-	}
-	ixl_init_locked(pf);	/* also enables intr */
-	//set_crcstrip(&adapter->hw, onoff); // XXX why twice ?
-	IXL_PF_UNLOCK(pf);
-	return (ifp->if_drv_flags & IFF_DRV_RUNNING ? 0 : 1);
-}
-
-
-/*
  * The attach routine, called near the end of ixl_attach(),
  * fills the parameters for netmap_attach() and calls it.
  * It cannot fail, in the worst case (such as no memory)
@@ -124,7 +93,7 @@ static void
 ixl_netmap_attach(struct ixl_vsi *vsi)
 {
 	struct netmap_adapter na;
-
+	extern if_shared_ctx_t ixl_sctx;
 	bzero(&na, sizeof(na));
 
 	na.ifp = vsi->ifp;
@@ -132,12 +101,12 @@ ixl_netmap_attach(struct ixl_vsi *vsi)
 	// XXX check that queues is set.
 	printf("queues is %p\n", vsi->queues);
 	if (vsi->queues) {
-		na.num_tx_desc = vsi->queues[0].num_desc;
-		na.num_rx_desc = vsi->queues[0].num_desc;
+		na.num_tx_desc = ixl_sctx->isc_ntxd;
+		na.num_rx_desc = ixl_sctx->isc_nrxd;
 	}
 	na.nm_txsync = ixl_netmap_txsync;
 	na.nm_rxsync = ixl_netmap_rxsync;
-	na.nm_register = ixl_netmap_reg;
+	na.nm_register = iflib_netmap_register;
 	na.num_tx_rings = na.num_rx_rings = vsi->num_queues;
 	netmap_attach(&na);
 }

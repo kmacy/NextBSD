@@ -101,7 +101,6 @@
 #if defined(IXL_DEBUG) || defined(IXL_DEBUG_SYSCTL)
 #include <sys/sbuf.h>
 
-#undef DEV_NETMAP
 
 #define MAC_FORMAT "%02x:%02x:%02x:%02x:%02x:%02x"
 #define MAC_FORMAT_ARGS(mac_addr) \

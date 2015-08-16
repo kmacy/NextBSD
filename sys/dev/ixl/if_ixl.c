@@ -41,7 +41,6 @@
 #include "ixl.h"
 #include "ixl_pf.h"
 
-#undef DEV_NETMAP
 #ifdef RSS
 #include <net/rss_config.h>
 #endif

@@ -67,8 +67,6 @@
 
 #include "ifdi_if.h"
 
-#undef DEV_NETMAP
-
 /*
  * File organization:
  *  - private structures
@@ -821,14 +819,6 @@ iflib_txq_setup(iflib_txq_t txq)
 	iflib_sd_t txsd;
 	iflib_dma_info_t di;
 	int i;
-#ifdef DEV_NETMAP
-	struct netmap_slot *slot;
-	struct netmap_adapter *na = netmap_getna(ctx->ifc_ifp);
-#endif /* DEV_NETMAP */
-
-#ifdef DEV_NETMAP
-	slot = netmap_reset(na, NR_TX, txq->ift_id, 0);
-#endif /* DEV_NETMAP */
 
     /* Set number of descriptors available */
 	txq->ift_qstatus = IFLIB_QUEUE_IDLE;
@@ -841,22 +831,6 @@ iflib_txq_setup(iflib_txq_t txq)
 	txsd = txq->ift_sds;
 	for (int i = 0; i < sctx->isc_ntxd; i++, txsd++) {
 		iflib_txsd_free(ctx, txq, txsd);
-#ifdef DEV_NETMAP
-		if (slot) {
-			int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
-			uint64_t paddr;
-			void *addr;
-
-			addr = PNMB(na, slot + si, &paddr);
-			/*
-			 * XXX need netmap down call
-			 */
-			txq->tx_base[i].buffer_addr = htole64(paddr);
-			/* reload the map for netmap mode */
-			netmap_load_map(na, txq->ift_desc_tag, txsd->ifsd_map, addr);
-		}
-#endif /* DEV_NETMAP */
-
 	}
 	for (i = 0, di = qset->ifq_ifdi; i < qset->ifq_nhwqs; i++, di++)
 		bzero((void *)di->idi_vaddr, di->idi_size);
@@ -1098,16 +1072,6 @@ iflib_fl_setup(iflib_fl_t fl)
 	if_ctx_t ctx = rxq->ifr_ctx;
 	if_softc_ctx_t sctx = &ctx->ifc_softc_ctx;
 	int			err = 0;
-#ifdef DEV_NETMAP
-	struct netmap_slot *slot;
-	struct netmap_adapter *na = netmap_getna(ctx->ifc_ifp);
-#endif
-
-	/* Clear the ring contents */
-#ifdef DEV_NETMAP
-	slot = netmap_reset(na, NR_RX, rxq->ifr_id, 0);
-#endif
-
 	/*
 	 * XXX don't set the max_frame_size to larger
 	 * than the hardware can handle
@@ -1428,7 +1392,7 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	struct mbuf *m, *mh, *mt;
 
 #ifdef DEV_NETMAP
-	if (netmap_rx_irq(ifp, rxq->ifr_id, &processed)) {
+	if (netmap_rx_irq(ctx->ifc_ifp, rxq->ifr_id, &budget)) {
 		return (FALSE);
 	}
 #endif /* DEV_NETMAP */
@@ -2669,6 +2633,37 @@ iflib_device_iov_add_vf(device_t dev, uint16_t vfnum, const nvlist_t *params)
 
 	return (error);
 }
+
+#ifdef DEV_NETMAP
+/*
+ * Register/unregister. We are already under netmap lock.
+ * Only called on the first register or the last unregister.
+ */
+int
+iflib_netmap_register(struct netmap_adapter *na, int onoff)
+{
+	struct ifnet *ifp = na->ifp;
+	if_ctx_t ctx = ifp->if_softc;
+
+	CTX_LOCK(ctx);
+	IFDI_INTR_DISABLE(ctx);
+
+	/* Tell the stack that the interface is no longer active */
+	ifp->if_drv_flags &= ~(IFF_DRV_RUNNING | IFF_DRV_OACTIVE);
+
+	//set_crcstrip(&adapter->hw, onoff);
+	/* enable or disable flags and callbacks in na and ifp */
+	if (onoff) {
+		nm_set_native_flags(na);
+	} else {
+		nm_clear_native_flags(na);
+	}
+	IFDI_INIT(ctx);
+	//set_crcstrip(&adapter->hw, onoff); // XXX why twice ?
+	CTX_UNLOCK(ctx);
+	return (ifp->if_drv_flags & IFF_DRV_RUNNING ? 0 : 1);
+}
+#endif
 
 
 /*********************************************************************
