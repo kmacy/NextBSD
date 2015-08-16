@@ -130,12 +130,14 @@ popmap_set(popmap_t popmap[], int i)
 /*
  * Is a bit in the population map clear?
  */
+#ifdef INVARIANTS
 static __inline boolean_t
 popmap_is_clear(popmap_t popmap[], int i)
 {
 
 	return ((popmap[i / NBPOPMAP] & (1UL << (i % NBPOPMAP))) == 0);
 }
+#endif
 
 /*
  * Is a bit in the population map set?
