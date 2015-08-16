@@ -67,6 +67,7 @@ struct ixl_pf {
 
 	struct i40e_hw		hw;
 	struct i40e_osdep	osdep;
+	device_t dev;
 
 	struct resource		*pci_mem;
 	struct resource		*msix_mem;

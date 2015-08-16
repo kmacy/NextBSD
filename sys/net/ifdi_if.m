@@ -90,6 +90,18 @@ CODE {
 		return (0);
 	}
 
+	static int
+	null_iov_init(if_ctx_t _ctx __unused, uint16_t num_vfs __unused, const nvlist_t *params __unused)
+	{
+		return (ENOTSUP);
+	}
+
+	static int
+	null_vf_add(if_ctx_t _ctx __unused, uint16_t num_vfs __unused, const nvlist_t *params __unused)
+	{
+		return (ENOTSUP);
+	}
+
 };
 
 #
@@ -104,11 +116,11 @@ METHOD int attach_post {
 	if_ctx_t _ctx;
 };
 
-METHOD void attach_cleanup {
+METHOD int attach_cleanup {
 	if_ctx_t _ctx;
 };
 
-METHOD void detach {
+METHOD int detach {
 	if_ctx_t _ctx;
 };
 
@@ -199,6 +211,31 @@ METHOD int promisc_set {
 	if_ctx_t _ctx;
 	int _flags;
 };
+
+#
+# IOV handling
+#
+
+METHOD void vflr_handle {
+	if_ctx_t _ctx;
+} DEFAULT null_void_op;
+
+METHOD int iov_init {
+	if_ctx_t _ctx;
+	uint16_t num_vfs;
+	const nvlist_t * params;
+} DEFAULT null_iov_init;
+
+METHOD void iov_uninit {
+	if_ctx_t _ctx;
+} DEFAULT null_void_op;
+
+METHOD int iov_vf_add {
+	if_ctx_t _ctx;
+	uint16_t num_vfs;
+	const nvlist_t * params;
+} DEFAULT null_vf_add;
+
 
 #
 # Device status

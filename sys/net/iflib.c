@@ -139,6 +139,7 @@ struct iflib_ctx {
 
 	struct if_irq ifc_legacy_irq;
 	struct grouptask ifc_admin_task;
+	struct grouptask ifc_vflr_task;
 	struct iflib_filter_info ifc_filter_info;
 	struct ifmedia	ifc_media;
 
@@ -2010,6 +2011,21 @@ _task_fn_admin(void *context, int pending)
 		iflib_txq_check_drain(txq, IFLIB_RESTART_BUDGET);
 }
 
+
+static void
+_task_fn_iov(void *context, int pending)
+{
+	if_ctx_t ctx = context;
+
+	if (!(if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_RUNNING))
+		return;
+
+	CTX_LOCK(ctx);
+	IFDI_VFLR_HANDLE(ctx);
+	CTX_UNLOCK(ctx);
+}
+
+
 #if 0
 void
 iflib_intr_rx(void *arg)
@@ -2618,6 +2634,43 @@ iflib_device_resume(device_t dev)
 	return (bus_generic_resume(dev));
 }
 
+int
+iflib_device_iov_init(device_t dev, uint16_t num_vfs, const nvlist_t *params)
+{
+	int error;
+	if_ctx_t ctx = device_get_softc(dev);
+
+	CTX_LOCK(ctx);
+	error = IFDI_IOV_INIT(ctx, num_vfs, params);
+	CTX_UNLOCK(ctx);
+
+	return (error);
+}
+
+void
+iflib_device_iov_uninit(device_t dev)
+{
+	if_ctx_t ctx = device_get_softc(dev);
+
+	CTX_LOCK(ctx);
+	IFDI_IOV_UNINIT(ctx);
+	CTX_UNLOCK(ctx);
+}
+
+int
+iflib_device_iov_add_vf(device_t dev, uint16_t vfnum, const nvlist_t *params)
+{
+	int error;
+	if_ctx_t ctx = device_get_softc(dev);
+
+	CTX_LOCK(ctx);
+	error = IFDI_IOV_VF_ADD(ctx, vfnum, params);
+	CTX_UNLOCK(ctx);
+
+	return (error);
+}
+
+
 /*********************************************************************
  *
  *  MODULE FUNCTION DEFINITIONS
@@ -3120,6 +3173,13 @@ iflib_softirq_alloc_generic(if_ctx_t ctx, int rid, iflib_intr_type_t type,  void
 		tqg = gctx->igc_config_tqg;
 		rid = -1;
 		fn = _task_fn_admin;
+		break;
+	case IFLIB_INTR_IOV:
+		q = ctx;
+		gtask = &ctx->ifc_vflr_task;
+		tqg = gctx->igc_config_tqg;
+		rid = -1;
+		fn = _task_fn_iov;
 		break;
 	default:
 		panic("unknown net intr type");

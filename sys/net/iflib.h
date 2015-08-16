@@ -32,6 +32,7 @@
 #include <sys/cpuset.h>
 #include <machine/bus.h>
 #include <sys/bus_dma.h>
+#include <sys/nv.h>
 
 struct iflib_ctx;
 typedef struct iflib_ctx *if_ctx_t;
@@ -175,6 +176,7 @@ typedef enum {
 	IFLIB_INTR_TX,
 	IFLIB_INTR_RX,
 	IFLIB_INTR_ADMIN,
+	IFLIB_INTR_IOV,
 } iflib_intr_type_t;
 
 #ifndef ETH_ADDR_LEN
@@ -221,6 +223,10 @@ int iflib_device_resume(device_t);
 int iflib_device_shutdown(device_t);
 
 
+int iflib_device_iov_init(device_t, uint16_t, const nvlist_t *);
+void iflib_device_iov_uninit(device_t);
+int iflib_device_iov_add_vf(device_t, uint16_t, const nvlist_t *);
+
 /*
  * If the driver can't plug cleanly in to newbus
  * use these
@@ -242,6 +248,7 @@ void iflib_irq_free(if_ctx_t ctx, if_irq_t irq);
 void iflib_tx_intr_deferred(if_ctx_t ctx, int txqid);
 void iflib_rx_intr_deferred(if_ctx_t ctx, int rxqid);
 void iflib_admin_intr_deferred(if_ctx_t ctx);
+void iflib_iov_intr_deferred(if_ctx_t ctx);
 
 
 void iflib_link_state_change(if_ctx_t ctx, int linkstate);

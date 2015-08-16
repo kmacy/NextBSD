@@ -189,13 +189,13 @@ static int	ixl_sysctl_switch_config(SYSCTL_HANDLER_ARGS);
 #ifdef PCI_IOV
 static int	ixl_adminq_err_to_errno(enum i40e_admin_queue_err err);
 
-static int	ixl_iov_init(device_t dev, uint16_t num_vfs, const nvlist_t*);
-static void	ixl_iov_uninit(device_t dev);
-static int	ixl_add_vf(device_t dev, uint16_t vfnum, const nvlist_t*);
+static int	ixl_if_iov_init(if_ctx_t, uint16_t num_vfs, const nvlist_t*);
+static void	ixl_if_iov_uninit(if_ctx_t);
+static int	ixl_if_vf_add(if_ctx_t, uint16_t vfnum, const nvlist_t*);
 
 static void	ixl_handle_vf_msg(struct ixl_pf *,
 		    struct i40e_arq_event_info *);
-static void	ixl_handle_vflr(void *arg, int pending);
+static void ixl_if_handle_vflr(if_ctx_t ctx);
 
 static void	ixl_reset_vf(struct ixl_pf *pf, struct ixl_vf *vf);
 static void	ixl_reinit_vf(struct ixl_pf *pf, struct ixl_vf *vf);
@@ -205,10 +205,10 @@ static int      ixl_interface_setup(if_ctx_t);
 
 static int      ixl_if_attach_pre(if_ctx_t);
 static int      ixl_if_attach_post(if_ctx_t);
-static void     ixl_if_attach_cleanup(if_ctx_t);
+static int     ixl_if_attach_cleanup(if_ctx_t);
 static int		ixl_if_msix_intr_assign(if_ctx_t, int);
 
-static void     ixl_if_detach(if_ctx_t);
+static int      ixl_if_detach(if_ctx_t);
 
 static void		ixl_if_init(if_ctx_t ctx);
 static void		ixl_if_stop(if_ctx_t ctx);
@@ -244,9 +244,9 @@ static device_method_t ixl_methods[] = {
 	DEVMETHOD(device_detach, iflib_device_detach),
 	DEVMETHOD(device_shutdown, iflib_device_suspend),
 #ifdef PCI_IOV
-	DEVMETHOD(pci_iov_init, ixl_iov_init),
-	DEVMETHOD(pci_iov_uninit, ixl_iov_uninit),
-	DEVMETHOD(pci_iov_add_vf, ixl_add_vf),
+	DEVMETHOD(pci_iov_init, iflib_device_iov_init),
+	DEVMETHOD(pci_iov_uninit, iflib_device_iov_uninit),
+	DEVMETHOD(pci_iov_add_vf, iflib_device_iov_add_vf),
 #endif
 	{0, 0}
 };
@@ -285,6 +285,12 @@ static device_method_t ixl_if_methods[] = {
 	DEVMETHOD(ifdi_vlan_register, ixl_if_vlan_register),
 	DEVMETHOD(ifdi_vlan_unregister, ixl_if_vlan_unregister),
 	DEVMETHOD(ifdi_queues_free, ixl_if_queues_free),
+#ifdef PCI_IOV
+	DEVMETHOD(ifdi_vflr_handle, ixl_if_handle_vflr),
+	DEVMETHOD(ifdi_iov_init, ixl_if_iov_init),
+	DEVMETHOD(ifdi_iov_uninit, ixl_if_iov_uninit),
+	DEVMETHOD(ifdi_iov_vf_add, ixl_if_vf_add),
+#endif
 	DEVMETHOD_END
 };
 
@@ -522,6 +528,7 @@ ixl_if_attach_pre(if_ctx_t ctx)
 	vsi->ctx = ctx;
 	vsi->media = iflib_get_media(ctx);
 	vsi->shared = iflib_get_softc_ctx(ctx);
+	pf->dev = iflib_get_dev(ctx);
 
 	/*
 	 * These are the same across all current ixl models
@@ -529,9 +536,6 @@ ixl_if_attach_pre(if_ctx_t ctx)
 	vsi->shared->isc_tx_nsegments = IXL_MAX_TX_SEGS;
 	vsi->shared->isc_msix_bar = PCIR_BAR(IXL_BAR);
 	
-#ifdef PCI_IOV
-	TASK_INIT(&pf->vflr_task, 0, ixl_handle_vflr, pf);
-#endif
 
 	/*
 	** Note this assumes we have a single embedded VSI,
@@ -744,7 +748,7 @@ err_out:
 	return (error);
 }
 
-static void
+static int
 ixl_if_attach_cleanup(if_ctx_t ctx)
 {
 	struct ixl_pf	*pf;
@@ -759,6 +763,7 @@ ixl_if_attach_cleanup(if_ctx_t ctx)
 	i40e_shutdown_adminq(hw);
 	ixl_free_pci_resources(pf);
 	ixl_free_vsi(vsi);
+	return (0);
 }
 
 static int
@@ -892,7 +897,7 @@ err_mac_hmc:
  *  return 0 on success, positive on failure
  *********************************************************************/
 
-static void
+static int
 ixl_if_detach(if_ctx_t ctx)
 {
 	struct ixl_vsi		*vsi = iflib_get_softc(ctx);
@@ -906,9 +911,9 @@ ixl_if_detach(if_ctx_t ctx)
 	INIT_DEBUGOUT("ixl_detach: begin");
 
 #ifdef PCI_IOV
-	error = pci_iov_detach(dev);
+	error = pci_iov_detach(iflib_get_dev(ctx));
 	if (error != 0) {
-		device_printf(dev, "SR-IOV in use; detach first.\n");
+		device_printf(iflib_get_dev(ctx), "SR-IOV in use; detach first.\n");
 		return (error);
 	}
 #endif
@@ -930,6 +935,7 @@ ixl_if_detach(if_ctx_t ctx)
 #endif /* DEV_NETMAP */
 	ixl_free_pci_resources(pf);
 	ixl_free_vsi(vsi);
+	return (0);
 }
 
 /*********************************************************************
@@ -1127,11 +1133,11 @@ ixl_intr(void *arg)
 	reg = reg | I40E_PFINT_DYN_CTL0_CLEARPBA_MASK;
 	wr32(hw, I40E_PFINT_DYN_CTL0, reg);
 
-        mask = rd32(hw, I40E_PFINT_ICR0_ENA);
+	mask = rd32(hw, I40E_PFINT_ICR0_ENA);
 
 #ifdef PCI_IOV
 	if (icr0 & I40E_PFINT_ICR0_VFLR_MASK)
-		taskqueue_enqueue(pf->tq, &pf->vflr_task);
+		iflib_iov_intr_deferred(vsi->ctx);
 #endif
 
 	if (icr0 & I40E_PFINT_ICR0_ADMINQ_MASK) {
@@ -1201,7 +1207,7 @@ ixl_msix_adminq(void *arg)
 #ifdef PCI_IOV
 	if (reg & I40E_PFINT_ICR0_VFLR_MASK) {
 		mask &= ~I40E_PFINT_ICR0_ENA_VFLR_MASK;
-		taskqueue_enqueue(pf->tq, &pf->vflr_task);
+		iflib_iov_intr_deferred(pf->vsi.ctx);
 	}
 #endif
 
@@ -1645,6 +1651,7 @@ ixl_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	}
 	pf->admvec = vector;
 	++vector;
+	iflib_softirq_alloc_generic(ctx, rid, IFLIB_INTR_IOV, pf, 0, "ixl_iov");
 
 	/* Now set up the stations */
 	for (int i = 0; i < vsi->num_queues; i++, vector++, que++) {
@@ -5693,7 +5700,7 @@ ixl_handle_vf_msg(struct ixl_pf *pf, struct i40e_arq_event_info *event)
 
 /* Handle any VFs that have reset themselves via a Function Level Reset(FLR). */
 static void
-ixl_handle_vflr(void *arg, int pending)
+ixl_if_handle_vflr(if_ctx_t ctx)
 {
 	struct ixl_pf *pf;
 	struct i40e_hw *hw;
@@ -5701,10 +5708,9 @@ ixl_handle_vflr(void *arg, int pending)
 	uint32_t vflrstat_index, vflrstat_mask, vflrstat, icr0;
 	int i;
 
-	pf = arg;
+	pf = iflib_get_softc(ctx);
 	hw = &pf->hw;
 
-	IXL_PF_LOCK(pf);
 	for (i = 0; i < pf->num_vfs; i++) {
 		global_vf_num = hw->func_caps.vf_base_id + i;
 
@@ -5723,8 +5729,6 @@ ixl_handle_vflr(void *arg, int pending)
 	icr0 |= I40E_PFINT_ICR0_ENA_VFLR_MASK;
 	wr32(hw, I40E_PFINT_ICR0_ENA, icr0);
 	ixl_flush(hw);
-
-	IXL_PF_UNLOCK(pf);
 }
 
 static int
@@ -5782,21 +5786,20 @@ ixl_adminq_err_to_errno(enum i40e_admin_queue_err err)
 }
 
 static int
-ixl_iov_init(device_t dev, uint16_t num_vfs, const nvlist_t *params)
+ixl_if_iov_init(if_ctx_t ctx, uint16_t num_vfs, const nvlist_t *params)
 {
-	if_ctx_t ctx;
+	device_t dev;
 	struct ixl_pf *pf;
 	struct i40e_hw *hw;
 	struct ixl_vsi *pf_vsi;
 	enum i40e_status_code ret;
 	int i, error;
 
-	ctx = device_get_softc(dev);
+	dev = iflib_get_dev(ctx);
 	pf = iflib_get_softc(ctx);
 	hw = &pf->hw;
 	pf_vsi = &pf->vsi;
 
-	IXL_PF_LOCK(pf);
 	pf->vfs = malloc(sizeof(struct ixl_vf) * num_vfs, M_IXL, M_NOWAIT |
 	    M_ZERO);
 
@@ -5821,34 +5824,31 @@ ixl_iov_init(device_t dev, uint16_t num_vfs, const nvlist_t *params)
 	ixl_enable_adminq(hw);
 
 	pf->num_vfs = num_vfs;
-	IXL_PF_UNLOCK(pf);
 	return (0);
 
 fail:
 	free(pf->vfs, M_IXL);
 	pf->vfs = NULL;
-	IXL_PF_UNLOCK(pf);
 	return (error);
 }
 
 static void
-ixl_iov_uninit(device_t dev)
+ixl_if_iov_uninit(if_ctx_t ctx)
 {
 	struct ixl_pf *pf;
-	if_ctx_t ctx;
 	struct i40e_hw *hw;
 	struct ixl_vsi *vsi;
 	struct ifnet *ifp;
 	struct ixl_vf *vfs;
+	device_t dev;
 	int i, num_vfs;
 
-	ctx = device_get_softc(dev);
+	dev = iflib_get_dev(ctx);
 	pf = iflib_get_softc(ctx);
 	hw = &pf->hw;
 	vsi = &pf->vsi;
 	ifp = vsi->ifp;
 
-	IXL_PF_LOCK(pf);
 	for (i = 0; i < pf->num_vfs; i++) {
 		if (pf->vfs[i].vsi.seid != 0)
 			i40e_aq_delete_element(hw, pf->vfs[i].vsi.seid, NULL);
@@ -5867,7 +5867,6 @@ ixl_iov_uninit(device_t dev)
 
 	pf->vfs = NULL;
 	pf->num_vfs = 0;
-	IXL_PF_UNLOCK(pf);
 
 	/* Do this after the unlock as sysctl_ctx_free might sleep. */
 	for (i = 0; i < num_vfs; i++)
@@ -5876,21 +5875,20 @@ ixl_iov_uninit(device_t dev)
 }
 
 static int
-ixl_add_vf(device_t dev, uint16_t vfnum, const nvlist_t *params)
+ixl_if_vf_add(if_ctx_t ctx, uint16_t vfnum, const nvlist_t *params)
 {
 	char sysctl_name[QUEUE_NAME_LEN];
 	struct ixl_pf *pf;
 	struct ixl_vf *vf;
-	if_ctx_t ctx;
+	device_t dev;
 	const void *mac;
 	size_t size;
 	int error;
 
-	ctx = device_get_softc(dev);
+	dev = iflib_get_dev(ctx);
 	pf = iflib_get_softc(ctx);
 	vf = &pf->vfs[vfnum];
 
-	IXL_PF_LOCK(pf);
 	vf->vf_num = vfnum;
 
 	vf->vsi.back = pf;
@@ -5924,7 +5922,6 @@ ixl_add_vf(device_t dev, uint16_t vfnum, const nvlist_t *params)
 
 	ixl_reset_vf(pf, vf);
 out:
-	IXL_PF_UNLOCK(pf);
 	if (error == 0) {
 		snprintf(sysctl_name, sizeof(sysctl_name), "vf%d", vfnum);
 		ixl_add_vsi_sysctls(pf, &vf->vsi, &vf->ctx, sysctl_name);
