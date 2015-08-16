@@ -766,6 +766,7 @@ kern_return_t	vm_map_copyin(
 		vm_object_reference_locked(object);
 		vm_object_split(tmp_entry);
 		object = tmp_entry->object.vm_object;
+		tmp_entry->object.vm_object = NULL;
 		vm_object_reference_locked(object);
 		VM_OBJECT_WUNLOCK(object);
 		vm_map_delete(src_map, src_start, src_end);
@@ -806,6 +807,7 @@ vm_map_copyout(
 	vm_map_copy_t		copy)
 {
 	int cow;
+	vm_object_t object;
 
 	*dst_addr = 0;
 /*
@@ -818,9 +820,14 @@ vm_map_copyout(
 	}
 	if (copy->type == VM_MAP_COPY_OBJECT) {
 		*dst_addr = 0;
-		cow = copy->cpy_object->ref_count > 1 ? MAP_COPY_ON_WRITE : 0;
+		object = copy->cpy_object;
+		cow = object->ref_count > 1 ? MAP_COPY_ON_WRITE : 0;
+		printf("object: %p size: %ld ref_count: %d type: %d flags: %x resident_page_count: %d\n",
+			   object, object->size, object->ref_count, object->type, object->flags,
+			   object->resident_page_count);
+
 		return vm_map_find(dst_map, copy->cpy_object, copy->offset,
-		    dst_addr, round_page(copy->size), 0, VMFS_ANY_SPACE,
+		    dst_addr, round_page(copy->size), 0, VMFS_OPTIMAL_SPACE,
 		    VM_PROT_READ|VM_PROT_WRITE, VM_PROT_READ|VM_PROT_WRITE,
 		    cow);
 	}
