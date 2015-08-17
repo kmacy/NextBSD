@@ -1911,7 +1911,7 @@ skip_db:
 	return (pkt_sent);
 }
 
-
+#ifdef DEV_NETMAP
 /*
  * Reconcile kernel and user view of the transmit ring.
  *
@@ -2182,6 +2182,7 @@ iflib_netmap_rxsync(struct netmap_kring *kring, int flags)
 ring_reset:
 	return netmap_ring_reinit(kring);
 }
+#endif
 
 static void
 _task_fn_tx(void *context, int pending)
