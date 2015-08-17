@@ -586,9 +586,10 @@ msix_alloc(device_t dev, int *irq)
 	int error;
 #endif
 
-	if (!msi_enabled)
+	if (!msi_enabled) {
+		printf("%s:%d MSIX disabled - thus MSIX\n", __FILE__, __LINE__);
 		return (ENXIO);
-
+	}
 again:
 	mtx_lock(&msi_lock);
 
@@ -610,6 +611,7 @@ again:
 		/* If we would exceed the max, give up. */
 		if (i + 1 > FIRST_MSI_INT + NUM_MSI_INTS) {
 			mtx_unlock(&msi_lock);
+			printf("%s:%d MSIX allocation failure\n", __FILE__, __LINE__);
 			return (ENXIO);
 		}
 		mtx_unlock(&msi_lock);

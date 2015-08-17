@@ -59,12 +59,6 @@ __FBSDID("$FreeBSD$");
 PMC_SOFT_DECLARE( , , lock, failed);
 #endif
 
-/*
- * Return the rwlock address when the lock cookie address is provided.
- * This functionality assumes that struct rwlock* have a member named rw_lock.
- */
-#define	rwlock2rw(c)	(__containerof(c, struct rwlock, rw_lock))
-
 #ifdef ADAPTIVE_RWLOCKS
 static int rowner_retries = 10;
 static int rowner_loops = 10000;
@@ -328,20 +322,8 @@ _rw_wunlock_cookie(volatile uintptr_t *c, const char *file, int line)
 	TD_LOCKS_DEC(curthread);
 }
 
-/*
- * Determines whether a new reader can acquire a lock.  Succeeds if the
- * reader already owns a read lock and the lock is locked for read to
- * prevent deadlock from reader recursion.  Also succeeds if the lock
- * is unlocked and has no writer waiters or spinners.  Failing otherwise
- * prioritizes writers before readers.
- */
-#define	RW_CAN_READ(_rw)						\
-    ((curthread->td_rw_rlocks && (_rw) & RW_LOCK_READ) || ((_rw) &	\
-    (RW_LOCK_READ | RW_LOCK_WRITE_WAITERS | RW_LOCK_WRITE_SPINNER)) ==	\
-    RW_LOCK_READ)
-
 void
-__rw_rlock(volatile uintptr_t *c, const char *file, int line)
+__rw_rlock_hard(volatile uintptr_t *c, const char *file, int line)
 {
 	struct rwlock *rw;
 	struct turnstile *ts;

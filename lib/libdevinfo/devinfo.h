@@ -31,6 +31,7 @@
 #define _DEVINFO_H_INCLUDED
 
 #include <sys/cdefs.h>
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/bus.h>
 

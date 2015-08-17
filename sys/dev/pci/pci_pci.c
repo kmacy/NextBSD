@@ -1985,8 +1985,10 @@ pcib_alloc_msix(device_t pcib, device_t dev, int *irq)
 	struct pcib_softc *sc = device_get_softc(pcib);
 	device_t bus;
 
-	if (sc->flags & PCIB_DISABLE_MSIX)
+	if (sc->flags & PCIB_DISABLE_MSIX) {
+		printf("%s:%d MSIX disabled\n", __FILE__, __LINE__);
 		return (ENXIO);
+	}
 	bus = device_get_parent(pcib);
 	return (PCIB_ALLOC_MSIX(device_get_parent(bus), dev, irq));
 }

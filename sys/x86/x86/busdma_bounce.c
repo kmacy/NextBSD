@@ -430,7 +430,7 @@ bounce_bus_dmamem_alloc(bus_dma_tag_t dmat, void** vaddr, int flags,
 		    __func__, dmat, dmat->common.flags, ENOMEM);
 		return (ENOMEM);
 	} else if (vtophys(*vaddr) & (dmat->common.alignment - 1)) {
-		printf("bus_dmamem_alloc failed to align memory properly.\n");
+		printf("bus_dmamem_alloc failed to align memory properly to: %lx.\n", dmat->common.alignment);
 	}
 	CTR4(KTR_BUSDMA, "%s: tag %p tag flags 0x%x error %d",
 	    __func__, dmat, dmat->common.flags, 0);

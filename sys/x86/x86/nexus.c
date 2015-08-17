@@ -125,6 +125,7 @@ static struct resource_list *nexus_get_reslist(device_t dev, device_t child);
 static	int nexus_set_resource(device_t, device_t, int, int, u_long, u_long);
 static	int nexus_get_resource(device_t, device_t, int, int, u_long *, u_long *);
 static void nexus_delete_resource(device_t, device_t, int, int);
+static	int nexus_get_cpus(device_t, device_t, enum cpu_sets, cpuset_t *);
 #ifdef DEV_APIC
 static	int nexus_alloc_msi(device_t pcib, device_t dev, int count, int maxcount, int *irqs);
 static	int nexus_release_msi(device_t pcib, device_t dev, int count, int *irqs);
@@ -161,6 +162,7 @@ static device_method_t nexus_methods[] = {
 	DEVMETHOD(bus_set_resource,	nexus_set_resource),
 	DEVMETHOD(bus_get_resource,	nexus_get_resource),
 	DEVMETHOD(bus_delete_resource,	nexus_delete_resource),
+	DEVMETHOD(bus_get_cpus,		nexus_get_cpus),
 
 	/* pcib interface */
 #ifdef DEV_APIC
@@ -608,6 +610,21 @@ nexus_delete_resource(device_t dev, device_t child, int type, int rid)
 	struct resource_list	*rl = &ndev->nx_resources;
 
 	resource_list_delete(rl, type, rid);
+}
+
+static int
+nexus_get_cpus(device_t dev, device_t child, enum cpu_sets op, cpuset_t *cpuset)
+{
+
+	switch (op) {
+#ifdef SMP
+	case INTR_CPUS:
+		*cpuset = intr_cpus;
+		return (0);
+#endif
+	default:
+		return (bus_generic_get_cpus(dev, child, op, cpuset));
+	}
 }
 
 /* Called from the MSI code to add new IRQs to the IRQ rman. */

@@ -64,13 +64,11 @@ SDT_PROBE_DEFINE2(lockstat, , , thread__spin, "struct mtx *", "uint64_t");
 int lockstat_enabled = 0;
 
 uint64_t 
-lockstat_nsecs(struct lock_object *lo)
+_lockstat_nsecs(struct lock_object *lo)
 {
 	struct bintime bt;
 	uint64_t ns;
 
-	if (!lockstat_enabled)
-		return (0);
 	if ((lo->lo_flags & LO_NOPROFILE) != 0)
 		return (0);
 

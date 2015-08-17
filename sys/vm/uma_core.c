@@ -73,7 +73,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/mutex.h>
 #include <sys/proc.h>
-#include <sys/random.h>
 #include <sys/rwlock.h>
 #include <sys/sbuf.h>
 #include <sys/sched.h>
@@ -2135,9 +2134,6 @@ uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 	int lockfail;
 	int cpu;
 
-	/* XXX: FIX? The entropy here is desirable, but the harvesting may be expensive */
-	random_harvest_fast(&zone, sizeof(zone), 1, RANDOM_FAST);
-
 	/* This is the fast path allocation */
 #ifdef UMA_DEBUG_ALLOC_1
 	printf("Allocating one item from %s(%p)\n", zone->uz_name, zone);
@@ -2676,9 +2672,6 @@ uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 	uma_bucket_t bucket;
 	int lockfail;
 	int cpu;
-
-	/* XXX: FIX? The entropy here is desirable, but the harvesting may be expensive */
-	random_harvest_fast(&zone, sizeof(zone), 1, RANDOM_FAST);
 
 #ifdef UMA_DEBUG_ALLOC_1
 	printf("Freeing item %p to %s(%p)\n", item, zone->uz_name, zone);

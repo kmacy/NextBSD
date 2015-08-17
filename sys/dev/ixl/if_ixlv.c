@@ -1529,7 +1529,6 @@ ixlv_setup_interface(device_t dev, struct ixlv_sc *sc)
 
 	ifp->if_transmit = ixl_mq_start;
 
-	ifp->if_qflush = ixl_qflush;
 	ifp->if_snd.ifq_maxlen = que->num_desc - 2;
 
 	ether_ifattach(ifp, sc->hw.mac.addr);
@@ -2504,15 +2503,6 @@ ixlv_free_queues(struct ixl_vsi *vsi)
 		IXL_TX_UNLOCK(txr);
 		IXL_TX_LOCK_DESTROY(txr);
 
-		if (!mtx_initialized(&rxr->mtx)) /* uninitialized */
-			continue;
-		IXL_RX_LOCK(rxr);
-		ixl_free_que_rx(que);
-		if (rxr->base)
-			i40e_free_dma_mem(&sc->hw, &rxr->dma);
-		IXL_RX_UNLOCK(rxr);
-		IXL_RX_LOCK_DESTROY(rxr);
-		
 	}
 	free(vsi->queues, M_DEVBUF);
 }

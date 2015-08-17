@@ -226,7 +226,7 @@ probe_tsc_freq(void)
 			tsc_is_invariant = 1;
 		if (cpu_feature & CPUID_SSE2) {
 			tsc_timecounter.tc_get_timecount =
-			    tsc_get_timecount_lfence;
+			    tsc_get_timecount;
 		}
 		break;
 	case CPU_VENDOR_CENTAUR:
@@ -564,7 +564,7 @@ init:
 		} else {
 			tsc_timecounter.tc_get_timecount = shift > 0 ?
 			    tsc_get_timecount_low_lfence :
-			    tsc_get_timecount_lfence;
+			    tsc_get_timecount;
 		}
 	} else {
 		tsc_timecounter.tc_get_timecount = shift > 0 ?

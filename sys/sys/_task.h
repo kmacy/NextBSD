@@ -51,4 +51,13 @@ struct task {
 	void	*ta_context;		/* (c) argument for handler */
 };
 
+struct grouptask {
+	struct	task		gt_task;
+	void			*gt_taskqueue;
+	LIST_ENTRY(grouptask)	gt_list;
+	void			*gt_uniq;
+        char			*gt_name;
+        int			gt_irq;
+};
+
 #endif /* !_SYS__TASK_H_ */

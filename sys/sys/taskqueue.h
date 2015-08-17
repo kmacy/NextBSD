@@ -39,6 +39,7 @@
 #include <sys/_cpuset.h>
 
 struct taskqueue;
+struct taskqgroup;
 struct thread;
 
 struct timeout_task {
@@ -202,5 +203,51 @@ int	taskqueue_enqueue_fast(struct taskqueue *queue, struct task *task);
 struct taskqueue *taskqueue_create_fast(const char *name, int mflags,
 				    taskqueue_enqueue_fn enqueue,
 				    void *context);
+
+/*
+ * Taskqueue groups.  Manages dynamic thread groups and irq binding for
+ * device and other tasks.
+ */
+void	taskqgroup_attach(struct taskqgroup *qgroup, struct grouptask *gtask,
+	    void *uniq, int irq, char *name);
+void	taskqgroup_detach(struct taskqgroup *qgroup, struct grouptask *gtask);
+struct taskqgroup *taskqgroup_create(char *name);
+void	taskqgroup_destroy(struct taskqgroup *qgroup);
+int	taskqgroup_adjust(struct taskqgroup *qgroup, int cnt, int stride);
+
+#define	GROUPTASK_INIT(gtask, priority, func, context)	\
+	TASK_INIT(&(gtask)->gt_task, priority, func, context)
+
+#define	GROUPTASK_ENQUEUE(gtask)			\
+	taskqueue_enqueue((gtask)->gt_taskqueue, &(gtask)->gt_task)
+
+#define TASKQGROUP_DECLARE(name)			\
+extern struct taskqgroup *qgroup_##name
+
+#define TASKQGROUP_DEFINE(name, cnt, stride)				\
+									\
+struct taskqgroup *qgroup_##name;					\
+									\
+static void								\
+taskqgroup_define_##name(void *arg)					\
+{									\
+	qgroup_##name = taskqgroup_create(#name);			\
+}									\
+									\
+SYSINIT(taskqgroup_##name, SI_SUB_CONFIGURE, SI_ORDER_SECOND,		\
+	taskqgroup_define_##name, NULL);				\
+									\
+static void								\
+taskqgroup_adjust_##name(void *arg)					\
+{									\
+	taskqgroup_adjust(qgroup_##name, (cnt), (stride));		\
+}									\
+									\
+SYSINIT(taskqgroup_adj_##name, SI_SUB_SMP, SI_ORDER_ANY,		\
+	taskqgroup_adjust_##name, NULL);				\
+									\
+struct __hack
+
+TASKQGROUP_DECLARE(net);
 
 #endif /* !_SYS_TASKQUEUE_H_ */
