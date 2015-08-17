@@ -85,7 +85,7 @@
  *    look at handling tx ack processing
  *
  */
-MALLOC_DEFINE(M_IFLIB, "iflib", "ifnet library");
+static MALLOC_DEFINE(M_IFLIB, "iflib", "ifnet library");
 
 struct iflib_txq;
 typedef struct iflib_txq *iflib_txq_t;
