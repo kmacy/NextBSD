@@ -210,6 +210,8 @@ struct taskqueue *taskqueue_create_fast(const char *name, int mflags,
  */
 void	taskqgroup_attach(struct taskqgroup *qgroup, struct grouptask *gtask,
 	    void *uniq, int irq, char *name);
+int		taskqgroup_attach_cpu(struct taskqgroup *qgroup, struct grouptask *gtask,
+		void *uniq, int cpu, int irq, char *name);
 void	taskqgroup_detach(struct taskqgroup *qgroup, struct grouptask *gtask);
 struct taskqgroup *taskqgroup_create(char *name);
 void	taskqgroup_destroy(struct taskqgroup *qgroup);

@@ -3361,10 +3361,11 @@ iflib_irq_alloc_generic(if_ctx_t ctx, if_irq_t irq, int rid,
 	struct grouptask *gtask;
 	struct taskqgroup *tqg;
 	iflib_filter_info_t info;
+	cpuset_t cpus;
 	task_fn_t *fn;
 	int tqrid;
 	void *q;
-	int err;
+	int err, i, cpuid;
 
 	info = &ctx->ifc_filter_info;
 
@@ -3403,13 +3404,21 @@ iflib_irq_alloc_generic(if_ctx_t ctx, if_irq_t irq, int rid,
 	info->ifi_task = gtask;
 
 	/* XXX query cpu that rid belongs to */
-#ifdef notyet /* how do we iterate - qid!*/
-	bus_bind_intr(dev, que->res, cpu_id);
-#endif
+
 	err = _iflib_irq_alloc(ctx, irq, rid, iflib_fast_intr, NULL, info,  name);
 	if (err != 0)
 		return (err);
-	taskqgroup_attach(tqg, gtask, q, tqrid, name);
+	if (tqrid != -1 && CPU_COUNT(&ctx->ifc_cpus) > qid) {
+		CPU_COPY(&ctx->ifc_cpus, &cpus);
+		for (i = 0; i < qid; i++) {
+			cpuid = CPU_FFS(&cpus);
+			CPU_CLR(cpuid, &cpus);
+		}
+		taskqgroup_attach_cpu(tqg, gtask, q, CPU_FFS(&cpus), irq->ii_rid, name);
+	} else
+		taskqgroup_attach(tqg, gtask, q, tqrid, name);
+
+
 	return (0);
 }
 
@@ -3668,12 +3677,14 @@ iflib_msix_init(if_ctx_t ctx)
 	queuemsgs = msgs - admincnt;
 #endif
 	if (bus_get_cpus(dev, INTR_CPUS, &ctx->ifc_cpus) == 0) {
-		queues = imin(CPU_COUNT(&ctx->ifc_cpus), queuemsgs);
+#ifdef RSS
+		queues = imin(queuemsgs, rss_getnumbuckets());
+#else
+		queues = queuemsgs;
+#endif
+		queues = imin(CPU_COUNT(&ctx->ifc_cpus), queues);
 		device_printf(dev, "pxm cpus: %d queue msgs: %d admincnt: %d\n",
 					  CPU_COUNT(&ctx->ifc_cpus), queuemsgs, admincnt);
-#ifdef notyet
-		bind_queues = 1;
-#endif		
 	} else {
 		device_printf(dev, "Unable to fetch CPU list\n");
 		/* Figure out a reasonable auto config value */
@@ -3708,5 +3719,6 @@ msi:
 		device_printf(dev,"Using a Legacy interrupt\n");
 		scctx->isc_intr = IFLIB_INTR_LEGACY;
 	}
+
 	return (vectors);
 }

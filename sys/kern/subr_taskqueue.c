@@ -906,6 +906,40 @@ taskqgroup_attach(struct taskqgroup *qgroup, struct grouptask *gtask,
 		mtx_unlock(&qgroup->tqg_lock);
 }
 
+int
+taskqgroup_attach_cpu(struct taskqgroup *qgroup, struct grouptask *gtask,
+	void *uniq, int cpu, int irq, char *name)
+{
+	cpuset_t mask;
+	int i, qid;
+
+	qid = -1;
+	gtask->gt_uniq = uniq;
+	gtask->gt_name = name;
+	gtask->gt_irq = irq;
+	mtx_lock(&qgroup->tqg_lock);
+	for (i = 0; i < qgroup->tqg_cnt; i++)
+		if (qgroup->tqg_queue[i].tgc_cpu == cpu) {
+			qid = i;
+			break;
+		}
+	if (qid == -1) {
+		mtx_unlock(&qgroup->tqg_lock);
+		return (EINVAL);
+	}
+	qgroup->tqg_queue[qid].tgc_cnt++;
+	LIST_INSERT_HEAD(&qgroup->tqg_queue[qid].tgc_tasks, gtask, gt_list);
+	gtask->gt_taskqueue = qgroup->tqg_queue[qid].tgc_taskq;
+	if (irq != -1 && smp_started) {
+		CPU_ZERO(&mask);
+		CPU_SET(qgroup->tqg_queue[qid].tgc_cpu, &mask);
+		mtx_unlock(&qgroup->tqg_lock);
+		intr_setaffinity(irq, &mask);
+	} else
+		mtx_unlock(&qgroup->tqg_lock);
+	return (0);
+}
+
 void
 taskqgroup_detach(struct taskqgroup *qgroup, struct grouptask *gtask)
 {
