@@ -415,7 +415,7 @@ static struct if_shared_ctx ixl_sctx_init = {
 };
 
 if_shared_ctx_t ixl_sctx = &ixl_sctx_init;
-static MALLOC_DEFINE(M_IXL, "ixl", "ixl driver allocations");
+MALLOC_DEFINE(M_IXL, "ixl", "ixl driver allocations");
 
 
 static int

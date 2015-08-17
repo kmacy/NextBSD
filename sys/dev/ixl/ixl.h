@@ -98,6 +98,8 @@
 #include "i40e_type.h"
 #include "i40e_prototype.h"
 
+MALLOC_DECLARE(M_IXL);
+
 #if defined(IXL_DEBUG) || defined(IXL_DEBUG_SYSCTL)
 #include <sys/sbuf.h>
 
@@ -533,7 +535,7 @@ ixl_get_filter(struct ixl_vsi *vsi)
 
 	/* create a new empty filter */
 	f = malloc(sizeof(struct ixl_mac_filter),
-	    M_DEVBUF, M_NOWAIT | M_ZERO);
+	    M_IXL, M_NOWAIT | M_ZERO);
 	if (f)
 		SLIST_INSERT_HEAD(&vsi->ftl, f, next);
 
