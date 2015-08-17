@@ -789,7 +789,7 @@ netmap_krings_create(struct netmap_adapter *na, u_int tailroom)
 
 	len = (n[NR_TX] + n[NR_RX]) * sizeof(struct netmap_kring) + tailroom;
 
-	na->tx_rings = malloc((size_t)len, M_DEVBUF, M_NOWAIT | M_ZERO);
+	na->tx_rings = malloc((size_t)len, M_NETMAP, M_NOWAIT | M_ZERO);
 	if (na->tx_rings == NULL) {
 		D("Cannot allocate krings");
 		return ENOMEM;
@@ -867,7 +867,7 @@ netmap_krings_delete(struct netmap_adapter *na)
 		mtx_destroy(&kring->q_lock);
 		netmap_knlist_destroy(&kring->si);
 	}
-	free(na->tx_rings, M_DEVBUF);
+	free(na->tx_rings, M_NETMAP);
 	na->tx_rings = na->rx_rings = na->tailroom = NULL;
 }
 
@@ -1002,7 +1002,7 @@ netmap_dtor(void *data)
 	NMG_UNLOCK();
 	if (last_instance) {
 		bzero(priv, sizeof(*priv));	/* for safety */
-		free(priv, M_DEVBUF);
+		free(priv, M_NETMAP);
 	}
 }
 
@@ -2696,7 +2696,7 @@ netmap_detach_common(struct netmap_adapter *na)
 	if (na->nm_mem)
 		netmap_mem_put(na->nm_mem);
 	bzero(na, sizeof(*na));
-	free(na, M_DEVBUF);
+	free(na, M_NETMAP);
 }
 
 /* Wrapper for the register callback provided hardware drivers.
@@ -2741,7 +2741,7 @@ netmap_attach(struct netmap_adapter *arg)
 
 	if (arg == NULL || ifp == NULL)
 		goto fail;
-	hwna = malloc(sizeof(*hwna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	hwna = malloc(sizeof(*hwna), M_NETMAP, M_NOWAIT | M_ZERO);
 	if (hwna == NULL)
 		goto fail;
 	hwna->up = *arg;
@@ -2750,7 +2750,7 @@ netmap_attach(struct netmap_adapter *arg)
 	hwna->nm_hw_register = hwna->up.nm_register;
 	hwna->up.nm_register = netmap_hw_register;
 	if (netmap_attach_common(&hwna->up)) {
-		free(hwna, M_DEVBUF);
+		free(hwna, M_NETMAP);
 		goto fail;
 	}
 	netmap_adapter_get(&hwna->up);

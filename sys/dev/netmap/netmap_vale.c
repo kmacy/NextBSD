@@ -360,7 +360,7 @@ nm_free_bdgfwd(struct netmap_adapter *na)
 	kring = na->tx_rings;
 	for (i = 0; i < nrings; i++) {
 		if (kring[i].nkr_ft) {
-			free(kring[i].nkr_ft, M_DEVBUF);
+			free(kring[i].nkr_ft, M_NETMAP);
 			kring[i].nkr_ft = NULL; /* protect from freeing twice */
 		}
 	}
@@ -390,7 +390,7 @@ nm_alloc_bdgfwd(struct netmap_adapter *na)
 		struct nm_bdg_q *dstq;
 		int j;
 
-		ft = malloc(l, M_DEVBUF, M_NOWAIT | M_ZERO);
+		ft = malloc(l, M_NETMAP, M_NOWAIT | M_ZERO);
 		if (!ft) {
 			nm_free_bdgfwd(na);
 			return ENOMEM;
@@ -674,7 +674,7 @@ netmap_get_bdg_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
 		error = netmap_vp_create(nmr, NULL, &vpna);
 		if (error) {
 			D("error %d", error);
-			free(ifp, M_DEVBUF);
+			free(ifp, M_NETMAP);
 			return error;
 		}
 		/* shortcut - we can skip get_hw_na(),
@@ -1771,7 +1771,7 @@ netmap_vp_create(struct nmreq *nmr, struct ifnet *ifp, struct netmap_vp_adapter 
 	int error;
 	u_int npipes = 0;
 
-	vpna = malloc(sizeof(*vpna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	vpna = malloc(sizeof(*vpna), M_NETMAP, M_NOWAIT | M_ZERO);
 	if (vpna == NULL)
 		return ENOMEM;
 
@@ -1840,7 +1840,7 @@ netmap_vp_create(struct nmreq *nmr, struct ifnet *ifp, struct netmap_vp_adapter 
 err:
 	if (na->nm_mem != NULL)
 		netmap_mem_delete(na->nm_mem);
-	free(vpna, M_DEVBUF);
+	free(vpna, M_NETMAP);
 	return error;
 }
 
@@ -2217,13 +2217,13 @@ netmap_bwrap_bdg_ctl(struct netmap_adapter *na, struct nmreq *nmr, int attach)
 			/* nothing to do */
 			return 0;
 		}
-		npriv = malloc(sizeof(*npriv), M_DEVBUF, M_NOWAIT|M_ZERO);
+		npriv = malloc(sizeof(*npriv), M_NETMAP, M_NOWAIT|M_ZERO);
 		if (npriv == NULL)
 			return ENOMEM;
 		error = netmap_do_regif(npriv, na, nmr->nr_ringid, nmr->nr_flags);
 		if (error) {
 			bzero(npriv, sizeof(*npriv));
-			free(npriv, M_DEVBUF);
+			free(npriv, M_NETMAP);
 			return error;
 		}
 		bna->na_kpriv = npriv;
@@ -2245,7 +2245,7 @@ netmap_bwrap_bdg_ctl(struct netmap_adapter *na, struct nmreq *nmr, int attach)
 			D("deleting priv");
 
 			bzero(npriv, sizeof(*npriv));
-			free(npriv, M_DEVBUF);
+			free(npriv, M_NETMAP);
 			if (b) {
 				/* XXX the bwrap dtor should take care
 				 * of this (2014-06-16)
@@ -2276,7 +2276,7 @@ netmap_bwrap_attach(const char *nr_name, struct netmap_adapter *hwna)
 		return EBUSY;
 	}
 
-	bna = malloc(sizeof(*bna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	bna = malloc(sizeof(*bna), M_NETMAP, M_NOWAIT | M_ZERO);
 	if (bna == NULL) {
 		return ENOMEM;
 	}
@@ -2369,7 +2369,7 @@ err_free:
 err_put:
 	hwna->na_vp = hwna->na_hostvp = NULL;
 	netmap_adapter_put(hwna);
-	free(bna, M_DEVBUF);
+	free(bna, M_NETMAP);
 	return error;
 
 }
@@ -2380,7 +2380,7 @@ netmap_init_bridges2(u_int n)
 	int i;
 	struct nm_bridge *b;
 
-	b = malloc(sizeof(struct nm_bridge) * n, M_DEVBUF,
+	b = malloc(sizeof(struct nm_bridge) * n, M_NETMAP,
 		M_NOWAIT | M_ZERO);
 	if (b == NULL)
 		return NULL;
@@ -2399,7 +2399,7 @@ netmap_uninit_bridges2(struct nm_bridge *b, u_int n)
 
 	for (i = 0; i < n; i++)
 		BDG_RWDESTROY(&b[i]);
-	free(b, M_DEVBUF);
+	free(b, M_NETMAP);
 }
 
 int

@@ -485,7 +485,7 @@ netmap_dev_pager_dtor(void *handle)
 	if (netmap_verbose)
 		D("handle %p", handle);
 	netmap_dtor(priv);
-	free(vmh, M_DEVBUF);
+	free(vmh, M_NETMAP);
 	dev_rel(dev);
 }
 
@@ -561,7 +561,7 @@ netmap_mmap_single(struct cdev *cdev, vm_ooffset_t *foff,
 		D("cdev %p foff %jd size %jd objp %p prot %d", cdev,
 		    (intmax_t )*foff, (intmax_t )objsize, objp, prot);
 
-	vmh = malloc(sizeof(struct netmap_vm_handle_t), M_DEVBUF,
+	vmh = malloc(sizeof(struct netmap_vm_handle_t), M_NETMAP,
 			      M_NOWAIT | M_ZERO);
 	if (vmh == NULL)
 		return ENOMEM;
@@ -597,7 +597,7 @@ err_deref:
 err_unlock:
 	NMG_UNLOCK();
 // err:
-	free(vmh, M_DEVBUF);
+	free(vmh, M_NETMAP);
 	return error;
 }
 
@@ -634,14 +634,14 @@ netmap_open(struct cdev *dev, int oflags, int devtype, struct thread *td)
 	(void)devtype;
 	(void)td;
 
-	priv = malloc(sizeof(struct netmap_priv_d), M_DEVBUF,
+	priv = malloc(sizeof(struct netmap_priv_d), M_NETMAP,
 			      M_NOWAIT | M_ZERO);
 	if (priv == NULL)
 		return ENOMEM;
 	priv->np_refs = 1;
 	error = devfs_set_cdevpriv(priv, netmap_dtor);
 	if (error) {
-		free(priv, M_DEVBUF);
+		free(priv, M_NETMAP);
 	} else {
 		NMG_LOCK();
 		netmap_use_count++;

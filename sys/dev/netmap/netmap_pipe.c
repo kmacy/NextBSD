@@ -91,7 +91,7 @@ nm_pipe_alloc(struct netmap_adapter *na, u_int npipes)
 		return EINVAL;
 
         len = sizeof(struct netmap_pipe_adapter *) * npipes;
-	npa = realloc(na->na_pipes, len, M_DEVBUF, M_NOWAIT | M_ZERO);
+	npa = realloc(na->na_pipes, len, M_NETMAP, M_NOWAIT | M_ZERO);
 	if (npa == NULL)
 		return ENOMEM;
 
@@ -110,7 +110,7 @@ netmap_pipe_dealloc(struct netmap_adapter *na)
 			D("freeing not empty pipe array for %s (%d dangling pipes)!", na->name,
 					na->na_next_pipe);
 		}
-		free(na->na_pipes, M_DEVBUF);
+		free(na->na_pipes, M_NETMAP);
 		na->na_pipes = NULL;
 		na->na_max_pipes = 0;
 		na->na_next_pipe = 0;
@@ -576,7 +576,7 @@ netmap_get_pipe_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
          * The endpoint we were asked for holds a reference to
          * the other one.
          */
-	mna = malloc(sizeof(*mna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	mna = malloc(sizeof(*mna), M_NETMAP, M_NOWAIT | M_ZERO);
 	if (mna == NULL) {
 		error = ENOMEM;
 		goto put_out;
@@ -613,7 +613,7 @@ netmap_get_pipe_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
 		goto free_mna;
 
 	/* create the slave */
-	sna = malloc(sizeof(*mna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	sna = malloc(sizeof(*mna), M_NETMAP, M_NOWAIT | M_ZERO);
 	if (sna == NULL) {
 		error = ENOMEM;
 		goto unregister_mna;
@@ -665,11 +665,11 @@ found:
 	return 0;
 
 free_sna:
-	free(sna, M_DEVBUF);
+	free(sna, M_NETMAP);
 unregister_mna:
 	netmap_pipe_remove(pna, mna);
 free_mna:
-	free(mna, M_DEVBUF);
+	free(mna, M_NETMAP);
 put_out:
 	netmap_adapter_put(pna);
 	return error;
