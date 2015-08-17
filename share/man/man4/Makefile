@@ -96,6 +96,7 @@ MAN=	aac.4 \
 	cdce.4 \
 	ch.4 \
 	ciss.4 \
+	cloudabi.4 \
 	cm.4 \
 	cmx.4 \
 	${_coretemp.4} \
@@ -107,6 +108,7 @@ MAN=	aac.4 \
 	cxgb.4 \
 	cxgbe.4 \
 	cy.4 \
+	cyapa.4 \
 	da.4 \
 	dc.4 \
 	dcons.4 \
@@ -215,11 +217,14 @@ MAN=	aac.4 \
 	ipw.4 \
 	ipwfw.4 \
 	isci.4 \
+	isl.4 \
 	ismt.4 \
 	isp.4 \
 	ispfw.4 \
 	iwi.4 \
 	iwifw.4 \
+	iwm.4 \
+	iwmfw.4 \
 	iwn.4 \
 	iwnfw.4 \
 	ixgb.4 \
@@ -581,6 +586,7 @@ MLINKS+=bwn.4 if_bwn.4
 MLINKS+=${_bxe.4} ${_if_bxe.4}
 MLINKS+=cas.4 if_cas.4
 MLINKS+=cdce.4 if_cdce.4
+MLINKS+=cloudabi.4 cloudabi64.4
 MLINKS+=crypto.4 cryptodev.4
 MLINKS+=cue.4 if_cue.4
 MLINKS+=cxgb.4 if_cxgb.4
@@ -625,6 +631,7 @@ MLINKS+=ipfirewall.4 ipaccounting.4 \
 MLINKS+=ipheth.4 if_ipheth.4
 MLINKS+=ipw.4 if_ipw.4
 MLINKS+=iwi.4 if_iwi.4
+MLINKS+=iwm.4 if_iwm.4
 MLINKS+=iwn.4 if_iwn.4
 MLINKS+=ixgb.4 if_ixgb.4
 MLINKS+=ixgbe.4 ix.4
@@ -664,6 +671,7 @@ MLINKS+=pccbb.4 cbb.4
 MLINKS+=pcm.4 snd.4 \
 	pcm.4 sound.4
 MLINKS+=pcn.4 if_pcn.4
+MLINKS+=pms.4 pmspcv.4
 MLINKS+=ral.4 if_ral.4
 MLINKS+=re.4 if_re.4
 MLINKS+=rl.4 if_rl.4

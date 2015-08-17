@@ -29,7 +29,7 @@
 #ifndef _LIBBUS_SPACE_H_
 #define	_LIBBUS_SPACE_H_
 
-int	bus_map(const char *dev);
+int	bus_map(const char *dev, const char *resource);
 int16_t	bus_read_1(int rid, long ofs);
 int32_t	bus_read_2(int rid, long ofs);
 int64_t bus_read_4(int rid, long ofs);
@@ -78,6 +78,7 @@ bus_size_t	busdma_seg_get_size(busdma_seg_t seg);
 #define	BUSDMA_SYNC_PREWRITE    4
 #define	BUSDMA_SYNC_POSTWRITE   8
 
-int	busdma_sync(busdma_md_t md, int op, bus_addr_t, bus_size_t);
+int	busdma_sync(busdma_md_t md, int op);
+int	busdma_sync_range(busdma_md_t md, int op, bus_size_t, bus_size_t);
 
 #endif /* _LIBBUS_SPACE_H_ */

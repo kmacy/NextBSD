@@ -104,8 +104,8 @@ ixl_netmap_attach(struct ixl_vsi *vsi)
 		na.num_tx_desc = ixl_sctx->isc_ntxd;
 		na.num_rx_desc = ixl_sctx->isc_nrxd;
 	}
-	na.nm_txsync = ixl_netmap_txsync;
-	na.nm_rxsync = ixl_netmap_rxsync;
+	na.nm_txsync = iflib_netmap_txsync;
+	na.nm_rxsync = iflib_netmap_rxsync;
 	na.nm_register = iflib_netmap_register;
 	na.num_tx_rings = na.num_rx_rings = vsi->num_queues;
 	netmap_attach(&na);
@@ -113,7 +113,7 @@ ixl_netmap_attach(struct ixl_vsi *vsi)
 
 
 #else /* !NETMAP_IXL_MAIN, code for ixl_txrx.c */
-
+#if 0
 /*
  * Reconcile kernel and user view of the transmit ring.
  *
@@ -385,7 +385,7 @@ ixl_netmap_rxsync(struct netmap_kring *kring, int flags)
 ring_reset:
 	return netmap_ring_reinit(kring);
 }
-
+#endif
 #endif /* !NETMAP_IXL_MAIN */
 
 /* end of file */

@@ -45,7 +45,6 @@
 #endif
 
 #include "ixl.h"
-#undef DEV_NETMAP
 
 #ifdef RSS
 #include <net/rss_config.h>
@@ -61,6 +60,7 @@ static bool	ixl_tso_setup(struct ixl_queue *, struct mbuf *);
 static int ixl_isc_txd_encap(void *arg, if_pkt_info_t pi);
 static void ixl_isc_txd_flush(void *arg, uint16_t txqid, uint32_t pidx);
 static int ixl_isc_txd_credits_update(void *arg, uint16_t qid, uint32_t cidx);
+
 #ifdef DEV_NETMAP
 #include <dev/netmap/if_ixl_netmap.h>
 #endif /* DEV_NETMAP */
@@ -152,36 +152,43 @@ ixl_isc_txd_encap(void *arg, if_pkt_info_t pi)
          */
 	first = pi->ipi_pidx;
 	buf = &txr->tx_buffers[first];
+	if (m_head != NULL) {
 #ifdef notyet
-	if (m_head->m_pkthdr.csum_flags & CSUM_TSO) {
-		/* Use larger mapping for TSO */
-		tag = txr->tso_tag;
-		maxsegs = IXL_MAX_TSO_SEGS;
-		if (ixl_tso_detect_sparse(m_head)) {
-			m = m_defrag(m_head, M_NOWAIT);
-			if (m == NULL) {
-				m_freem(*m_headp);
-				*m_headp = NULL;
-				return (ENOBUFS);
-			}
+		if (m_head->m_pkthdr.csum_flags & CSUM_TSO) {
+			/* Use larger mapping for TSO */
+			tag = txr->tso_tag;
+			maxsegs = IXL_MAX_TSO_SEGS;
+			if (ixl_tso_detect_sparse(m_head)) {
+				m = m_defrag(m_head, M_NOWAIT);
+				if (m == NULL) {
+					m_freem(*m_headp);
+					*m_headp = NULL;
+					return (ENOBUFS);
+				}
 			*m_headp = m;
+			}
 		}
-	}
 #endif
 
-	/* Set up the TSO/CSUM offload */
-	if (m_head->m_pkthdr.csum_flags & CSUM_OFFLOAD) {
-		error = ixl_tx_setup_offload(que, m_head, &cmd, &off);
-		if (error)
-			return (error);
-	}
+		/* Set up the TSO/CSUM offload */
+		if (m_head->m_pkthdr.csum_flags & CSUM_OFFLOAD) {
+			error = ixl_tx_setup_offload(que, m_head, &cmd, &off);
+			if (error)
+				return (error);
+		}
 
-	cmd |= I40E_TX_DESC_CMD_ICRC;
-	/* Grab the VLAN tag */
-	if (m_head->m_flags & M_VLANTAG) {
-		cmd |= I40E_TX_DESC_CMD_IL2TAG1;
-		vtag = htole16(m_head->m_pkthdr.ether_vtag);
+		/* Grab the VLAN tag */
+		if (m_head->m_flags & M_VLANTAG) {
+			cmd |= I40E_TX_DESC_CMD_IL2TAG1;
+			vtag = htole16(m_head->m_pkthdr.ether_vtag);
+		}
+	} else if (first == 0) {
+		/* XXX --- need to be able to pass slot->flags & NS_REPORT
+		 * || first == report_frequency) {
+		**/
+		cmd |= (I40E_TX_DESC_CMD_RS << I40E_TXD_QW1_CMD_SHIFT);
 	}
+	cmd |= I40E_TX_DESC_CMD_ICRC;
 
 	i = first;
 	for (j = 0; j < nsegs; j++) {
@@ -269,6 +276,8 @@ ixl_init_tx_ring(struct ixl_queue *que)
 
 	buf = txr->tx_buffers;
 	for (int i = 0; i < ixl_sctx->isc_ntxd; i++, buf++) {
+#ifdef notyet
+		/* XXX move in to iflib */
 #ifdef DEV_NETMAP
 		/*
 		 * In netmap mode, set the map for the packet buffer.
@@ -282,6 +291,7 @@ ixl_init_tx_ring(struct ixl_queue *que)
 			netmap_load_map(na, buf->tag, buf->map, NMB(na, slot + si));
 		}
 #endif /* DEV_NETMAP */
+#endif
 		/* Clear the EOP index */
 		buf->eop_index = -1;
 	}
@@ -652,6 +662,7 @@ ixl_init_rx_ring(struct ixl_queue *que)
 {
 	struct	rx_ring 	*rxr = &que->rxr;
 	struct ixl_vsi		*vsi = que->vsi;
+#if 0
 #ifdef DEV_NETMAP
 	struct netmap_adapter *na = NA(que->vsi->ifp);
 	struct netmap_slot *slot;
@@ -674,9 +685,11 @@ ixl_init_rx_ring(struct ixl_queue *que)
 			/* Update descriptor and the cached value */
 			rxr->base[j].read.pkt_addr = htole64(paddr);
 			rxr->base[j].read.hdr_addr = 0;
-			continue;
+			/* XXX hrrrm */
+			return (0);
 		}
 #endif /* DEV_NETMAP */
+#endif
 	/* Setup our descriptor indices */
 	rxr->bytes = 0;
 
@@ -782,13 +795,6 @@ ixl_isc_rxd_pkt_get(void *arg, if_rxd_info_t ri)
 
 	/* we should never be called without a valid descriptor */
 	MPASS((status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT)) != 0);
-
-#ifdef DEV_NETMAP
-	if (netmap_rx_irq(ifp, que->me, &count)) {
-		IXL_RX_UNLOCK(rxr);
-		return (FALSE);
-	}
-#endif /* DEV_NETMAP */
 
 	ri->iri_len = plen;
 	rxr->rx_bytes += plen;

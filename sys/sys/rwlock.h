@@ -200,7 +200,7 @@ __rw_runlock(volatile uintptr_t *c, const char *file, int line)
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
 
-	if (!(v & RW_LOCK_WAITERS) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)) {
+	if ((!(v & RW_LOCK_WAITERS) || (RW_READERS(v) > 1)) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)) {
 #ifdef INVARIANTS
 		struct thread *td = curthread;
 		td->td_locks--;
