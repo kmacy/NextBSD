@@ -1191,7 +1191,7 @@ netmap_mem_private_delete(struct netmap_mem_d *nmd)
 	if (netmap_verbose)
 		D("done deleting %p", nmd);
 	NMA_LOCK_DESTROY(nmd);
-	free(nmd, M_DEVBUF);
+	free(nmd, M_NETMAP);
 }
 
 static int
@@ -1238,7 +1238,7 @@ netmap_mem_private_new(const char *name, u_int txr, u_int txd,
 	u_int v, maxd;
 
 	d = malloc(sizeof(struct netmap_mem_d),
-			M_DEVBUF, M_NOWAIT | M_ZERO);
+			M_NETMAP, M_NOWAIT | M_ZERO);
 	if (d == NULL) {
 		err = ENOMEM;
 		goto error;

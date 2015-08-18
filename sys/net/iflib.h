@@ -265,15 +265,4 @@ void iflib_led_create(if_ctx_t ctx);
 void iflib_add_int_delay_sysctl(if_ctx_t, const char *, const char *,
 								if_int_delay_info_t, int, int);
 
-#ifdef DEV_NETMAP
-#include <sys/selinfo.h>
-#include <net/netmap.h>
-#include <dev/netmap/netmap_kern.h>
-
-int iflib_netmap_register(struct netmap_adapter *na, int onoff);
-int iflib_netmap_txsync(struct netmap_kring *kring, int flags);
-int iflib_netmap_rxsync(struct netmap_kring *kring, int flags);
-
-#endif
-
 #endif /*  __IFLIB_H_ */
