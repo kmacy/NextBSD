@@ -103,14 +103,18 @@ typedef enum {
  * but this is the only consumer for now.
  */
 typedef struct pci_vendor_info {
-	uint32_t    pvi_vendor_id;
-	uint32_t    pvi_device_id;
-	uint32_t    pvi_subvendor_id;
-	uint32_t    pvi_subdevice_id;
-	uint32_t    pvi_class_mask;
-	uint32_t    pvi_index;
+	uint32_t	pvi_vendor_id;
+	uint32_t	pvi_device_id;
+	uint32_t	pvi_subvendor_id;
+	uint32_t	pvi_subdevice_id;
+	uint32_t	pvi_rev_id;
+	uint32_t	pvi_class_mask;
+	caddr_t		pvi_name;
 } pci_vendor_info_t;
 
+#define PVID(vendor, devid, name) {vendor, devid, 0, 0, 0, 0, name}
+#define PVID_OEM(vendor, devid, svid, sdevid, revid, name) {vendor, devid, svid, sdevid, revid, 0, name}
+#define PVID_END {0, 0, 0, 0, 0, 0, 0}
 
 typedef struct if_txrx {
 	int (*ift_txd_encap) (void *, if_pkt_info_t);
@@ -163,11 +167,7 @@ struct if_shared_ctx {
 
 	/* fields necessary for probe */
 	pci_vendor_info_t *isc_vendor_info;
-	int isc_vendor_id;
-	char **isc_vendor_strings;
 	char *isc_driver_version;
-
-
 };
 
 #define IFLIB_MAGIC 0xCAFEF00D
