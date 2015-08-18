@@ -1681,7 +1681,7 @@ iflib_stop(if_ctx_t ctx)
 
 	IFDI_INTR_DISABLE(ctx);
 	/* Tell the stack that the interface is no longer active */
-	if_setdrvflagbits(ctx->ifc_ifp, IFF_DRV_OACTIVE, IFF_DRV_RUNNING);
+	if_setdrvflagbits(ctx->ifc_ifp, 0, IFF_DRV_RUNNING);
 
 	/* Wait for current tx queue users to exit to disarm watchdog timer. */
 	for (int i = 0; i < sctx->isc_nqsets; i++, txq++)
