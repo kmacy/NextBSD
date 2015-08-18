@@ -394,6 +394,13 @@ static moduledata_t iflib_moduledata = {
 DECLARE_MODULE(iflib, iflib_moduledata, SI_SUB_SMP, SI_ORDER_ANY);
 MODULE_VERSION(iflib, 1);
 
+MODULE_DEPEND(iflib, pci, 1, 1, 1);
+MODULE_DEPEND(iflib, ether, 1, 1, 1);
+#ifdef DEV_NETMAP
+MODULE_DEPEND(iflib, netmap, 1, 1, 1);
+#endif /* DEV_NETMAP */
+
+
 TASKQGROUP_DEFINE(if_io_tqg, mp_ncpus, 1);
 TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 
@@ -1594,7 +1601,13 @@ iflib_netmap_rxq_init(if_ctx_t ctx, iflib_rxq_t rxq)
 			/* Update descriptor and the cached value */
 			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, i, &paddr, &vaddr, 1);
 	}
-	ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, nrxd-1);
+	/* preserve queue */
+	if (ctx->ifc_ifp->if_capenable & IFCAP_NETMAP) {
+		struct netmap_kring *kring = &na->rx_rings[rxq->ifr_id];
+		int t = na->num_rx_desc - 1 - nm_kr_rxspace(kring);
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, t);
+	} else
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, nrxd-1);
 }
 #else
 #define iflib_netmap_txq_init(ctx, txq)
@@ -1618,6 +1631,7 @@ iflib_init_locked(if_ctx_t ctx)
 		iflib_netmap_txq_init(ctx, txq);
 		iflib_netmap_rxq_init(ctx, rxq);
 	}
+
 	IFDI_INIT(ctx);
 	if_setdrvflagbits(ctx->ifc_ifp, IFF_DRV_RUNNING, 0);
 	IFDI_INTR_ENABLE(ctx);
