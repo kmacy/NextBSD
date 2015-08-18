@@ -372,8 +372,11 @@ TUNABLE_INT("hw.ixl.atr_rate", &ixl_atr_rate);
 #endif
 
 #ifdef DEV_NETMAP
-#define NETMAP_IXL_MAIN /* only bring in one part of the netmap code */
-#include <dev/netmap/if_ixl_netmap.h>
+#include <net/netmap.h>
+#include <sys/selinfo.h>
+#include <vm/vm.h>
+#include <vm/pmap.h>
+#include <dev/netmap/netmap_kern.h>
 #endif /* DEV_NETMAP */
 
 static char *ixl_fc_string[6] = {
@@ -874,9 +877,6 @@ ixl_if_attach_post(if_ctx_t ctx)
 			    iov_error);
 	}
 #endif
-#ifdef DEV_NETMAP
-	ixl_netmap_attach(vsi);
-#endif /* DEV_NETMAP */
 	INIT_DEBUGOUT("ixl_attach: end");
 	device_printf(dev, "%s success!\n", __FUNCTION__);
 	return (0);

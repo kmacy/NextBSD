@@ -62,7 +62,11 @@ static void ixl_isc_txd_flush(void *arg, uint16_t txqid, uint32_t pidx);
 static int ixl_isc_txd_credits_update(void *arg, uint16_t qid, uint32_t cidx);
 
 #ifdef DEV_NETMAP
-#include <dev/netmap/if_ixl_netmap.h>
+#include <net/netmap.h>
+#include <sys/selinfo.h>
+#include <vm/vm.h>
+#include <vm/pmap.h>
+#include <dev/netmap/netmap_kern.h>
 #endif /* DEV_NETMAP */
 
 static void ixl_isc_rxd_refill(void *arg, uint16_t rxqid, uint8_t flid __unused,
