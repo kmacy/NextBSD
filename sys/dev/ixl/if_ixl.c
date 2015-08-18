@@ -905,6 +905,7 @@ ixl_if_detach(if_ctx_t ctx)
 	struct ixl_pf		*pf = vsi->back;
 	struct i40e_hw		*hw = &pf->hw;
 	i40e_status		status;
+	int		i;
 #ifdef PCI_IOV
 	int			error;
 #endif
@@ -931,6 +932,11 @@ ixl_if_detach(if_ctx_t ctx)
 		device_printf(iflib_get_dev(ctx),
 		    "Shutdown Admin queue failed with code %d\n", status);
 
+	if (vsi->shared->isc_intr == IFLIB_INTR_MSIX) {
+		iflib_irq_free(ctx, &vsi->irq);
+		for (i = 0; i < vsi->num_queues; i++)
+			iflib_irq_free(ctx, &vsi->queues[i].que_irq);
+	}
 #ifdef DEV_NETMAP
 	netmap_detach(vsi->ifp);
 #endif /* DEV_NETMAP */
@@ -1674,6 +1680,7 @@ ixl_if_msix_intr_assign(if_ctx_t ctx, int msix)
 
 	return (0);
 fail:
+	iflib_irq_free(ctx, &vsi->irq);
 	que = vsi->queues;
 	for (int i = 0; i < vsi->num_queues; i++, que++)
 		iflib_irq_free(ctx, &que->que_irq);
