@@ -2946,6 +2946,16 @@ iflib_device_deregister(if_ctx_t ctx)
 	device_t dev = ctx->ifc_dev;
 	int i;
 
+#ifdef DEV_NETMAP
+	if (ifp->if_netmap) {
+		struct netmap_adapter *na;
+
+		na = ifp->if_netmap;
+		device_printf(dev, "deregistering netmap: ");
+		device_printf(dev, "%p magic: %x na_flags: %x\n",
+					  na, na->magic, na->na_flags);
+	}
+#endif
 	/* Make sure VLANS are not using driver */
 	if (if_vlantrunkinuse(ifp)) {
 		device_printf(dev,"Vlan in use, detach first\n");
@@ -2968,11 +2978,14 @@ iflib_device_deregister(if_ctx_t ctx)
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
-	IFDI_DETACH(ctx);
 	for (txq = ctx->ifc_txqs, i = 0; i < ctx->ifc_softc_ctx.isc_nqsets; i++, txq++) {
 		callout_drain(&txq->ift_timer);
 		callout_drain(&txq->ift_db_check);
 	}
+#ifdef DEV_NETMAP
+	netmap_detach(ifp);
+#endif /* DEV_NETMAP */
+	IFDI_DETACH(ctx);
 	if (ctx->ifc_softc_ctx.isc_intr == IFLIB_INTR_MSIX) {
 		pci_release_msi(dev);
 	}
@@ -2981,9 +2994,6 @@ iflib_device_deregister(if_ctx_t ctx)
 			ctx->ifc_softc_ctx.isc_msix_bar, ctx->ifc_msix_mem);
 		ctx->ifc_msix_mem = NULL;
 	}
-#ifdef DEV_NETMAP
-	netmap_detach(ifp);
-#endif /* DEV_NETMAP */
 
 	bus_generic_detach(dev);
 	if_free(ctx->ifc_ifp);
