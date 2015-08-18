@@ -905,7 +905,6 @@ ixl_if_detach(if_ctx_t ctx)
 	struct ixl_pf		*pf = vsi->back;
 	struct i40e_hw		*hw = &pf->hw;
 	i40e_status		status;
-	int		i;
 #ifdef PCI_IOV
 	int			error;
 #endif
@@ -932,11 +931,6 @@ ixl_if_detach(if_ctx_t ctx)
 		device_printf(iflib_get_dev(ctx),
 		    "Shutdown Admin queue failed with code %d\n", status);
 
-	if (vsi->shared->isc_intr == IFLIB_INTR_MSIX) {
-		iflib_irq_free(ctx, &vsi->irq);
-		for (i = 0; i < vsi->num_queues; i++)
-			iflib_irq_free(ctx, &vsi->queues[i].que_irq);
-	}
 #ifdef DEV_NETMAP
 	netmap_detach(vsi->ifp);
 #endif /* DEV_NETMAP */
@@ -1877,9 +1871,12 @@ ixl_free_pci_resources(struct ixl_pf * pf)
 	if ((!ixl_enable_msix) || (que == NULL))
 		goto early;
 
+
 	/*
 	**  Release all msix VSI resources:
 	*/
+	iflib_irq_free(vsi->ctx, &vsi->irq);
+
 	for (int i = 0; i < vsi->num_queues; i++, que++)
 		iflib_irq_free(vsi->ctx, &que->que_irq);
 early:
@@ -1895,13 +1892,6 @@ early:
 	}
 	if (pf->res != NULL)
 		bus_release_resource(dev, SYS_RES_IRQ, rid, pf->res);
-
-	if (pf->msix)
-		pci_release_msi(dev);
-
-	if (pf->msix_mem != NULL)
-		bus_release_resource(dev, SYS_RES_MEMORY,
-		    memrid, pf->msix_mem);
 
 	if (pf->pci_mem != NULL)
 		bus_release_resource(dev, SYS_RES_MEMORY,

@@ -2809,6 +2809,14 @@ iflib_device_deregister(if_ctx_t ctx)
 		callout_drain(&txq->ift_timer);
 		callout_drain(&txq->ift_db_check);
 	}
+	if (ctx->ifc_softc_ctx.isc_intr == IFLIB_INTR_MSIX) {
+		pci_release_msi(dev);
+	}
+	if (ctx->ifc_msix_mem != NULL) {
+		bus_release_resource(ctx->ifc_dev, SYS_RES_MEMORY,
+			ctx->ifc_softc_ctx.isc_msix_bar, ctx->ifc_msix_mem);
+		ctx->ifc_msix_mem = NULL;
+	}
 #ifdef DEV_NETMAP
 	netmap_detach(ifp);
 #endif /* DEV_NETMAP */
