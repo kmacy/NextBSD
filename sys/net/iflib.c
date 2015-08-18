@@ -2266,7 +2266,6 @@ iflib_txq_check_drain(iflib_txq_t txq, int budget)
 	mp_ring_check_drainage(txq->ift_br[0], budget);
 }
 
-
 static uint32_t
 iflib_txq_can_drain(struct mp_ring *r)
 {
@@ -2342,10 +2341,6 @@ skip_db:
 
 	return (pkt_sent);
 }
-#endif
-
-
-
 
 static void
 _task_fn_tx(void *context, int pending)
