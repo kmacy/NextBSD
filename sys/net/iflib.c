@@ -1545,13 +1545,16 @@ hung:
 }
 
 #ifdef DEV_NETMAP
-iflib_init_netmap(if_ctx_t ctx, iflib_txq_t txq)
+static void
+iflib_netmap_txq_init(if_ctx_t ctx, iflib_txq_t txq)
 {
 	struct netmap_adapter *na = NA(ctx->ifc_ifp);
 	struct netmap_slot *slot;
-	if_txsd_t sd;
+	iflib_sd_t sd;
 
 	slot = netmap_reset(na, NR_TX, txq->ift_id, 0);
+	if (slot == 0)
+		return;
 
 	sd = txq->ift_sds;
 	for (int i = 0; i < ctx->ifc_sctx->isc_ntxd; i++, sd++) {
@@ -1563,14 +1566,39 @@ iflib_init_netmap(if_ctx_t ctx, iflib_txq_t txq)
 		 * netmap_idx_n2k() maps a nic index, i, into the corresponding
 		 * netmap slot index, si
 		 */
-		if (slot) {
-			int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
-			netmap_load_map(na, txq->ift_desc_tag, sd->ifsd_map, NMB(na, slot + si));
-		}
+		int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
+		netmap_load_map(na, txq->ift_desc_tag, sd->ifsd_map, NMB(na, slot + si));
 	}
 }
+static void
+iflib_netmap_rxq_init(if_ctx_t ctx, iflib_rxq_t rxq)
+{
+	struct netmap_adapter *na = NA(ctx->ifc_ifp);
+	struct netmap_slot *slot;
+	iflib_sd_t sd;
+	int nrxd;
+
+	slot = netmap_reset(na, NR_RX, rxq->ifr_id, 0);
+	if (slot == 0)
+		return;
+	sd = rxq->ifr_fl[0].ifl_sds;
+	nrxd = ctx->ifc_sctx->isc_nrxd;
+	for (int i = 0; i < nrxd; i++, sd++) {
+			int sj = netmap_idx_n2k(&na->rx_rings[rxq->ifr_id], i);
+			uint64_t paddr;
+			void *addr;
+			caddr_t vaddr;
+
+			vaddr = addr = PNMB(na, slot + sj, &paddr);
+			netmap_load_map(na, rxq->ifr_fl[0].ifl_ifdi->idi_tag, sd->ifsd_map, addr);
+			/* Update descriptor and the cached value */
+			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, i, &paddr, &vaddr, 1);
+	}
+	ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, nrxd-1);
+}
 #else
-#define iflib_init_netmap(ctx)
+#define iflib_netmap_txq_init(ctx, txq)
+#define iflib_netmap_rxq_init(ctx, rxq)
 #endif
 
 static void
@@ -1578,17 +1606,18 @@ iflib_init_locked(if_ctx_t ctx)
 {
 	if_softc_ctx_t sctx = &ctx->ifc_softc_ctx;
 	iflib_txq_t txq = ctx->ifc_txqs;
+	iflib_rxq_t rxq = ctx->ifc_rxqs;
 	int i;
 
 	IFDI_INTR_DISABLE(ctx);
-	for (i = 0; i < sctx->isc_nqsets; i++, txq++) {
+	for (i = 0; i < sctx->isc_nqsets; i++, txq++, rxq++) {
 		TX_LOCK(txq);
 		callout_stop(&txq->ift_timer);
 		callout_stop(&txq->ift_db_check);
 		TX_UNLOCK(txq);
-		iflib_init_netmap(ctx, txq);
+		iflib_netmap_txq_init(ctx, txq);
+		iflib_netmap_rxq_init(ctx, rxq);
 	}
-	iflib_init_netmap(ctx);
 	IFDI_INIT(ctx);
 	if_setdrvflagbits(ctx->ifc_ifp, IFF_DRV_RUNNING, 0);
 	IFDI_INTR_ENABLE(ctx);
