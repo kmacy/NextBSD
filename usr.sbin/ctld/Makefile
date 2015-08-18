@@ -12,6 +12,8 @@ MAN=		ctld.8 ctl.conf.5
 
 LIBADD=		bsdxml l md sbuf util
 
+WANTS_PIE=	yes
+
 YFLAGS+=	-v
 CLEANFILES=	y.tab.c y.tab.h y.output
 

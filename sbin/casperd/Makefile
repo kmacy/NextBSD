@@ -5,6 +5,7 @@ PROG=	casperd
 SRCS=	casperd.c zygote.c
 
 LIBADD=	casper nv pjdlog util
+WANTS_PIE=	yes
 
 MAN=	casperd.8
 

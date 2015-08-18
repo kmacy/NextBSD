@@ -1,0 +1,172 @@
+[20150715] Fixed vdso randomization
+__HardenedBSD_version = 28
+
+	Fixed and simplified vdso and stack mapping.
+
+
+[20150706] Added shared-page (vdso) randomization
+__HardenedBSD_version = 27
+
+	This version brings in true stack randomization.
+	Changed ASLR settings:
+		vdso random : 20 bit
+
+
+[20150701] Rewriten stack randomization, and bumped ASLR settings
+__HardenedBSD_version = 26
+
+	This version brings in true stack randomization.
+	Changed ASLR settings:
+		stack random : 26 -> 42 bit
+		exec random : 21 -> 30 bit
+
+
+[20150605] ASLR "rewrite" and NOEXEC fixes after jhb's vm_mmap.c changes 
+__HardenedBSD_version = 25
+__HardenedBSD_version = 24
+
+	Move the mmap randomization to it's own place and add more state enforcements (KASSERTs).
+	Added locking around pax_aslr_mmap(...).
+	Factore out the MAP_32BIT related code from pax_aslr_mmap(...), and move to pax_aslr_mmap_map_32bit(...)
+
+
+[20150604] fix ASLR - randomize the rtld's shared object too
+__HardenedBSD_version = 23
+
+	Randomize the rtld's address before load them in imgact_elf.c
+
+
+[20150604] added PAX_NOTE_{,NO}SHLIBRANDOM extension
+__HardenedBSD_version = 22
+
+	This feature will fix the issue mentioned on issue #137
+
+
+[20150528] Changed internal structure, removed hardening.pax.segvguard.debug sysctl
+__HardenedBSD_version = 21
+
+	Changed internal structure
+	Removed hardening.pax.segvguard.debug sysctl
+
+
+[20150415] Bumped stack randomization
+__HardenedBSD_version = 20
+
+	Increased stack randomization from 20 bit to 26 bit.
+
+
+[20150415] Fixed stack randomization
+__HardenedBSD_version = 19
+
+
+[20150408] How to get HardenedBSD and HardenedBSD-ports?
+
+	Without git/svnlite:
+
+	    HardenedBSD source:
+
+		# fetch https://github.com/HardenedBSD/hardenedBSD/archive/hardened/current/master.tar.gz -o hardenedbsd-src.tar.gz
+		# tar xf hardenedbsd-src.tar.gz
+		# mv hardenedBSD-hardened-current-master /usr/src
+
+	    HardenedBSD ports:
+
+		# fetch https://github.com/HardenedBSD/freebsd-ports/archive/master.tar.gz -o hardenedbsd-ports.tar.gz
+		# tar xf hardenedbsd-ports.tar.gz
+		# mv freebsd-ports-master /usr/ports
+
+	    Secadm:
+
+		# fetch https://github.com/HardenedBSD/secadm/archive/master.tar.gz -o secadm.tar.gz
+		# tar xf secadm.tar.gz
+
+	With git:
+
+	    HardenedBSD-source:
+
+		# git clone https://github.com/HardenedBSD/hardenedBSD.git /usr/src
+
+	    HardenedBSD ports:
+
+		# git clone https://github.com/HardenedBSD/freebsd-ports.git /usr/ports
+
+	    Secadm:
+
+		# git clone https://github.com/HardenedBSD/secadm.git
+
+	With svnlite (much more slower than git version):
+
+	    HardenedBSD-source:
+
+		# svnlite co https://github.com/HardenedBSD/hardenedBSD.git /usr/src
+
+	    HardenedBSD ports:
+
+		# svnlite co https://github.com/HardenedBSD/freebsd-ports.git /usr/ports
+
+	    Secadm:
+
+		# svnlite co https://github.com/HardenedBSD/secadm.git
+
+
+[20150404] Added secadm hook to rtld
+__HardenedBSD_version = 18
+
+Added integriforce secadm hook to rtld to validate
+shared object before loading them.
+
+
+[20150318] Merged first part of NOEXEC project
+__HardenedBSD_version = 17
+
+This is the first part of PaX's MPROTECT restriction:
+* this merge brings per process level restriction settings
+* eliminated the linux's sound related mmap weakness
+* improved the logging
+...
+
+If you have problem with your application, then install
+secadm:
+
+ * from pkg:
+
+	pkg install secadm
+
+ * or from github:
+
+	# git clone https://github.com/hardenedbsd/secadm
+	# cd secadm
+	# make && make install
+
+
+[201502011] Changed kernel knobs
+
+Added ``options PAX`` to enable the HardenedBSD framework.
+All other PAX_* knob depends on PAX knob.
+
+
+[20150131] Upgrading from systems before "HBSD: Revert the chacha20 import in full."
+
+After the "HBSD: Revert the chacha20 import in full." commit
+we lost the compatibility with the previous version, this
+means ABI break, and the system is unable to properly boot.
+In the background is the removed VM_INHERIT_ZERO flag, which
+was previously used in libc.
+
+The solution is to install the new world, before you booting to the new kernel.
+
+1. make buildworld kernel
+2. IMPORTANT: install world before you reboot
+ 2.1. mergemaster -p && make installworld && mergemaster
+3. reboot
+4. start in single user mode
+5. cd /usr/src
+6. make delete-old delete-old-libs
+7. if you have buildworld or buildkernel error,
+   where the cc aborting and dumping core,
+   then you need to delete the content of /usr/obj directory:
+ 7.1 cd /usr/obj
+ 7.2 rm -rf *
+
+And probably a full ports rebuild required too...
+

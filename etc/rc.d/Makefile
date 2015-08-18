@@ -11,7 +11,6 @@ FILES=	DAEMON \
 	accounting \
 	addswap \
 	adjkerntz \
-	archdep \
 	atm1 \
 	atm2 \
 	atm3 \

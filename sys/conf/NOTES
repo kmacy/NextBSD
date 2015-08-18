@@ -2981,9 +2981,10 @@ options 	MAXFILES=999
 
 # Random number generator
 # Only ONE of the below two may be used; they are mutually exclusive.
-# If neither is present, then the Fortuna algorithm is used.
-options 	RANDOM_YARROW	# Yarrow CSPRNG (old default)
-#options 	RANDOM_DUMMY	# Dummy CSPRNG that always blocks
+# If neither is present, then the Fortuna algorithm is selected.
+#options 	RANDOM_YARROW	# Yarrow CSPRNG (old default)
+#options 	RANDOM_LOADABLE	# Allow the algorithm to be loaded as
+				# a module.
 # For developers.
 options 	RANDOM_DEBUG	# Extra debugging messages
 
@@ -2996,3 +2997,15 @@ options		EM_MULTIQUEUE # Activate multiqueue features/disable MSI-X
 # zlib I/O stream support
 # This enables support for compressed core dumps.
 options 	GZIO
+
+# PAX and HardenedBSD related knobs
+options 	PAX		# Enable the PAX framework
+options 	PAX_ASLR	# Address Space Layout Randomization
+options 	PAX_HARDENING	# Other hardening features
+options 	PAX_NOEXEC	# Remove WX pages from user-space and enforce W^X
+options 	PAX_SEGVGUARD	# Track and ban failing process
+options 	PAX_SYSCTLS	# Run-time settings for PAX and Hardening
+options 	PAX_PTRACE_HARDENING
+options 	PAX_PTRACE_HARDENING_GRP=50000
+options 	PAX_INSECURE_MODE	# Allow to override INVARIANTS enforcements
+

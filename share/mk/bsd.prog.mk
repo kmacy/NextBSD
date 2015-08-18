@@ -11,6 +11,14 @@
 CFLAGS+=${COPTS}
 .endif
 
+.if defined(WANTS_PIE)
+.if ${MK_PIE} != "no"
+CFLAGS+= -fPIE
+CXXFLAGS+= -fPIE
+LDFLAGS+= -pie
+.endif
+.endif
+
 .if ${MK_ASSERT_DEBUG} == "no"
 CFLAGS+= -DNDEBUG
 NO_WERROR=

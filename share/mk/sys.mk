@@ -389,3 +389,5 @@ SHELL=	${__MAKE_SHELL}
 .include <bsd.cpu.mk>
 
 .endif # ! Posix
+
+.include <bsd.hardenedbsd.mk>

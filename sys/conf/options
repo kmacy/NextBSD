@@ -186,7 +186,6 @@ SCHED_STATS	opt_sched.h
 SCHED_ULE	opt_sched.h
 SLEEPQUEUE_PROFILING
 SLHCI_DEBUG	opt_slhci.h
-SPX_HACK
 STACK		opt_stack.h
 SUIDDIR
 MSGMNB		opt_sysvipc.h
@@ -711,6 +710,7 @@ DEV_PCI			opt_pci.h
 DEV_PF			opt_pf.h
 DEV_PFLOG		opt_pf.h
 DEV_PFSYNC		opt_pf.h
+DEV_RANDOM		opt_global.h
 DEV_SPLASH		opt_splash.h
 DEV_VLAN		opt_vlan.h
 
@@ -775,6 +775,9 @@ VT_MAXWINDOWS		opt_syscons.h
 VT_TWOBUTTON_MOUSE	opt_syscons.h
 DEV_SC			opt_syscons.h
 DEV_VT			opt_syscons.h
+
+# kbdmux options
+KBDMUX_DFLT_KEYMAP	opt_kbdmux.h
 
 # teken terminal emulator options
 TEKEN_CONS25		opt_teken.h
@@ -942,17 +945,30 @@ RACCT_DEFAULT_TO_DISABLED	opt_global.h
 # Resource Limits
 RCTL		opt_global.h
 
+# PaX-inspired hardening features
+PAX		opt_pax.h
+PAX_ASLR	opt_pax.h
+PAX_SYSCTLS	opt_pax.h
+PAX_SEGVGUARD	opt_pax.h
+PAX_HARDENING	opt_pax.h
+PAX_NOEXEC	opt_pax.h
+PAX_INSECURE_MODE	opt_pax.h
+
+PAX_PTRACE_HARDENING	opt_pax.h
+PAX_PTRACE_HARDENING_GRP	opt_pax.h
+
 # Random number generator(s)
 # The DEBUG option is in global.h as the random harvesting
 # puts probes all over the place, and it makes little sense
 # to pollute these headers with an extra include.
-# the DUMMY option is in global.h because it is used to
-# turn off harvesting all over the kernel.
-RANDOM_DEBUG	opt_global.h
+RANDOM_DEBUG	opt_random.h
 # Which CSPRNG hashes we get.
-# These are mutually exclusive. With neither, Fortuna is selected.
-RANDOM_DUMMY	opt_global.h
+# If Yarrow is not chosen, Fortuna is selected.
 RANDOM_YARROW	opt_random.h
+# With this, no entropy processor is loaded, but the entropy
+# harvesting infrastructure is present. This means an entropy
+# processor may be loaded as a module.
+RANDOM_LOADABLE	opt_random.h
 
 # Mach support options
 COMPAT_MACH_STATIC

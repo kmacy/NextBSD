@@ -556,7 +556,7 @@ sendsig(sig_t catcher, ksiginfo_t *ksi, sigset_t *mask)
 
 	tf->tf_elr = (register_t)catcher;
 	tf->tf_sp = (register_t)fp;
-	tf->tf_lr = (register_t)(PS_STRINGS - *(p->p_sysent->sv_szsigcode));
+	tf->tf_lr = (register_t)(p->p_psstrings - *(p->p_sysent->sv_szsigcode));
 
 	CTR3(KTR_SIG, "sendsig: return td=%p pc=%#x sp=%#x", td, tf->tf_elr,
 	    tf->tf_sp);
