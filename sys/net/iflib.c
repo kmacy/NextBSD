@@ -2945,8 +2945,10 @@ iflib_device_deregister(if_ctx_t ctx)
 {
 	if_t ifp = ctx->ifc_ifp;
 	iflib_txq_t txq;
+	iflib_rxq_t rxq;
 	device_t dev = ctx->ifc_dev;
-	int i;
+	int i, nqsets;
+	struct taskqgroup *tqg;
 
 	/* Make sure VLANS are not using driver */
 	if (if_vlantrunkinuse(ifp)) {
@@ -2971,10 +2973,22 @@ iflib_device_deregister(if_ctx_t ctx)
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
-	for (txq = ctx->ifc_txqs, i = 0; i < ctx->ifc_softc_ctx.isc_nqsets; i++, txq++) {
+	nqsets = ctx->ifc_softc_ctx.isc_nqsets;
+	tqg = gctx->igc_io_tqg;
+	for (txq = ctx->ifc_txqs, i = 0, rxq = ctx->ifc_rxqs; i < nqsets; i++, txq++, rxq++) {
 		callout_drain(&txq->ift_timer);
 		callout_drain(&txq->ift_db_check);
+		if (txq->ift_task.gt_uniq != NULL)
+			taskqgroup_detach(tqg, &txq->ift_task);
+		if (rxq->ifr_task.gt_uniq != NULL)
+			taskqgroup_detach(tqg, &rxq->ifr_task);
 	}
+	tqg = gctx->igc_config_tqg;
+	if (ctx->ifc_admin_task.gt_uniq != NULL)
+		taskqgroup_detach(tqg, &ctx->ifc_admin_task);
+	if (ctx->ifc_vflr_task.gt_uniq != NULL)
+		taskqgroup_detach(tqg, &ctx->ifc_vflr_task);
+
 	IFDI_DETACH(ctx);
 	if (ctx->ifc_softc_ctx.isc_intr == IFLIB_INTR_MSIX) {
 		pci_release_msi(dev);
@@ -3612,8 +3626,6 @@ iflib_irq_free(if_ctx_t ctx, if_irq_t irq)
 
 	if (irq->ii_res)
 		bus_release_resource(ctx->ifc_dev, SYS_RES_IRQ, irq->ii_rid, irq->ii_res);
-
-	/* taskqgroup_detach() */
 }
 
 static int
