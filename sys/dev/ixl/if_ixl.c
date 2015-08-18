@@ -299,9 +299,6 @@ static driver_t ixl_if_driver = {
 	"ixl_if", ixl_if_methods, sizeof(struct ixl_pf),
 };
 
-#ifdef DEV_NETMAP
-MODULE_DEPEND(ixl, netmap, 1, 1, 1);
-#endif /* DEV_NETMAP */
 
 /*
 ** TUNEABLE PARAMETERS:
@@ -370,14 +367,6 @@ TUNABLE_INT("hw.ixl.enable_fdir", &ixl_enable_fdir);
 int ixl_atr_rate = 20;
 TUNABLE_INT("hw.ixl.atr_rate", &ixl_atr_rate);
 #endif
-
-#ifdef DEV_NETMAP
-#include <net/netmap.h>
-#include <sys/selinfo.h>
-#include <vm/vm.h>
-#include <vm/pmap.h>
-#include <dev/netmap/netmap_kern.h>
-#endif /* DEV_NETMAP */
 
 static char *ixl_fc_string[6] = {
 	"None",
@@ -2277,22 +2266,6 @@ ixl_initialize_vsi(struct ixl_vsi *vsi)
 			device_printf(dev, "Unable to set RX context %d\n", i);
 			break;
 		}
-		err = ixl_init_rx_ring(que);
-		if (err) {
-			device_printf(dev, "Fail in init_rx_ring %d\n", i);
-			break;
-		}
-		wr32(vsi->hw, I40E_QRX_TAIL(que->me), 0);
-#ifdef DEV_NETMAP
-		/* preserve queue */
-		if (vsi->ifp->if_capenable & IFCAP_NETMAP) {
-			struct netmap_adapter *na = NA(vsi->ifp);
-			struct netmap_kring *kring = &na->rx_rings[i];
-			int t = na->num_rx_desc - 1 - nm_kr_rxspace(kring);
-			wr32(vsi->hw, I40E_QRX_TAIL(que->me), t);
-		} else
-#endif /* DEV_NETMAP */
-		wr32(vsi->hw, I40E_QRX_TAIL(que->me), sctx->isc_nrxd - 1);
 	}
 	return (err);
 }
