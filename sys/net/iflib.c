@@ -396,9 +396,7 @@ MODULE_VERSION(iflib, 1);
 
 MODULE_DEPEND(iflib, pci, 1, 1, 1);
 MODULE_DEPEND(iflib, ether, 1, 1, 1);
-#ifdef DEV_NETMAP
-MODULE_DEPEND(iflib, netmap, 1, 1, 1);
-#endif /* DEV_NETMAP */
+
 
 
 TASKQGROUP_DEFINE(if_io_tqg, mp_ncpus, 1);
@@ -552,6 +550,8 @@ if_dbg_malloc(unsigned long size, struct malloc_type *type, int flags)
 #include <sys/selinfo.h>
 #include <net/netmap.h>
 #include <dev/netmap/netmap_kern.h>
+
+MODULE_DEPEND(iflib, netmap, 1, 1, 1);
 
 /*
  * device-specific sysctl variables:
@@ -898,6 +898,75 @@ iflib_netmap_attach(if_ctx_t ctx)
 	na.num_tx_rings = na.num_rx_rings = ctx->ifc_softc_ctx.isc_nqsets;
 	return (netmap_attach(&na));
 }
+
+static void
+iflib_netmap_txq_init(if_ctx_t ctx, iflib_txq_t txq)
+{
+	struct netmap_adapter *na = NA(ctx->ifc_ifp);
+	struct netmap_slot *slot;
+	iflib_sd_t sd;
+
+	slot = netmap_reset(na, NR_TX, txq->ift_id, 0);
+	if (slot == 0)
+		return;
+
+	sd = txq->ift_sds;
+	for (int i = 0; i < ctx->ifc_sctx->isc_ntxd; i++, sd++) {
+
+		/*
+		 * In netmap mode, set the map for the packet buffer.
+		 * NOTE: Some drivers (not this one) also need to set
+		 * the physical buffer address in the NIC ring.
+		 * netmap_idx_n2k() maps a nic index, i, into the corresponding
+		 * netmap slot index, si
+		 */
+		int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
+		netmap_load_map(na, txq->ift_desc_tag, sd->ifsd_map, NMB(na, slot + si));
+	}
+}
+static void
+iflib_netmap_rxq_init(if_ctx_t ctx, iflib_rxq_t rxq)
+{
+	struct netmap_adapter *na = NA(ctx->ifc_ifp);
+	struct netmap_slot *slot;
+	iflib_sd_t sd;
+	int nrxd;
+
+	slot = netmap_reset(na, NR_RX, rxq->ifr_id, 0);
+	if (slot == 0)
+		return;
+	sd = rxq->ifr_fl[0].ifl_sds;
+	nrxd = ctx->ifc_sctx->isc_nrxd;
+	for (int i = 0; i < nrxd; i++, sd++) {
+			int sj = netmap_idx_n2k(&na->rx_rings[rxq->ifr_id], i);
+			uint64_t paddr;
+			void *addr;
+			caddr_t vaddr;
+
+			vaddr = addr = PNMB(na, slot + sj, &paddr);
+			netmap_load_map(na, rxq->ifr_fl[0].ifl_ifdi->idi_tag, sd->ifsd_map, addr);
+			/* Update descriptor and the cached value */
+			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, i, &paddr, &vaddr, 1);
+	}
+	/* preserve queue */
+	if (ctx->ifc_ifp->if_capenable & IFCAP_NETMAP) {
+		struct netmap_kring *kring = &na->rx_rings[rxq->ifr_id];
+		int t = na->num_rx_desc - 1 - nm_kr_rxspace(kring);
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, t);
+	} else
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, nrxd-1);
+}
+
+#define iflib_netmap_detach(ifp) netmap_detach(ifp)
+
+#else
+#define iflib_netmap_txq_init(ctx, txq)
+#define iflib_netmap_rxq_init(ctx, rxq)
+#define iflib_netmap_detach(ifp)
+
+#define iflib_netmap_attach(ctx) (0)
+#define netmap_rx_irq(ifp, qid, budget) (0)
+
 #endif
 
 #if defined(__i386__) || defined(__amd64__)
@@ -1551,69 +1620,6 @@ hung:
 	CTX_UNLOCK(ctx);
 }
 
-#ifdef DEV_NETMAP
-static void
-iflib_netmap_txq_init(if_ctx_t ctx, iflib_txq_t txq)
-{
-	struct netmap_adapter *na = NA(ctx->ifc_ifp);
-	struct netmap_slot *slot;
-	iflib_sd_t sd;
-
-	slot = netmap_reset(na, NR_TX, txq->ift_id, 0);
-	if (slot == 0)
-		return;
-
-	sd = txq->ift_sds;
-	for (int i = 0; i < ctx->ifc_sctx->isc_ntxd; i++, sd++) {
-
-		/*
-		 * In netmap mode, set the map for the packet buffer.
-		 * NOTE: Some drivers (not this one) also need to set
-		 * the physical buffer address in the NIC ring.
-		 * netmap_idx_n2k() maps a nic index, i, into the corresponding
-		 * netmap slot index, si
-		 */
-		int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
-		netmap_load_map(na, txq->ift_desc_tag, sd->ifsd_map, NMB(na, slot + si));
-	}
-}
-static void
-iflib_netmap_rxq_init(if_ctx_t ctx, iflib_rxq_t rxq)
-{
-	struct netmap_adapter *na = NA(ctx->ifc_ifp);
-	struct netmap_slot *slot;
-	iflib_sd_t sd;
-	int nrxd;
-
-	slot = netmap_reset(na, NR_RX, rxq->ifr_id, 0);
-	if (slot == 0)
-		return;
-	sd = rxq->ifr_fl[0].ifl_sds;
-	nrxd = ctx->ifc_sctx->isc_nrxd;
-	for (int i = 0; i < nrxd; i++, sd++) {
-			int sj = netmap_idx_n2k(&na->rx_rings[rxq->ifr_id], i);
-			uint64_t paddr;
-			void *addr;
-			caddr_t vaddr;
-
-			vaddr = addr = PNMB(na, slot + sj, &paddr);
-			netmap_load_map(na, rxq->ifr_fl[0].ifl_ifdi->idi_tag, sd->ifsd_map, addr);
-			/* Update descriptor and the cached value */
-			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, i, &paddr, &vaddr, 1);
-	}
-	/* preserve queue */
-	if (ctx->ifc_ifp->if_capenable & IFCAP_NETMAP) {
-		struct netmap_kring *kring = &na->rx_rings[rxq->ifr_id];
-		int t = na->num_rx_desc - 1 - nm_kr_rxspace(kring);
-		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, t);
-	} else
-		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, nrxd-1);
-}
-#else
-#define iflib_netmap_txq_init(ctx, txq)
-#define iflib_netmap_rxq_init(ctx, rxq)
-#endif
-
 static void
 iflib_init_locked(if_ctx_t ctx)
 {
@@ -1819,11 +1825,9 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	 */
 	struct mbuf *m, *mh, *mt;
 
-#ifdef DEV_NETMAP
 	if (netmap_rx_irq(ctx->ifc_ifp, rxq->ifr_id, &budget)) {
 		return (FALSE);
 	}
-#endif /* DEV_NETMAP */
 
 	ri.iri_qsidx = rxq->ifr_id;
 	if (sctx->isc_flags & IFLIB_HAS_CQ) {
@@ -2906,12 +2910,10 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 	ether_ifattach(ctx->ifc_ifp, ctx->ifc_mac);
 	if ((err = IFDI_ATTACH_POST(ctx)) != 0)
 		goto fail_detach;
-#ifdef DEV_NETMAP
 	if ((err = iflib_netmap_attach(ctx))) {
 		device_printf(ctx->ifc_dev, "netmap attach failed: %d\n", err);
 		goto fail_detach;
 	}
-#endif
 	*ctxp = ctx;
 	return (0);
 fail_detach:
@@ -2946,16 +2948,6 @@ iflib_device_deregister(if_ctx_t ctx)
 	device_t dev = ctx->ifc_dev;
 	int i;
 
-#ifdef DEV_NETMAP
-	if (ifp->if_netmap) {
-		struct netmap_adapter *na;
-
-		na = ifp->if_netmap;
-		device_printf(dev, "deregistering netmap: ");
-		device_printf(dev, "%p magic: %x na_flags: %x\n",
-					  na, na->magic, na->na_flags);
-	}
-#endif
 	/* Make sure VLANS are not using driver */
 	if (if_vlantrunkinuse(ifp)) {
 		device_printf(dev,"Vlan in use, detach first\n");
@@ -2974,7 +2966,8 @@ iflib_device_deregister(if_ctx_t ctx)
 	if (ctx->ifc_vlan_detach_event != NULL)
 		EVENTHANDLER_DEREGISTER(vlan_unconfig, ctx->ifc_vlan_detach_event);
 
-	ether_ifdetach(ctx->ifc_ifp);
+	iflib_netmap_detach(ifp);
+	ether_ifdetach(ifp);
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
@@ -2982,9 +2975,6 @@ iflib_device_deregister(if_ctx_t ctx)
 		callout_drain(&txq->ift_timer);
 		callout_drain(&txq->ift_db_check);
 	}
-#ifdef DEV_NETMAP
-	netmap_detach(ifp);
-#endif /* DEV_NETMAP */
 	IFDI_DETACH(ctx);
 	if (ctx->ifc_softc_ctx.isc_intr == IFLIB_INTR_MSIX) {
 		pci_release_msi(dev);
@@ -2996,7 +2986,7 @@ iflib_device_deregister(if_ctx_t ctx)
 	}
 
 	bus_generic_detach(dev);
-	if_free(ctx->ifc_ifp);
+	if_free(ifp);
 
 	iflib_tx_structures_free(ctx);
 	iflib_rx_structures_free(ctx);
