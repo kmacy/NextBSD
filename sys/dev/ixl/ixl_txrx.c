@@ -61,10 +61,6 @@ static int ixl_isc_txd_encap(void *arg, if_pkt_info_t pi);
 static void ixl_isc_txd_flush(void *arg, uint16_t txqid, uint32_t pidx);
 static int ixl_isc_txd_credits_update(void *arg, uint16_t qid, uint32_t cidx);
 
-#ifdef DEV_NETMAP
-#include <dev/netmap/if_ixl_netmap.h>
-#endif /* DEV_NETMAP */
-
 static void ixl_isc_rxd_refill(void *arg, uint16_t rxqid, uint8_t flid __unused,
 				   uint32_t pidx, uint64_t *paddrs, caddr_t *vaddrs __unused, uint16_t count);
 static void ixl_isc_rxd_flush(void *arg, uint16_t rxqid, uint8_t flid __unused, uint32_t pidx);
@@ -255,17 +251,6 @@ ixl_init_tx_ring(struct ixl_queue *que)
 	/* Clear the old ring contents */
 	bzero((void *)txr->tx_base,
 	      (sizeof(struct i40e_tx_desc)) * ixl_sctx->isc_ntxd);
-#ifdef DEV_NETMAP
-	struct netmap_adapter *na = NA(que->vsi->ifp);
-	struct netmap_slot *slot;
-#endif /* DEV_NETMAP */
-#ifdef DEV_NETMAP
-	/*
-	 * (under lock): if in netmap mode, do some consistency
-	 * checks and set slot to entry 0 of the netmap ring.
-	 */
-	slot = netmap_reset(na, NR_TX, que->me, 0);
-#endif /* DEV_NETMAP */
 
 #ifdef IXL_FDIR
 	/* Initialize flow director */
@@ -273,25 +258,9 @@ ixl_init_tx_ring(struct ixl_queue *que)
 	txr->atr_count = 0;
 #endif
 
-
 	buf = txr->tx_buffers;
 	for (int i = 0; i < ixl_sctx->isc_ntxd; i++, buf++) {
-#ifdef notyet
-		/* XXX move in to iflib */
-#ifdef DEV_NETMAP
-		/*
-		 * In netmap mode, set the map for the packet buffer.
-		 * NOTE: Some drivers (not this one) also need to set
-		 * the physical buffer address in the NIC ring.
-		 * netmap_idx_n2k() maps a nic index, i, into the corresponding
-		 * netmap slot index, si
-		 */
-		if (slot) {
-			int si = netmap_idx_n2k(&na->tx_rings[que->me], i);
-			netmap_load_map(na, buf->tag, buf->map, NMB(na, slot + si));
-		}
-#endif /* DEV_NETMAP */
-#endif
+
 		/* Clear the EOP index */
 		buf->eop_index = -1;
 	}
@@ -651,54 +620,6 @@ ixl_isc_rxd_available(void *arg, uint16_t rxqid, uint32_t idx)
 
 	return (cnt);
 }
-
-/*********************************************************************
- *
- *  (Re)Initialize the queue receive ring and its buffers.
- *
- **********************************************************************/
-int
-ixl_init_rx_ring(struct ixl_queue *que)
-{
-	struct	rx_ring 	*rxr = &que->rxr;
-	struct ixl_vsi		*vsi = que->vsi;
-#if 0
-#ifdef DEV_NETMAP
-	struct netmap_adapter *na = NA(que->vsi->ifp);
-	struct netmap_slot *slot;
-	/* same as in ixl_init_tx_ring() */
-	slot = netmap_reset(na, NR_RX, que->me, 0);
-		/*
-		 * In netmap mode, fill the map and set the buffer
-		 * address in the NIC ring, considering the offset
-		 * between the netmap and NIC rings (see comment in
-		 * ixgbe_setup_transmit_ring() ). No need to allocate
-		 * an mbuf, so end the block with a continue;
-		 */
-		if (slot) {
-			int sj = netmap_idx_n2k(&na->rx_rings[que->me], j);
-			uint64_t paddr;
-			void *addr;
-
-			addr = PNMB(na, slot + sj, &paddr);
-			netmap_load_map(na, rxr->dma.tag, buf->pmap, addr);
-			/* Update descriptor and the cached value */
-			rxr->base[j].read.pkt_addr = htole64(paddr);
-			rxr->base[j].read.hdr_addr = 0;
-			/* XXX hrrrm */
-			return (0);
-		}
-#endif /* DEV_NETMAP */
-#endif
-	/* Setup our descriptor indices */
-	rxr->bytes = 0;
-
-	/* XXXrefresh  all */
-	ixl_flush(vsi->hw);
-
-	return (0);
-}
-
 
 #ifdef RSS
 /*

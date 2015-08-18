@@ -299,9 +299,6 @@ static driver_t ixl_if_driver = {
 	"ixl_if", ixl_if_methods, sizeof(struct ixl_pf),
 };
 
-#ifdef DEV_NETMAP
-MODULE_DEPEND(ixl, netmap, 1, 1, 1);
-#endif /* DEV_NETMAP */
 
 /*
 ** TUNEABLE PARAMETERS:
@@ -371,11 +368,6 @@ int ixl_atr_rate = 20;
 TUNABLE_INT("hw.ixl.atr_rate", &ixl_atr_rate);
 #endif
 
-#ifdef DEV_NETMAP
-#define NETMAP_IXL_MAIN /* only bring in one part of the netmap code */
-#include <dev/netmap/if_ixl_netmap.h>
-#endif /* DEV_NETMAP */
-
 static char *ixl_fc_string[6] = {
 	"None",
 	"Rx",
@@ -415,6 +407,7 @@ static struct if_shared_ctx ixl_sctx_init = {
 };
 
 if_shared_ctx_t ixl_sctx = &ixl_sctx_init;
+MALLOC_DEFINE(M_IXL, "ixl", "ixl driver allocations");
 
 
 static int
@@ -430,12 +423,12 @@ ixl_if_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs, int nqs)
 	/* Allocate queue structure memory */
 	if (!(vsi->queues =
 	    (struct ixl_queue *) malloc(sizeof(struct ixl_queue) *
-	    vsi->num_queues, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	    vsi->num_queues, M_IXL, M_NOWAIT | M_ZERO))) {
 		device_printf(iflib_get_dev(ctx), "Unable to allocate TX ring memory\n");
 		return (ENOMEM);
 	}
-	if ((bufs = malloc(sizeof(*bufs)*ixl_sctx->isc_ntxd*vsi->num_queues, M_DEVBUF, M_WAITOK|M_ZERO)) == NULL) {
-		free(vsi->queues, M_DEVBUF);
+	if ((bufs = malloc(sizeof(*bufs)*ixl_sctx->isc_ntxd*vsi->num_queues, M_IXL, M_WAITOK|M_ZERO)) == NULL) {
+		free(vsi->queues, M_IXL);
 		device_printf(iflib_get_dev(ctx), "failed to allocate sw bufs\n");
 		return (ENOMEM);
 	}
@@ -472,11 +465,10 @@ ixl_if_queues_free(if_ctx_t ctx)
 
 	if ((que = vsi->queues) == NULL)
 		return;
-	free(que->txr.tx_buffers, M_DEVBUF);
-	free(que, M_DEVBUF);
+	free(que->txr.tx_buffers, M_IXL);
+	free(que, M_IXL);
 }
 
-static MALLOC_DEFINE(M_IXL, "ixl", "ixl driver allocations");
 
 static uint8_t ixl_bcast_addr[ETHER_ADDR_LEN] =
     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -874,9 +866,6 @@ ixl_if_attach_post(if_ctx_t ctx)
 			    iov_error);
 	}
 #endif
-#ifdef DEV_NETMAP
-	ixl_netmap_attach(vsi);
-#endif /* DEV_NETMAP */
 	INIT_DEBUGOUT("ixl_attach: end");
 	device_printf(dev, "%s success!\n", __FUNCTION__);
 	return (0);
@@ -931,9 +920,6 @@ ixl_if_detach(if_ctx_t ctx)
 		device_printf(iflib_get_dev(ctx),
 		    "Shutdown Admin queue failed with code %d\n", status);
 
-#ifdef DEV_NETMAP
-	netmap_detach(vsi->ifp);
-#endif /* DEV_NETMAP */
 	ixl_free_pci_resources(pf);
 	ixl_free_vsi(vsi);
 	return (0);
@@ -958,7 +944,7 @@ ixl_get_hw_capabilities(struct ixl_pf *pf)
 	len = 40 * sizeof(struct i40e_aqc_list_capabilities_element_resp);
 retry:
 	if (!(buf = (struct i40e_aqc_list_capabilities_element_resp *)
-	    malloc(len, M_DEVBUF, M_NOWAIT | M_ZERO))) {
+	    malloc(len, M_IXL, M_NOWAIT | M_ZERO))) {
 		device_printf(dev, "Unable to allocate cap memory\n");
                 return (ENOMEM);
 	}
@@ -966,7 +952,7 @@ retry:
 	/* This populates the hw struct */
         error = i40e_aq_discover_capabilities(hw, buf, len,
 	    &needed, i40e_aqc_opc_list_func_capabilities, NULL);
-	free(buf, M_DEVBUF);
+	free(buf, M_IXL);
 	if ((pf->hw.aq.asq_last_status == I40E_AQ_RC_ENOMEM) &&
 	    (again == TRUE)) {
 		/* retry once with a larger buffer */
@@ -1674,6 +1660,7 @@ ixl_if_msix_intr_assign(if_ctx_t ctx, int msix)
 
 	return (0);
 fail:
+	iflib_irq_free(ctx, &vsi->irq);
 	que = vsi->queues;
 	for (int i = 0; i < vsi->num_queues; i++, que++)
 		iflib_irq_free(ctx, &que->que_irq);
@@ -1870,9 +1857,12 @@ ixl_free_pci_resources(struct ixl_pf * pf)
 	if ((!ixl_enable_msix) || (que == NULL))
 		goto early;
 
+
 	/*
 	**  Release all msix VSI resources:
 	*/
+	iflib_irq_free(vsi->ctx, &vsi->irq);
+
 	for (int i = 0; i < vsi->num_queues; i++, que++)
 		iflib_irq_free(vsi->ctx, &que->que_irq);
 early:
@@ -1888,13 +1878,6 @@ early:
 	}
 	if (pf->res != NULL)
 		bus_release_resource(dev, SYS_RES_IRQ, rid, pf->res);
-
-	if (pf->msix)
-		pci_release_msi(dev);
-
-	if (pf->msix_mem != NULL)
-		bus_release_resource(dev, SYS_RES_MEMORY,
-		    memrid, pf->msix_mem);
 
 	if (pf->pci_mem != NULL)
 		bus_release_resource(dev, SYS_RES_MEMORY,
@@ -2283,22 +2266,6 @@ ixl_initialize_vsi(struct ixl_vsi *vsi)
 			device_printf(dev, "Unable to set RX context %d\n", i);
 			break;
 		}
-		err = ixl_init_rx_ring(que);
-		if (err) {
-			device_printf(dev, "Fail in init_rx_ring %d\n", i);
-			break;
-		}
-		wr32(vsi->hw, I40E_QRX_TAIL(que->me), 0);
-#ifdef DEV_NETMAP
-		/* preserve queue */
-		if (vsi->ifp->if_capenable & IFCAP_NETMAP) {
-			struct netmap_adapter *na = NA(vsi->ifp);
-			struct netmap_kring *kring = &na->rx_rings[i];
-			int t = na->num_rx_desc - 1 - nm_kr_rxspace(kring);
-			wr32(vsi->hw, I40E_QRX_TAIL(que->me), t);
-		} else
-#endif /* DEV_NETMAP */
-		wr32(vsi->hw, I40E_QRX_TAIL(que->me), sctx->isc_nrxd - 1);
 	}
 	return (err);
 }
@@ -2324,7 +2291,7 @@ ixl_free_mac_filters(struct ixl_vsi *vsi)
 	while (!SLIST_EMPTY(&vsi->ftl)) {
 		f = SLIST_FIRST(&vsi->ftl);
 		SLIST_REMOVE_HEAD(&vsi->ftl, next);
-		free(f, M_DEVBUF);
+		free(f, M_IXL);
 	}
 }
 
@@ -2986,7 +2953,7 @@ ixl_add_hw_filters(struct ixl_vsi *vsi, int flags, int cnt)
 	int		err, j = 0;
 
 	a = malloc(sizeof(struct i40e_aqc_add_macvlan_element_data) * cnt,
-	    M_DEVBUF, M_NOWAIT | M_ZERO);
+	    M_IXL, M_NOWAIT | M_ZERO);
 	if (a == NULL) {
 		device_printf(dev, "add_hw_filters failed to get memory\n");
 		return;
@@ -3023,7 +2990,7 @@ ixl_add_hw_filters(struct ixl_vsi *vsi, int flags, int cnt)
 		else
 			vsi->hw_filters_add += j;
 	}
-	free(a, M_DEVBUF);
+	free(a, M_IXL);
 	return;
 }
 
@@ -3044,7 +3011,7 @@ ixl_del_hw_filters(struct ixl_vsi *vsi, int cnt)
 	DEBUGOUT("ixl_del_hw_filters: begin\n");
 
 	d = malloc(sizeof(struct i40e_aqc_remove_macvlan_element_data) * cnt,
-	    M_DEVBUF, M_NOWAIT | M_ZERO);
+	    M_IXL, M_NOWAIT | M_ZERO);
 	if (d == NULL) {
 		printf("del hw filter failed to get memory\n");
 		return;
@@ -3058,7 +3025,7 @@ ixl_del_hw_filters(struct ixl_vsi *vsi, int cnt)
 			e->flags = I40E_AQC_MACVLAN_DEL_PERFECT_MATCH;
 			/* delete entry from vsi list */
 			SLIST_REMOVE(&vsi->ftl, f, ixl_mac_filter, next);
-			free(f, M_DEVBUF);
+			free(f, M_IXL);
 			j++;
 		}
 		if (j == cnt)
@@ -3080,7 +3047,7 @@ ixl_del_hw_filters(struct ixl_vsi *vsi, int cnt)
 		} else
 			vsi->hw_filters_del += j;
 	}
-	free(d, M_DEVBUF);
+	free(d, M_IXL);
 
 	DEBUGOUT("ixl_del_hw_filters: end\n");
 	return;
@@ -3572,7 +3539,7 @@ ixl_if_update_admin_status(if_ctx_t ctx)
 
 	event.buf_len = IXL_AQ_BUF_SZ;
 	event.msg_buf = malloc(event.buf_len,
-	    M_DEVBUF, M_NOWAIT | M_ZERO);
+	    M_IXL, M_NOWAIT | M_ZERO);
 	if (!event.msg_buf) {
 		printf("Unable to allocate adminq memory\n");
 		return;
@@ -3608,7 +3575,7 @@ ixl_if_update_admin_status(if_ctx_t ctx)
 	reg = rd32(hw, I40E_PFINT_ICR0_ENA);
 	reg |= I40E_PFINT_ICR0_ENA_ADMINQ_MASK;
 	wr32(hw, I40E_PFINT_ICR0_ENA, reg);
-	free(event.msg_buf, M_DEVBUF);
+	free(event.msg_buf, M_IXL);
 
 	/*
 	 * If there are still messages to process, reschedule ourselves.
@@ -4274,7 +4241,7 @@ ixl_sysctl_sw_filter_list(SYSCTL_HANDLER_ARGS)
 	}
 
 	buf_len = sizeof(char) * (entry_len + 1) * ftl_len + 2;
-	buf = buf_i = malloc(buf_len, M_DEVBUF, M_NOWAIT);
+	buf = buf_i = malloc(buf_len, M_IXL, M_NOWAIT);
 
 	sprintf(buf_i++, "\n");
 	SLIST_FOREACH(f, &vsi->ftl, next) {
@@ -4292,7 +4259,7 @@ ixl_sysctl_sw_filter_list(SYSCTL_HANDLER_ARGS)
 	error = sysctl_handle_string(oidp, buf, strlen(buf), req);
 	if (error)
 		printf("sysctl error: %d\n", error);
-	free(buf, M_DEVBUF);
+	free(buf, M_IXL);
 	return error;
 }
 

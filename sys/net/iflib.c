@@ -85,7 +85,7 @@
  *    look at handling tx ack processing
  *
  */
-MALLOC_DEFINE(M_IFLIB, "iflib", "ifnet library");
+static MALLOC_DEFINE(M_IFLIB, "iflib", "ifnet library");
 
 struct iflib_txq;
 typedef struct iflib_txq *iflib_txq_t;
@@ -394,6 +394,11 @@ static moduledata_t iflib_moduledata = {
 DECLARE_MODULE(iflib, iflib_moduledata, SI_SUB_SMP, SI_ORDER_ANY);
 MODULE_VERSION(iflib, 1);
 
+MODULE_DEPEND(iflib, pci, 1, 1, 1);
+MODULE_DEPEND(iflib, ether, 1, 1, 1);
+
+
+
 TASKQGROUP_DEFINE(if_io_tqg, mp_ncpus, 1);
 TASKQGROUP_DEFINE(if_config_tqg, 1, 1);
 
@@ -537,6 +542,431 @@ if_dbg_malloc(unsigned long size, struct malloc_type *type, int flags)
 }
 
 #define malloc if_dbg_malloc
+#endif
+
+
+
+#ifdef DEV_NETMAP
+#include <sys/selinfo.h>
+#include <net/netmap.h>
+#include <dev/netmap/netmap_kern.h>
+
+MODULE_DEPEND(iflib, netmap, 1, 1, 1);
+
+/*
+ * device-specific sysctl variables:
+ *
+ * ixl_crcstrip: 0: keep CRC in rx frames (default), 1: strip it.
+ *	During regular operations the CRC is stripped, but on some
+ *	hardware reception of frames not multiple of 64 is slower,
+ *	so using crcstrip=0 helps in benchmarks.
+ *
+ * ixl_rx_miss, ixl_rx_miss_bufs:
+ *	count packets that might be missed due to lost interrupts.
+ */
+SYSCTL_DECL(_dev_netmap);
+/*
+ * The xl driver by default strips CRCs and we do not override it.
+ */
+int ixl_rx_miss, ixl_rx_miss_bufs, ixl_crcstrip = 1;
+#if 0
+SYSCTL_INT(_dev_netmap, OID_AUTO, ixl_crcstrip,
+    CTLFLAG_RW, &ixl_crcstrip, 1, "strip CRC on rx frames");
+#endif
+SYSCTL_INT(_dev_netmap, OID_AUTO, ixl_rx_miss,
+    CTLFLAG_RW, &ixl_rx_miss, 0, "potentially missed rx intr");
+SYSCTL_INT(_dev_netmap, OID_AUTO, ixl_rx_miss_bufs,
+    CTLFLAG_RW, &ixl_rx_miss_bufs, 0, "potentially missed rx intr bufs");
+
+
+/*
+ * Register/unregister. We are already under netmap lock.
+ * Only called on the first register or the last unregister.
+ */
+static int
+iflib_netmap_register(struct netmap_adapter *na, int onoff)
+{
+	struct ifnet *ifp = na->ifp;
+	if_ctx_t ctx = ifp->if_softc;
+
+	CTX_LOCK(ctx);
+	IFDI_INTR_DISABLE(ctx);
+
+	/* Tell the stack that the interface is no longer active */
+	ifp->if_drv_flags &= ~(IFF_DRV_RUNNING | IFF_DRV_OACTIVE);
+
+	//set_crcstrip(&adapter->hw, onoff);
+	/* enable or disable flags and callbacks in na and ifp */
+	if (onoff) {
+		nm_set_native_flags(na);
+	} else {
+		nm_clear_native_flags(na);
+	}
+	IFDI_INIT(ctx);
+	//set_crcstrip(&adapter->hw, onoff); // XXX why twice ?
+	CTX_UNLOCK(ctx);
+	return (ifp->if_drv_flags & IFF_DRV_RUNNING ? 0 : 1);
+}
+
+/*
+ * Reconcile kernel and user view of the transmit ring.
+ *
+ * All information is in the kring.
+ * Userspace wants to send packets up to the one before kring->rhead,
+ * kernel knows kring->nr_hwcur is the first unsent packet.
+ *
+ * Here we push packets out (as many as possible), and possibly
+ * reclaim buffers from previously completed transmission.
+ *
+ * The caller (netmap) guarantees that there is only one instance
+ * running at any time. Any interference with other driver
+ * methods should be handled by the individual drivers.
+ */
+static int
+iflib_netmap_txsync(struct netmap_kring *kring, int flags)
+{
+	struct netmap_adapter *na = kring->na;
+	struct ifnet *ifp = na->ifp;
+	struct netmap_ring *ring = kring->ring;
+	u_int nm_i;	/* index into the netmap ring */
+	u_int nic_i;	/* index into the NIC ring */
+	u_int n;
+	u_int const lim = kring->nkr_num_slots - 1;
+	u_int const head = kring->rhead;
+	struct if_pkt_info pi;
+
+#ifdef notyet
+	/* XXX need to pass in pi */
+	/*
+	 * interrupts on every tx packet are expensive so request
+	 * them every half ring, or where NS_REPORT is set
+	 */
+	u_int report_frequency = kring->nkr_num_slots >> 1;
+#endif
+	/* device-specific */
+	if_ctx_t ctx = ifp->if_softc;
+	iflib_txq_t txq = &ctx->ifc_txqs[kring->ring_id];
+
+	pi.ipi_m = NULL;
+	pi.ipi_segs = txq->ift_segs;
+	pi.ipi_qsidx = kring->ring_id;
+	pi.ipi_ndescs = 0;
+
+	bus_dmamap_sync(txq->ift_desc_tag, txq->ift_ifdi->idi_map,
+					BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
+
+
+	/*
+	 * First part: process new packets to send.
+	 * nm_i is the current index in the netmap ring,
+	 * nic_i is the corresponding index in the NIC ring.
+	 *
+	 * If we have packets to send (nm_i != head)
+	 * iterate over the netmap ring, fetch length and update
+	 * the corresponding slot in the NIC ring. Some drivers also
+	 * need to update the buffer's physical address in the NIC slot
+	 * even NS_BUF_CHANGED is not set (PNMB computes the addresses).
+	 *
+	 * The netmap_reload_map() calls is especially expensive,
+	 * even when (as in this case) the tag is 0, so do only
+	 * when the buffer has actually changed.
+	 *
+	 * If possible do not set the report/intr bit on all slots,
+	 * but only a few times per ring or when NS_REPORT is set.
+	 *
+	 * Finally, on 10G and faster drivers, it might be useful
+	 * to prefetch the next slot and txr entry.
+	 */
+
+	nm_i = kring->nr_hwcur;
+	if (nm_i != head) {	/* we have new packets to send */
+		nic_i = netmap_idx_k2n(kring, nm_i);
+
+		__builtin_prefetch(&ring->slot[nm_i]);
+		__builtin_prefetch(&txq->ift_sds[nic_i]);
+
+		for (n = 0; nm_i != head; n++) {
+			struct netmap_slot *slot = &ring->slot[nm_i];
+			u_int len = slot->len;
+			uint64_t paddr;
+			void *addr = PNMB(na, slot, &paddr);
+
+			/* device-specific */
+			pi.ipi_pidx = nic_i;
+			ctx->isc_txd_encap(ctx->ifc_softc, &pi);
+			/* prefetch for next round */
+			__builtin_prefetch(&ring->slot[nm_i + 1]);
+			__builtin_prefetch(&txq->ift_sds[nic_i + 1]);
+
+			NM_CHECK_ADDR_LEN(na, addr, len);
+
+			if (slot->flags & NS_BUF_CHANGED) {
+				/* buffer has changed, reload map */
+				netmap_reload_map(na, txq->ift_desc_tag, txq->ift_sds[nic_i].ifsd_map, addr);
+			}
+			slot->flags &= ~(NS_REPORT | NS_BUF_CHANGED);
+
+			/* make sure changes to the buffer are synced */
+			bus_dmamap_sync(txq->ift_ifdi->idi_tag, txq->ift_sds[nic_i].ifsd_map,
+							BUS_DMASYNC_PREWRITE);
+
+			nm_i = nm_next(nm_i, lim);
+			nic_i = nm_next(nic_i, lim);
+		}
+		kring->nr_hwcur = head;
+		bus_dmamap_sync(txq->ift_desc_tag, txq->ift_ifdi->idi_map,
+						BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
+
+		/* (re)start the tx unit up to slot nic_i (excluded) */
+		ctx->isc_txd_flush(ctx->ifc_softc, txq->ift_id, nic_i);
+	}
+
+	/*
+	 * Second part: reclaim buffers for completed transmissions.
+	 */
+	if (iflib_tx_credits_update(ctx, txq)) {
+		/* some tx completed, increment avail */
+		nic_i = txq->ift_cidx_processed;
+		kring->nr_hwtail = nm_prev(netmap_idx_n2k(kring, nic_i), lim);
+	}
+	return (0);
+}
+
+/*
+ * Reconcile kernel and user view of the receive ring.
+ * Same as for the txsync, this routine must be efficient.
+ * The caller guarantees a single invocations, but races against
+ * the rest of the driver should be handled here.
+ *
+ * On call, kring->rhead is the first packet that userspace wants
+ * to keep, and kring->rcur is the wakeup point.
+ * The kernel has previously reported packets up to kring->rtail.
+ *
+ * If (flags & NAF_FORCE_READ) also check for incoming packets irrespective
+ * of whether or not we received an interrupt.
+ */
+static int
+iflib_netmap_rxsync(struct netmap_kring *kring, int flags)
+{
+	struct netmap_adapter *na = kring->na;
+	struct ifnet *ifp = na->ifp;
+	struct netmap_ring *ring = kring->ring;
+	u_int nm_i;	/* index into the netmap ring */
+	u_int nic_i;	/* index into the NIC ring */
+	u_int i, n;
+	u_int const lim = kring->nkr_num_slots - 1;
+	u_int const head = kring->rhead;
+	int force_update = (flags & NAF_FORCE_READ) || kring->nr_kflags & NKR_PENDINTR;
+	struct if_rxd_info ri;
+	/* device-specific */
+	if_ctx_t ctx = ifp->if_softc;
+	iflib_rxq_t rxq = &ctx->ifc_rxqs[kring->ring_id];
+	iflib_fl_t fl = rxq->ifr_fl;
+	if (head > lim)
+		return netmap_ring_reinit(kring);
+
+	bzero(&ri, sizeof(ri));
+	ri.iri_qsidx = kring->ring_id;
+	ri.iri_ifp = ctx->ifc_ifp;
+	/* XXX check sync modes */
+	for (i = 0, fl = rxq->ifr_fl; i < rxq->ifr_nfl; i++, fl++)
+		bus_dmamap_sync(rxq->ifr_desc_tag, fl->ifl_ifdi->idi_map,
+						BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
+
+	/*
+	 * First part: import newly received packets.
+	 *
+	 * nm_i is the index of the next free slot in the netmap ring,
+	 * nic_i is the index of the next received packet in the NIC ring,
+	 * and they may differ in case if_init() has been called while
+	 * in netmap mode. For the receive ring we have
+	 *
+	 *	nic_i = rxr->next_check;
+	 *	nm_i = kring->nr_hwtail (previous)
+	 * and
+	 *	nm_i == (nic_i + kring->nkr_hwofs) % ring_size
+	 *
+	 * rxr->next_check is set to 0 on a ring reinit
+	 */
+	if (netmap_no_pendintr || force_update) {
+#if 0
+		int crclen = ixl_crcstrip ? 0 : 4;
+#endif
+		int error, avail;
+		uint16_t slot_flags = kring->nkr_slot_flags;
+
+		for (fl = rxq->ifr_fl, i = 0; i < rxq->ifr_nfl; i++, fl++) {
+			nic_i = fl->ifl_cidx;
+			nm_i = netmap_idx_n2k(kring, nic_i);
+			avail = ctx->isc_rxd_available(ctx->ifc_softc, kring->ring_id, nic_i);
+			for (n = 0; avail > 0; n++, avail--) {
+				error = ctx->isc_rxd_pkt_get(ctx->ifc_softc, &ri);
+				if (error)
+					ring->slot[nm_i].len = 0;
+				else
+					ring->slot[nm_i].len = ri.iri_len;
+				ring->slot[nm_i].flags = slot_flags;
+				bus_dmamap_sync(fl->ifl_ifdi->idi_tag,
+								fl->ifl_sds[nic_i].ifsd_map, BUS_DMASYNC_POSTREAD);
+				nm_i = nm_next(nm_i, lim);
+				nic_i = nm_next(nic_i, lim);
+			}
+			if (n) { /* update the state variables */
+#if 0
+				if (netmap_no_pendintr && !force_update) {
+					/* diagnostics */
+					ixl_rx_miss ++;
+					ixl_rx_miss_bufs += n;
+				}
+#endif
+				fl->ifl_cidx = nic_i;
+				kring->nr_hwtail = nm_i;
+			}
+			kring->nr_kflags &= ~NKR_PENDINTR;
+		}
+	}
+	/*
+	 * Second part: skip past packets that userspace has released.
+	 * (kring->nr_hwcur to head excluded),
+	 * and make the buffers available for reception.
+	 * As usual nm_i is the index in the netmap ring,
+	 * nic_i is the index in the NIC ring, and
+	 * nm_i == (nic_i + kring->nkr_hwofs) % ring_size
+	 */
+	/* XXX not sure how this will work with multiple free lists */
+	nm_i = kring->nr_hwcur;
+	if (nm_i != head) {
+		nic_i = netmap_idx_k2n(kring, nm_i);
+		for (n = 0; nm_i != head; n++) {
+			struct netmap_slot *slot = &ring->slot[nm_i];
+			uint64_t paddr;
+			caddr_t vaddr;
+			void *addr = PNMB(na, slot, &paddr);
+
+			if (addr == NETMAP_BUF_BASE(na)) /* bad buf */
+				goto ring_reset;
+
+			vaddr = addr;
+			if (slot->flags & NS_BUF_CHANGED) {
+				/* buffer has changed, reload map */
+				netmap_reload_map(na, fl->ifl_ifdi->idi_tag, fl->ifl_sds[nic_i].ifsd_map, addr);
+				slot->flags &= ~NS_BUF_CHANGED;
+			}
+			/*
+			 * XXX we should be batching this operation - TODO
+			 */
+			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, fl->ifl_id, nic_i, &paddr, &vaddr, 1);
+			bus_dmamap_sync(fl->ifl_ifdi->idi_tag, fl->ifl_sds[nic_i].ifsd_map,
+			    BUS_DMASYNC_PREREAD);
+			nm_i = nm_next(nm_i, lim);
+			nic_i = nm_next(nic_i, lim);
+		}
+		kring->nr_hwcur = head;
+
+		bus_dmamap_sync(fl->ifl_ifdi->idi_tag, fl->ifl_ifdi->idi_map,
+		    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
+		/*
+		 * IMPORTANT: we must leave one free slot in the ring,
+		 * so move nic_i back by one unit
+		 */
+		nic_i = nm_prev(nic_i, lim);
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, fl->ifl_id, nic_i);
+	}
+
+	return 0;
+
+ring_reset:
+	return netmap_ring_reinit(kring);
+}
+
+static int
+iflib_netmap_attach(if_ctx_t ctx)
+{
+	struct netmap_adapter na;
+
+	bzero(&na, sizeof(na));
+
+	na.ifp = ctx->ifc_ifp;
+	na.na_flags = NAF_BDG_MAYSLEEP;
+	MPASS(ctx->ifc_softc_ctx.isc_nqsets);
+
+	na.num_tx_desc = ctx->ifc_sctx->isc_ntxd;
+	na.num_rx_desc = ctx->ifc_sctx->isc_ntxd;
+	na.nm_txsync = iflib_netmap_txsync;
+	na.nm_rxsync = iflib_netmap_rxsync;
+	na.nm_register = iflib_netmap_register;
+	na.num_tx_rings = na.num_rx_rings = ctx->ifc_softc_ctx.isc_nqsets;
+	return (netmap_attach(&na));
+}
+
+static void
+iflib_netmap_txq_init(if_ctx_t ctx, iflib_txq_t txq)
+{
+	struct netmap_adapter *na = NA(ctx->ifc_ifp);
+	struct netmap_slot *slot;
+	iflib_sd_t sd;
+
+	slot = netmap_reset(na, NR_TX, txq->ift_id, 0);
+	if (slot == 0)
+		return;
+
+	sd = txq->ift_sds;
+	for (int i = 0; i < ctx->ifc_sctx->isc_ntxd; i++, sd++) {
+
+		/*
+		 * In netmap mode, set the map for the packet buffer.
+		 * NOTE: Some drivers (not this one) also need to set
+		 * the physical buffer address in the NIC ring.
+		 * netmap_idx_n2k() maps a nic index, i, into the corresponding
+		 * netmap slot index, si
+		 */
+		int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
+		netmap_load_map(na, txq->ift_desc_tag, sd->ifsd_map, NMB(na, slot + si));
+	}
+}
+static void
+iflib_netmap_rxq_init(if_ctx_t ctx, iflib_rxq_t rxq)
+{
+	struct netmap_adapter *na = NA(ctx->ifc_ifp);
+	struct netmap_slot *slot;
+	iflib_sd_t sd;
+	int nrxd;
+
+	slot = netmap_reset(na, NR_RX, rxq->ifr_id, 0);
+	if (slot == 0)
+		return;
+	sd = rxq->ifr_fl[0].ifl_sds;
+	nrxd = ctx->ifc_sctx->isc_nrxd;
+	for (int i = 0; i < nrxd; i++, sd++) {
+			int sj = netmap_idx_n2k(&na->rx_rings[rxq->ifr_id], i);
+			uint64_t paddr;
+			void *addr;
+			caddr_t vaddr;
+
+			vaddr = addr = PNMB(na, slot + sj, &paddr);
+			netmap_load_map(na, rxq->ifr_fl[0].ifl_ifdi->idi_tag, sd->ifsd_map, addr);
+			/* Update descriptor and the cached value */
+			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, i, &paddr, &vaddr, 1);
+	}
+	/* preserve queue */
+	if (ctx->ifc_ifp->if_capenable & IFCAP_NETMAP) {
+		struct netmap_kring *kring = &na->rx_rings[rxq->ifr_id];
+		int t = na->num_rx_desc - 1 - nm_kr_rxspace(kring);
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, t);
+	} else
+		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, 0 /* fl_id */, nrxd-1);
+}
+
+#define iflib_netmap_detach(ifp) netmap_detach(ifp)
+
+#else
+#define iflib_netmap_txq_init(ctx, txq)
+#define iflib_netmap_rxq_init(ctx, rxq)
+#define iflib_netmap_detach(ifp)
+
+#define iflib_netmap_attach(ctx) (0)
+#define netmap_rx_irq(ifp, qid, budget) (0)
+
 #endif
 
 #if defined(__i386__) || defined(__amd64__)
@@ -1195,15 +1625,19 @@ iflib_init_locked(if_ctx_t ctx)
 {
 	if_softc_ctx_t sctx = &ctx->ifc_softc_ctx;
 	iflib_txq_t txq = ctx->ifc_txqs;
+	iflib_rxq_t rxq = ctx->ifc_rxqs;
 	int i;
 
 	IFDI_INTR_DISABLE(ctx);
-	for (i = 0; i < sctx->isc_nqsets; i++, txq++) {
+	for (i = 0; i < sctx->isc_nqsets; i++, txq++, rxq++) {
 		TX_LOCK(txq);
 		callout_stop(&txq->ift_timer);
 		callout_stop(&txq->ift_db_check);
 		TX_UNLOCK(txq);
+		iflib_netmap_txq_init(ctx, txq);
+		iflib_netmap_rxq_init(ctx, rxq);
 	}
+
 	IFDI_INIT(ctx);
 	if_setdrvflagbits(ctx->ifc_ifp, IFF_DRV_RUNNING, 0);
 	IFDI_INTR_ENABLE(ctx);
@@ -1247,7 +1681,7 @@ iflib_stop(if_ctx_t ctx)
 
 	IFDI_INTR_DISABLE(ctx);
 	/* Tell the stack that the interface is no longer active */
-	if_setdrvflagbits(ctx->ifc_ifp, IFF_DRV_OACTIVE, IFF_DRV_RUNNING);
+	if_setdrvflagbits(ctx->ifc_ifp, 0, IFF_DRV_RUNNING);
 
 	/* Wait for current tx queue users to exit to disarm watchdog timer. */
 	for (int i = 0; i < sctx->isc_nqsets; i++, txq++)
@@ -1391,11 +1825,9 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 	 */
 	struct mbuf *m, *mh, *mt;
 
-#ifdef DEV_NETMAP
 	if (netmap_rx_irq(ctx->ifc_ifp, rxq->ifr_id, &budget)) {
 		return (FALSE);
 	}
-#endif /* DEV_NETMAP */
 
 	ri.iri_qsidx = rxq->ifr_id;
 	if (sctx->isc_flags & IFLIB_HAS_CQ) {
@@ -1910,279 +2342,10 @@ skip_db:
 
 	return (pkt_sent);
 }
-
-#ifdef DEV_NETMAP
-/*
- * Reconcile kernel and user view of the transmit ring.
- *
- * All information is in the kring.
- * Userspace wants to send packets up to the one before kring->rhead,
- * kernel knows kring->nr_hwcur is the first unsent packet.
- *
- * Here we push packets out (as many as possible), and possibly
- * reclaim buffers from previously completed transmission.
- *
- * The caller (netmap) guarantees that there is only one instance
- * running at any time. Any interference with other driver
- * methods should be handled by the individual drivers.
- */
-int
-iflib_netmap_txsync(struct netmap_kring *kring, int flags)
-{
-	struct netmap_adapter *na = kring->na;
-	struct ifnet *ifp = na->ifp;
-	struct netmap_ring *ring = kring->ring;
-	u_int nm_i;	/* index into the netmap ring */
-	u_int nic_i;	/* index into the NIC ring */
-	u_int n;
-	u_int const lim = kring->nkr_num_slots - 1;
-	u_int const head = kring->rhead;
-	struct if_pkt_info pi;
-
-#ifdef notyet
-	/* XXX need to pass in pi */
-	/*
-	 * interrupts on every tx packet are expensive so request
-	 * them every half ring, or where NS_REPORT is set
-	 */
-	u_int report_frequency = kring->nkr_num_slots >> 1;
 #endif
-	/* device-specific */
-	if_ctx_t ctx = ifp->if_softc;
-	iflib_txq_t txq = &ctx->ifc_txqs[kring->ring_id];
-
-	pi.ipi_m = NULL;
-	pi.ipi_segs = txq->ift_segs;
-	pi.ipi_qsidx = kring->ring_id;
-	pi.ipi_ndescs = 0;
-
-	bus_dmamap_sync(txq->ift_desc_tag, txq->ift_ifdi->idi_map,
-					BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 
 
-	/*
-	 * First part: process new packets to send.
-	 * nm_i is the current index in the netmap ring,
-	 * nic_i is the corresponding index in the NIC ring.
-	 *
-	 * If we have packets to send (nm_i != head)
-	 * iterate over the netmap ring, fetch length and update
-	 * the corresponding slot in the NIC ring. Some drivers also
-	 * need to update the buffer's physical address in the NIC slot
-	 * even NS_BUF_CHANGED is not set (PNMB computes the addresses).
-	 *
-	 * The netmap_reload_map() calls is especially expensive,
-	 * even when (as in this case) the tag is 0, so do only
-	 * when the buffer has actually changed.
-	 *
-	 * If possible do not set the report/intr bit on all slots,
-	 * but only a few times per ring or when NS_REPORT is set.
-	 *
-	 * Finally, on 10G and faster drivers, it might be useful
-	 * to prefetch the next slot and txr entry.
-	 */
 
-	nm_i = kring->nr_hwcur;
-	if (nm_i != head) {	/* we have new packets to send */
-		nic_i = netmap_idx_k2n(kring, nm_i);
-
-		__builtin_prefetch(&ring->slot[nm_i]);
-		__builtin_prefetch(&txq->ift_sds[nic_i]);
-
-		for (n = 0; nm_i != head; n++) {
-			struct netmap_slot *slot = &ring->slot[nm_i];
-			u_int len = slot->len;
-			uint64_t paddr;
-			void *addr = PNMB(na, slot, &paddr);
-
-			/* device-specific */
-			pi.ipi_pidx = nic_i;
-			ctx->isc_txd_encap(ctx->ifc_softc, &pi);
-			/* prefetch for next round */
-			__builtin_prefetch(&ring->slot[nm_i + 1]);
-			__builtin_prefetch(&txq->ift_sds[nic_i + 1]);
-
-			NM_CHECK_ADDR_LEN(na, addr, len);
-
-			if (slot->flags & NS_BUF_CHANGED) {
-				/* buffer has changed, reload map */
-				netmap_reload_map(na, txq->ift_desc_tag, txq->ift_sds[nic_i].ifsd_map, addr);
-			}
-			slot->flags &= ~(NS_REPORT | NS_BUF_CHANGED);
-
-			/* make sure changes to the buffer are synced */
-			bus_dmamap_sync(txq->ift_ifdi->idi_tag, txq->ift_sds[nic_i].ifsd_map,
-							BUS_DMASYNC_PREWRITE);
-
-			nm_i = nm_next(nm_i, lim);
-			nic_i = nm_next(nic_i, lim);
-		}
-		kring->nr_hwcur = head;
-		bus_dmamap_sync(txq->ift_desc_tag, txq->ift_ifdi->idi_map,
-						BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
-
-		/* (re)start the tx unit up to slot nic_i (excluded) */
-		ctx->isc_txd_flush(ctx->ifc_softc, txq->ift_id, nic_i);
-	}
-
-	/*
-	 * Second part: reclaim buffers for completed transmissions.
-	 */
-	if (iflib_tx_credits_update(ctx, txq)) {
-		/* some tx completed, increment avail */
-		nic_i = txq->ift_cidx_processed;
-		kring->nr_hwtail = nm_prev(netmap_idx_n2k(kring, nic_i), lim);
-	}
-	return (0);
-}
-
-/*
- * Reconcile kernel and user view of the receive ring.
- * Same as for the txsync, this routine must be efficient.
- * The caller guarantees a single invocations, but races against
- * the rest of the driver should be handled here.
- *
- * On call, kring->rhead is the first packet that userspace wants
- * to keep, and kring->rcur is the wakeup point.
- * The kernel has previously reported packets up to kring->rtail.
- *
- * If (flags & NAF_FORCE_READ) also check for incoming packets irrespective
- * of whether or not we received an interrupt.
- */
-int
-iflib_netmap_rxsync(struct netmap_kring *kring, int flags)
-{
-	struct netmap_adapter *na = kring->na;
-	struct ifnet *ifp = na->ifp;
-	struct netmap_ring *ring = kring->ring;
-	u_int nm_i;	/* index into the netmap ring */
-	u_int nic_i;	/* index into the NIC ring */
-	u_int i, n;
-	u_int const lim = kring->nkr_num_slots - 1;
-	u_int const head = kring->rhead;
-	int force_update = (flags & NAF_FORCE_READ) || kring->nr_kflags & NKR_PENDINTR;
-	struct if_rxd_info ri;
-	/* device-specific */
-	if_ctx_t ctx = ifp->if_softc;
-	iflib_rxq_t rxq = &ctx->ifc_rxqs[kring->ring_id];
-	iflib_fl_t fl = rxq->ifr_fl;
-	if (head > lim)
-		return netmap_ring_reinit(kring);
-
-	bzero(&ri, sizeof(ri));
-	ri.iri_qsidx = kring->ring_id;
-	ri.iri_ifp = ctx->ifc_ifp;
-	/* XXX check sync modes */
-	for (i = 0, fl = rxq->ifr_fl; i < rxq->ifr_nfl; i++, fl++)
-		bus_dmamap_sync(rxq->ifr_desc_tag, fl->ifl_ifdi->idi_map,
-						BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
-
-	/*
-	 * First part: import newly received packets.
-	 *
-	 * nm_i is the index of the next free slot in the netmap ring,
-	 * nic_i is the index of the next received packet in the NIC ring,
-	 * and they may differ in case if_init() has been called while
-	 * in netmap mode. For the receive ring we have
-	 *
-	 *	nic_i = rxr->next_check;
-	 *	nm_i = kring->nr_hwtail (previous)
-	 * and
-	 *	nm_i == (nic_i + kring->nkr_hwofs) % ring_size
-	 *
-	 * rxr->next_check is set to 0 on a ring reinit
-	 */
-	if (netmap_no_pendintr || force_update) {
-#if 0
-		int crclen = ixl_crcstrip ? 0 : 4;
-#endif
-		int error, avail;
-		uint16_t slot_flags = kring->nkr_slot_flags;
-
-		for (fl = rxq->ifr_fl, i = 0; i < rxq->ifr_nfl; i++, fl++) {
-			nic_i = fl->ifl_cidx;
-			nm_i = netmap_idx_n2k(kring, nic_i);
-			avail = ctx->isc_rxd_available(ctx->ifc_softc, kring->ring_id, nic_i);
-			for (n = 0; avail > 0; n++, avail--) {
-				error = ctx->isc_rxd_pkt_get(ctx->ifc_softc, &ri);
-				if (error)
-					ring->slot[nm_i].len = 0;
-				else
-					ring->slot[nm_i].len = ri.iri_len;
-				ring->slot[nm_i].flags = slot_flags;
-				bus_dmamap_sync(fl->ifl_ifdi->idi_tag,
-								fl->ifl_sds[nic_i].ifsd_map, BUS_DMASYNC_POSTREAD);
-				nm_i = nm_next(nm_i, lim);
-				nic_i = nm_next(nic_i, lim);
-			}
-			if (n) { /* update the state variables */
-#if 0
-				if (netmap_no_pendintr && !force_update) {
-					/* diagnostics */
-					ixl_rx_miss ++;
-					ixl_rx_miss_bufs += n;
-				}
-#endif
-				fl->ifl_cidx = nic_i;
-				kring->nr_hwtail = nm_i;
-			}
-			kring->nr_kflags &= ~NKR_PENDINTR;
-		}
-	}
-	/*
-	 * Second part: skip past packets that userspace has released.
-	 * (kring->nr_hwcur to head excluded),
-	 * and make the buffers available for reception.
-	 * As usual nm_i is the index in the netmap ring,
-	 * nic_i is the index in the NIC ring, and
-	 * nm_i == (nic_i + kring->nkr_hwofs) % ring_size
-	 */
-	/* XXX not sure how this will work with multiple free lists */
-	nm_i = kring->nr_hwcur;
-	if (nm_i != head) {
-		nic_i = netmap_idx_k2n(kring, nm_i);
-		for (n = 0; nm_i != head; n++) {
-			struct netmap_slot *slot = &ring->slot[nm_i];
-			uint64_t paddr;
-			caddr_t vaddr;
-			void *addr = PNMB(na, slot, &paddr);
-
-			if (addr == NETMAP_BUF_BASE(na)) /* bad buf */
-				goto ring_reset;
-
-			vaddr = addr;
-			if (slot->flags & NS_BUF_CHANGED) {
-				/* buffer has changed, reload map */
-				netmap_reload_map(na, fl->ifl_ifdi->idi_tag, fl->ifl_sds[nic_i].ifsd_map, addr);
-				slot->flags &= ~NS_BUF_CHANGED;
-			}
-			/*
-			 * XXX we should be batching this operation - TODO
-			 */
-			ctx->isc_rxd_refill(ctx->ifc_softc, rxq->ifr_id, fl->ifl_id, nic_i, &paddr, &vaddr, 1);
-			bus_dmamap_sync(fl->ifl_ifdi->idi_tag, fl->ifl_sds[nic_i].ifsd_map,
-			    BUS_DMASYNC_PREREAD);
-			nm_i = nm_next(nm_i, lim);
-			nic_i = nm_next(nic_i, lim);
-		}
-		kring->nr_hwcur = head;
-
-		bus_dmamap_sync(fl->ifl_ifdi->idi_tag, fl->ifl_ifdi->idi_map,
-		    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
-		/*
-		 * IMPORTANT: we must leave one free slot in the ring,
-		 * so move nic_i back by one unit
-		 */
-		nic_i = nm_prev(nic_i, lim);
-		ctx->isc_rxd_flush(ctx->ifc_softc, rxq->ifr_id, fl->ifl_id, nic_i);
-	}
-
-	return 0;
-
-ring_reset:
-	return netmap_ring_reinit(kring);
-}
-#endif
 
 static void
 _task_fn_tx(void *context, int pending)
@@ -2321,7 +2484,7 @@ iflib_if_init(void *arg)
 	if_ctx_t ctx = arg;
 
 	CTX_LOCK(ctx);
-	/* XXX if running stop before init'ing */
+	iflib_stop(ctx);
 	iflib_init_locked(ctx);
 	CTX_UNLOCK(ctx);
 }
@@ -2748,7 +2911,10 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 	ether_ifattach(ctx->ifc_ifp, ctx->ifc_mac);
 	if ((err = IFDI_ATTACH_POST(ctx)) != 0)
 		goto fail_detach;
-
+	if ((err = iflib_netmap_attach(ctx))) {
+		device_printf(ctx->ifc_dev, "netmap attach failed: %d\n", err);
+		goto fail_detach;
+	}
 	*ctxp = ctx;
 	return (0);
 fail_detach:
@@ -2780,8 +2946,10 @@ iflib_device_deregister(if_ctx_t ctx)
 {
 	if_t ifp = ctx->ifc_ifp;
 	iflib_txq_t txq;
+	iflib_rxq_t rxq;
 	device_t dev = ctx->ifc_dev;
-	int i;
+	int i, nqsets;
+	struct taskqgroup *tqg;
 
 	/* Make sure VLANS are not using driver */
 	if (if_vlantrunkinuse(ifp)) {
@@ -2801,21 +2969,39 @@ iflib_device_deregister(if_ctx_t ctx)
 	if (ctx->ifc_vlan_detach_event != NULL)
 		EVENTHANDLER_DEREGISTER(vlan_unconfig, ctx->ifc_vlan_detach_event);
 
-	ether_ifdetach(ctx->ifc_ifp);
+	iflib_netmap_detach(ifp);
+	ether_ifdetach(ifp);
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
-	IFDI_DETACH(ctx);
-	for (txq = ctx->ifc_txqs, i = 0; i < ctx->ifc_softc_ctx.isc_nqsets; i++, txq++) {
+	nqsets = ctx->ifc_softc_ctx.isc_nqsets;
+	tqg = gctx->igc_io_tqg;
+	for (txq = ctx->ifc_txqs, i = 0, rxq = ctx->ifc_rxqs; i < nqsets; i++, txq++, rxq++) {
 		callout_drain(&txq->ift_timer);
 		callout_drain(&txq->ift_db_check);
+		if (txq->ift_task.gt_uniq != NULL)
+			taskqgroup_detach(tqg, &txq->ift_task);
+		if (rxq->ifr_task.gt_uniq != NULL)
+			taskqgroup_detach(tqg, &rxq->ifr_task);
 	}
-#ifdef DEV_NETMAP
-	netmap_detach(ifp);
-#endif /* DEV_NETMAP */
+	tqg = gctx->igc_config_tqg;
+	if (ctx->ifc_admin_task.gt_uniq != NULL)
+		taskqgroup_detach(tqg, &ctx->ifc_admin_task);
+	if (ctx->ifc_vflr_task.gt_uniq != NULL)
+		taskqgroup_detach(tqg, &ctx->ifc_vflr_task);
+
+	IFDI_DETACH(ctx);
+	if (ctx->ifc_softc_ctx.isc_intr == IFLIB_INTR_MSIX) {
+		pci_release_msi(dev);
+	}
+	if (ctx->ifc_msix_mem != NULL) {
+		bus_release_resource(ctx->ifc_dev, SYS_RES_MEMORY,
+			ctx->ifc_softc_ctx.isc_msix_bar, ctx->ifc_msix_mem);
+		ctx->ifc_msix_mem = NULL;
+	}
 
 	bus_generic_detach(dev);
-	if_free(ctx->ifc_ifp);
+	if_free(ifp);
 
 	iflib_tx_structures_free(ctx);
 	iflib_rx_structures_free(ctx);
@@ -2906,38 +3092,6 @@ iflib_device_iov_add_vf(device_t dev, uint16_t vfnum, const nvlist_t *params)
 
 	return (error);
 }
-
-#ifdef DEV_NETMAP
-/*
- * Register/unregister. We are already under netmap lock.
- * Only called on the first register or the last unregister.
- */
-int
-iflib_netmap_register(struct netmap_adapter *na, int onoff)
-{
-	struct ifnet *ifp = na->ifp;
-	if_ctx_t ctx = ifp->if_softc;
-
-	CTX_LOCK(ctx);
-	IFDI_INTR_DISABLE(ctx);
-
-	/* Tell the stack that the interface is no longer active */
-	ifp->if_drv_flags &= ~(IFF_DRV_RUNNING | IFF_DRV_OACTIVE);
-
-	//set_crcstrip(&adapter->hw, onoff);
-	/* enable or disable flags and callbacks in na and ifp */
-	if (onoff) {
-		nm_set_native_flags(na);
-	} else {
-		nm_clear_native_flags(na);
-	}
-	IFDI_INIT(ctx);
-	//set_crcstrip(&adapter->hw, onoff); // XXX why twice ?
-	CTX_UNLOCK(ctx);
-	return (ifp->if_drv_flags & IFF_DRV_RUNNING ? 0 : 1);
-}
-#endif
-
 
 /*********************************************************************
  *
@@ -3473,8 +3627,6 @@ iflib_irq_free(if_ctx_t ctx, if_irq_t irq)
 
 	if (irq->ii_res)
 		bus_release_resource(ctx->ifc_dev, SYS_RES_IRQ, irq->ii_rid, irq->ii_res);
-
-	/* taskqgroup_detach() */
 }
 
 static int

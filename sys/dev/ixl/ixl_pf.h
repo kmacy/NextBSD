@@ -70,7 +70,6 @@ struct ixl_pf {
 	device_t dev;
 
 	struct resource		*pci_mem;
-	struct resource		*msix_mem;
 
 	/*
 	 * Interrupt resources: this set is

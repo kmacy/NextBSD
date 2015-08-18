@@ -186,7 +186,7 @@ nm_monitor_alloc(struct netmap_kring *kring, u_int n)
 		return 0;
 	
         len = sizeof(struct netmap_kring *) * n;
-	nm = realloc(kring->monitors, len, M_DEVBUF, M_NOWAIT | M_ZERO);
+	nm = realloc(kring->monitors, len, M_NETMAP, M_NOWAIT | M_ZERO);
 	if (nm == NULL)
 		return ENOMEM;
 
@@ -205,7 +205,7 @@ nm_monitor_dealloc(struct netmap_kring *kring)
 			D("freeing not empty monitor array for %s (%d dangling monitors)!", kring->name,
 					kring->n_monitors);
 		}
-		free(kring->monitors, M_DEVBUF);
+		free(kring->monitors, M_NETMAP);
 		kring->monitors = NULL;
 		kring->max_monitors = 0;
 		kring->n_monitors = 0;
@@ -704,7 +704,7 @@ netmap_get_monitor_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
 
 	D("flags %x", nmr->nr_flags);
 
-	mna = malloc(sizeof(*mna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	mna = malloc(sizeof(*mna), M_NETMAP, M_NOWAIT | M_ZERO);
 	if (mna == NULL) {
 		D("memory error");
 		return ENOMEM;
@@ -842,7 +842,7 @@ netmap_get_monitor_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
 
 put_out:
 	netmap_adapter_put(pna);
-	free(mna, M_DEVBUF);
+	free(mna, M_NETMAP);
 	return error;
 }
 
