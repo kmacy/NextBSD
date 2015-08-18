@@ -561,6 +561,7 @@ struct nm_ifreq {
 	char data[NM_IFRDATA_LEN];
 };
 
+#ifdef _KERNEL
 MALLOC_DECLARE(M_NETMAP);
-
+#endif
 #endif /* _NET_NETMAP_H_ */
