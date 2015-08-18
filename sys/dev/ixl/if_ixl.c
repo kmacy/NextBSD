@@ -931,9 +931,6 @@ ixl_if_detach(if_ctx_t ctx)
 		device_printf(iflib_get_dev(ctx),
 		    "Shutdown Admin queue failed with code %d\n", status);
 
-#ifdef DEV_NETMAP
-	netmap_detach(vsi->ifp);
-#endif /* DEV_NETMAP */
 	ixl_free_pci_resources(pf);
 	ixl_free_vsi(vsi);
 	return (0);
