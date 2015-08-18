@@ -872,7 +872,7 @@ ring_reset:
 	return netmap_ring_reinit(kring);
 }
 
-static void
+static int
 iflib_netmap_attach(if_ctx_t ctx)
 {
 	struct netmap_adapter na;
@@ -889,7 +889,7 @@ iflib_netmap_attach(if_ctx_t ctx)
 	na.nm_rxsync = iflib_netmap_rxsync;
 	na.nm_register = iflib_netmap_register;
 	na.num_tx_rings = na.num_rx_rings = ctx->ifc_softc_ctx.isc_nqsets;
-	netmap_attach(&na);
+	return (netmap_attach(&na));
 }
 #endif
 
@@ -1544,6 +1544,35 @@ hung:
 	CTX_UNLOCK(ctx);
 }
 
+#ifdef DEV_NETMAP
+iflib_init_netmap(if_ctx_t ctx, iflib_txq_t txq)
+{
+	struct netmap_adapter *na = NA(ctx->ifc_ifp);
+	struct netmap_slot *slot;
+	if_txsd_t sd;
+
+	slot = netmap_reset(na, NR_TX, txq->ift_id, 0);
+
+	sd = txq->ift_sds;
+	for (int i = 0; i < ctx->ifc_sctx->isc_ntxd; i++, sd++) {
+
+		/*
+		 * In netmap mode, set the map for the packet buffer.
+		 * NOTE: Some drivers (not this one) also need to set
+		 * the physical buffer address in the NIC ring.
+		 * netmap_idx_n2k() maps a nic index, i, into the corresponding
+		 * netmap slot index, si
+		 */
+		if (slot) {
+			int si = netmap_idx_n2k(&na->tx_rings[txq->ift_id], i);
+			netmap_load_map(na, txq->ift_desc_tag, sd->ifsd_map, NMB(na, slot + si));
+		}
+	}
+}
+#else
+#define iflib_init_netmap(ctx)
+#endif
+
 static void
 iflib_init_locked(if_ctx_t ctx)
 {
@@ -1557,7 +1586,9 @@ iflib_init_locked(if_ctx_t ctx)
 		callout_stop(&txq->ift_timer);
 		callout_stop(&txq->ift_db_check);
 		TX_UNLOCK(txq);
+		iflib_init_netmap(ctx, txq);
 	}
+	iflib_init_netmap(ctx);
 	IFDI_INIT(ctx);
 	if_setdrvflagbits(ctx->ifc_ifp, IFF_DRV_RUNNING, 0);
 	IFDI_INTR_ENABLE(ctx);
@@ -2405,7 +2436,7 @@ iflib_if_init(void *arg)
 	if_ctx_t ctx = arg;
 
 	CTX_LOCK(ctx);
-	/* XXX if running stop before init'ing */
+	iflib_stop(ctx);
 	iflib_init_locked(ctx);
 	CTX_UNLOCK(ctx);
 }
@@ -2833,7 +2864,10 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 	if ((err = IFDI_ATTACH_POST(ctx)) != 0)
 		goto fail_detach;
 #ifdef DEV_NETMAP
-	iflib_netmap_attach(ctx);
+	if ((err = iflib_netmap_attach(ctx))) {
+		device_printf(ctx->ifc_dev, "netmap attach failed: %d\n", err);
+		goto fail_detach;
+	}
 #endif
 	*ctxp = ctx;
 	return (0);
