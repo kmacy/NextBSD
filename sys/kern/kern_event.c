@@ -236,7 +236,11 @@ SYSCTL_UINT(_kern, OID_AUTO, kq_calloutmax, CTLFLAG_RW,
 } while (0)
 #define KN_LIST_LOCK(kn) do {						\
 	if (kn->kn_knlist != NULL)					\
-		kn->kn_knlist->kl_lock(kn->kn_knlist->kl_lockarg);	\
+		kn->kn_knlist->kl_lock(kn->kn_knlist->kl_lockarg, __FILE__, __LINE__);	\
+} while (0)
+#define KNL_LOCK(knlist) do {						\
+	if (knlist != NULL)					\
+		knlist->kl_lock(knlist->kl_lockarg, __FILE__, __LINE__);	\
 } while (0)
 #define KN_LIST_UNLOCK(kn) do {						\
 	if (kn->kn_knlist != NULL) 					\
@@ -305,7 +309,7 @@ static struct {
 	{ &null_filtops },			/* EVFILT_LIO */
 	{ &user_filtops, 1 },			/* EVFILT_USER */
 	{ &null_filtops },			/* EVFILT_SENDFILE */
-	{ &null_filtops },		/* EVFILT_MACHPORT */
+	{ &null_filtops , 1},		/* EVFILT_MACHPORT */
 	{ &null_filtops },			/* EVFILT_VM */
 };
 
@@ -478,7 +482,7 @@ knote_fork(struct knlist *list, int pid)
 
 	if (list == NULL)
 		return;
-	list->kl_lock(list->kl_lockarg);
+	KNL_LOCK(list);
 
 	SLIST_FOREACH(kn, &list->kl_list, kn_selnext) {
 		/*
@@ -534,9 +538,9 @@ knote_fork(struct knlist *list, int pid)
 		KQ_LOCK(kq);
 		kn->kn_status &= ~KN_INFLUX;
 		KQ_UNLOCK_FLUX(kq);
-		list->kl_lock(list->kl_lockarg);
+		KNL_LOCK(list);
 	}
-	list->kl_unlock(list->kl_lockarg);
+	KNL_LOCK(list);
 }
 
 /*
@@ -2108,7 +2112,7 @@ knote(struct knlist *list, long hint, int lockflags)
 	KNL_ASSERT_LOCK(list, lockflags & KNF_LISTLOCKED);
 
 	if ((lockflags & KNF_LISTLOCKED) == 0)
-		list->kl_lock(list->kl_lockarg); 
+		KNL_LOCK(list);
 
 	/*
 	 * If we unlock the list lock (and set KN_INFLUX), we can eliminate
@@ -2163,7 +2167,7 @@ knlist_add(struct knlist *knl, struct knote *kn, int islocked)
 	KASSERT((kn->kn_status & (KN_INFLUX|KN_DETACHED)) ==
 	    (KN_INFLUX|KN_DETACHED), ("knote not KN_INFLUX and KN_DETACHED"));
 	if (!islocked)
-		knl->kl_lock(knl->kl_lockarg);
+		KNL_LOCK(knl);
 	SLIST_INSERT_HEAD(&knl->kl_list, kn, kn_selnext);
 	if (!islocked)
 		knl->kl_unlock(knl->kl_lockarg);
@@ -2183,7 +2187,7 @@ knlist_remove_kq(struct knlist *knl, struct knote *kn, int knlislocked, int kqis
 		KASSERT((kn->kn_status & (KN_INFLUX|KN_DETACHED)) == KN_INFLUX,
     ("knlist_remove called w/o knote being KN_INFLUX or already removed"));
 	if (!knlislocked)
-		knl->kl_lock(knl->kl_lockarg);
+		KNL_LOCK(knl);
 	SLIST_REMOVE(&knl->kl_list, kn, knote, kn_selnext);
 	kn->kn_knlist = NULL;
 	if (!knlislocked)
@@ -2227,14 +2231,12 @@ knlist_empty(struct knlist *knl)
 static struct mtx	knlist_lock;
 MTX_SYSINIT(knlist_lock, &knlist_lock, "knlist lock for lockless objects",
 	MTX_DEF);
-static void knlist_mtx_lock(void *arg);
-static void knlist_mtx_unlock(void *arg);
 
 static void
-knlist_mtx_lock(void *arg)
+knlist_mtx_lock(void *arg, char *file, int line)
 {
 
-	mtx_lock((struct mtx *)arg);
+	_mtx_lock_flags((struct mtx *)arg, 0, file, line);
 }
 
 static void
@@ -2259,10 +2261,10 @@ knlist_mtx_assert_unlocked(void *arg)
 }
 
 static void
-knlist_rw_rlock(void *arg)
+knlist_rw_rlock(void *arg, char *file, int line)
 {
 
-	rw_rlock((struct rwlock *)arg);
+	_rw_rlock((struct rwlock *)arg, file, line);
 }
 
 static void
@@ -2287,7 +2289,7 @@ knlist_rw_assert_unlocked(void *arg)
 }
 
 void
-knlist_init(struct knlist *knl, void *lock, void (*kl_lock)(void *),
+knlist_init(struct knlist *knl, void *lock, void (*kl_lock)(void *, char *, int),
     void (*kl_unlock)(void *),
     void (*kl_assert_locked)(void *), void (*kl_assert_unlocked)(void *))
 {
@@ -2345,7 +2347,8 @@ knlist_destroy(struct knlist *knl)
 		printf("WARNING: destroying knlist w/ knotes on it!\n");
 #endif
 
-	knl->kl_lockarg = knl->kl_lock = knl->kl_unlock = NULL;
+	knl->kl_lock = NULL;
+	knl->kl_lockarg = knl->kl_unlock = NULL;
 	SLIST_INIT(&knl->kl_list);
 }
 
@@ -2364,7 +2367,7 @@ knlist_cleardel(struct knlist *knl, struct thread *td, int islocked, int killkn)
 	else {
 		KNL_ASSERT_UNLOCKED(knl);
 again:		/* need to reacquire lock since we have dropped it */
-		knl->kl_lock(knl->kl_lockarg);
+		KNL_LOCK(knl);
 	}
 
 	SLIST_FOREACH_SAFE(kn, &knl->kl_list, kn_selnext, kn2) {
