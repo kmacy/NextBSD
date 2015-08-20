@@ -540,7 +540,7 @@ knote_fork(struct knlist *list, int pid)
 		KQ_UNLOCK_FLUX(kq);
 		KNL_LOCK(list);
 	}
-	KNL_LOCK(list);
+	KNL_UNLOCK(list);
 }
 
 /*
