@@ -57,39 +57,31 @@ char ixl_driver_version[] = "1.4.3";
  *
  *  Used by probe to select devices to load on
  *  Last field stores an index into ixl_strings
- *  Last entry must be all 0s
+ *  Last entry must be PVID_END
  *
  *  { Vendor ID, Device ID, SubVendor ID, SubDevice ID, String Index }
  *********************************************************************/
 
 static pci_vendor_info_t ixl_vendor_info_array[] =
 {
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_SFP_XL710, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_A, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_B, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_C, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_A, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_B, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_C, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T4, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_20G_KR2, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_20G_KR2_A, 0, 0, 0, 0},
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_SFP_XL710, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_A, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_B, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_KX_C, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_A, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_B, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_QSFP_C, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T4,"Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_20G_KR2, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_20G_KR2_A, "Intel(R) Ethernet Connection XL710 Driver"),
 #ifdef X722_SUPPORT
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_SFP_X722, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_1G_BASE_T_X722, 0, 0, 0, 0},
-	{I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T_X722, 0, 0, 0, 0},
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_SFP_X722, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_1G_BASE_T_X722, "Intel(R) Ethernet Connection XL710 Driver"),
+	PVID(I40E_INTEL_VENDOR_ID, I40E_DEV_ID_10G_BASE_T_X722, "Intel(R) Ethernet Connection XL710 Driver"),
 #endif
 	/* required last entry */
-	{0, 0, 0, 0, 0}
-};
-
-/*********************************************************************
- *  Table of branding strings
- *********************************************************************/
-
-static char    *ixl_strings[] = {
-	"Intel(R) Ethernet Connection XL710 Driver"
+	PVID_END
 };
 
 
@@ -398,10 +390,8 @@ static struct if_shared_ctx ixl_sctx_init = {
 							  sizeof(union i40e_rx_desc), DBA_ALIGN),
 	.isc_nqs = 2,
 	.isc_admin_intrcnt = 1,
-	.isc_vendor_id = 	I40E_INTEL_VENDOR_ID,
 	.isc_vendor_info = ixl_vendor_info_array,
 	.isc_driver_version = ixl_driver_version,
-	.isc_vendor_strings = ixl_strings,
 	.isc_txrx = &ixl_txrx,
 	.isc_driver = &ixl_if_driver,
 };
@@ -439,7 +429,6 @@ ixl_if_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs, int nqs)
 
 		que->me = i;
 		que->vsi = vsi;
-		vsi->active_queues |= (u64)1 << que->me;
 
 		/* get the virtual and physical address of the hardware queues */
 		txr->tail = I40E_QTX_TAIL(que->me);

@@ -202,7 +202,7 @@ struct kqueue;
 TAILQ_HEAD(kqlist, kqueue);
 struct knlist {
 	struct	klist	kl_list;
-	void    (*kl_lock)(void *);	/* lock function */
+	void    (*kl_lock)(void *, char *, int);	/* lock function */
 	void    (*kl_unlock)(void *);
 	void	(*kl_assert_locked)(void *);
 	void	(*kl_assert_unlocked)(void *);
@@ -308,7 +308,7 @@ extern void	knlist_remove(struct knlist *knl, struct knote *kn, int islocked);
 extern void	knlist_remove_inevent(struct knlist *knl, struct knote *kn);
 extern int	knlist_empty(struct knlist *knl);
 extern void	knlist_init(struct knlist *knl, void *lock,
-    void (*kl_lock)(void *), void (*kl_unlock)(void *),
+	void (*kl_lock)(void *, char *, int), void (*kl_unlock)(void *),
     void (*kl_assert_locked)(void *), void (*kl_assert_unlocked)(void *));
 extern void	knlist_init_mtx(struct knlist *knl, struct mtx *lock);
 extern void	knlist_init_rw_reader(struct knlist *knl, struct rwlock *lock);

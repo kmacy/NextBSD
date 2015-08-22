@@ -97,11 +97,11 @@
 #include <sys/mach/thread.h>
 
 static void
-kn_sx_lock(void *arg)
+kn_sx_lock(void *arg, char *file, int line)
 {
 	struct sx *lock = arg;
 
-	sx_xlock(lock);
+	_sx_xlock(lock, 0, file, line);
 }
 
 static void

@@ -2802,19 +2802,17 @@ iflib_device_probe(device_t dev)
 
 	uint16_t	pci_vendor_id, pci_device_id;
 	uint16_t	pci_subvendor_id, pci_subdevice_id;
-	char	device_name[256];
+	uint16_t	pci_rev_id;
 	if_shared_ctx_t sctx;
 
 	if ((sctx = DEVICE_REGISTER(dev)) == NULL || sctx->isc_magic != IFLIB_MAGIC)
 		return (ENOTSUP);
 
 	pci_vendor_id = pci_get_vendor(dev);
-	if (pci_vendor_id != sctx->isc_vendor_id)
-		return (ENXIO);
-
 	pci_device_id = pci_get_device(dev);
 	pci_subvendor_id = pci_get_subvendor(dev);
 	pci_subdevice_id = pci_get_subdevice(dev);
+	pci_rev_id = pci_get_revid(dev);
 
 	ent = sctx->isc_vendor_info;
 	while (ent->pvi_vendor_id != 0) {
@@ -2825,11 +2823,11 @@ iflib_device_probe(device_t dev)
 		     (ent->pvi_subvendor_id == 0)) &&
 
 		    ((pci_subdevice_id == ent->pvi_subdevice_id) ||
-		     (ent->pvi_subdevice_id == 0))) {
-			sprintf(device_name, "%s, Version - %s",
-				sctx->isc_vendor_strings[ent->pvi_index],
-				sctx->isc_driver_version);
-			device_set_desc_copy(dev, device_name);
+		     (ent->pvi_subdevice_id == 0)) &&
+		    ((pci_rev_id == ent->pvi_rev_id) ||
+		     (ent->pvi_rev_id == 0))) {
+
+			device_set_desc_copy(dev, ent->pvi_name);
 			/* this needs to be changed to zero if the bus probing code
 			 * ever stops re-probing on best match because the sctx
 			 * may have its values over written by register calls
@@ -2933,6 +2931,8 @@ iflib_device_attach(device_t dev)
 	if ((sctx = DEVICE_REGISTER(dev)) == NULL || sctx->isc_magic != IFLIB_MAGIC)
 		return (ENOTSUP);
 
+	pci_enable_busmaster(dev);
+
 	return (iflib_device_register(dev, NULL, sctx, &ctx));
 }
 
@@ -2986,7 +2986,7 @@ iflib_device_deregister(if_ctx_t ctx)
 		taskqgroup_detach(tqg, &ctx->ifc_vflr_task);
 
 	IFDI_DETACH(ctx);
-	if (ctx->ifc_softc_ctx.isc_intr == IFLIB_INTR_MSIX) {
+	if (ctx->ifc_softc_ctx.isc_intr != IFLIB_INTR_LEGACY) {
 		pci_release_msi(dev);
 	}
 	if (ctx->ifc_msix_mem != NULL) {
@@ -3520,6 +3520,7 @@ iflib_irq_alloc_generic(if_ctx_t ctx, if_irq_t irq, int rid,
 	info = &ctx->ifc_filter_info;
 
 	switch (type) {
+	/* XXX merge tx/rx for netmap? */
 	case IFLIB_INTR_TX:
 		q = &ctx->ifc_txqs[qid];
 		info = &ctx->ifc_txqs[qid].ift_filter_info;
