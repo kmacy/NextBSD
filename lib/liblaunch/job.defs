@@ -275,17 +275,15 @@ get_root_bootstrap(
 out				rootbs		: mach_port_move_send_t
 );
 
-#ifdef SHOW_LEGACY
 routine
-legacy_ipc_request(
-				j			: job_t;
-				request		: pointer_t;
+ipc_request(
+				j		: job_t;
+				request		: pointer_t, dealloc;
 				request_fds	: mach_port_move_send_array_t;
 out				reply		: pointer_t, dealloc;
-out				reply_fds	: mach_port_move_send_array_t, dealloc;
+out				reply_fds	: mach_port_move_send_array_t;
 				asport		: mach_port_t
 );
-#endif
 
 routine
 get_listener_port_rights(
