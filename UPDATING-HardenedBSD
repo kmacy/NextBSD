@@ -1,3 +1,10 @@
+[20150823] Fixed pkg bootstrap
+__HardenedBSD_version = 29
+
+	With FreeBSD commit 671f0b9, use of pubkey signature_type method is explicitly disallowed.
+	This breaks bootstrapping with pubkey signature_type.
+
+
 [20150715] Fixed vdso randomization
 __HardenedBSD_version = 28
 
