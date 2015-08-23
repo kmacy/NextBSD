@@ -141,6 +141,9 @@ thread_ctor(void *mem, int size, void *arg, int flags)
 
 	td->td_tid = tid_alloc();
 
+	td->td_cswitchcb = NULL;
+	td->td_threadlist = NULL;
+	td->td_reuse_stack = NULL;
 	/*
 	 * Note that td_critnest begins life as 1 because the thread is not
 	 * running and is thereby implicitly waiting to be on the receiving

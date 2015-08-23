@@ -213,6 +213,26 @@ atomic_cmpset_int(volatile u_int *dst, u_int expect, u_int src)
 	return (res);
 }
 
+static __inline int
+atomic_cmpset_64(volatile uint64_t *dst, uint64_t exp, uint64_t src)
+{
+	int64_t res = exp;
+
+	__asm __volatile (
+	"       " MPLOCKED "            "
+	"       cmpxchg8b %2 ;          "
+	"       setz    %%al ;          "
+	"       movzbl  %%al,%0 ;       "
+	"# atomic_cmpset_64"
+	: "+A" (res),			/* 0 (result) */
+	  "=m" (*dst)			/* 1 */
+	: "m" (*dst),			/* 2 */
+	  "b" ((uint32_t)src),
+	  "c" ((uint32_t)(src >> 32)));
+
+	return (res);
+}
+
 #endif /* CPU_DISABLE_CMPXCHG */
 
 /*

@@ -30,6 +30,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_capsicum.h"
 #include "opt_hwpmc_hooks.h"
 #include "opt_ktrace.h"
+#include "opt_thrworkq.h"
 #include "opt_vm.h"
 
 #include <sys/param.h>
@@ -63,6 +64,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysent.h>
 #include <sys/shm.h>
 #include <sys/sysctl.h>
+#ifdef THRWORKQ
+#include <sys/thrworkq.h>
+#endif
 #include <sys/vnode.h>
 #include <sys/stat.h>
 #ifdef KTRACE
@@ -200,6 +204,7 @@ sys_execve(struct thread *td, struct execve_args *uap)
 	int error;
 
 	error = pre_execve(td, &oldvmspace);
+
 	if (error != 0)
 		return (error);
 	error = exec_copyin_args(&args, uap->fname, UIO_USERSPACE,
@@ -283,6 +288,10 @@ pre_execve(struct thread *td, struct vmspace **oldvmspace)
 			error = ERESTART;
 		PROC_UNLOCK(p);
 	}
+#ifdef THRWORKQ
+	if (error == 0)
+		thrworkq_exit(p);
+#endif
 	KASSERT(error != 0 || (td->td_pflags & TDP_EXECVMSPC) == 0,
 	    ("nested execve"));
 	*oldvmspace = p->p_vmspace;

@@ -178,6 +178,10 @@ struct td_sched;
 struct thread;
 struct trapframe;
 struct turnstile;
+struct thrworkq;
+struct threadlist;
+
+typedef void (*mi_switchcb_t)(int, struct thread *);
 
 /*
  * XXX: Does this belong in resource.h or resourcevar.h instead?
@@ -331,6 +335,9 @@ struct thread {
 	struct proc	*td_rfppwait_p;	/* (k) The vforked child */
 	struct vm_page	**td_ma;	/* (k) uio pages held */
 	int		td_ma_cnt;	/* (k) size of *td_ma */
+	mi_switchcb_t   td_cswitchcb;   /* (k) context switch callback. */
+	struct threadlist *td_threadlist; /* (?) thread workq thread list. */
+	void            *td_reuse_stack;  /* (?) reuse workq thread stack.  */
 	void		*td_emuldata;	/* Emulator state data */
 	void	*td_machdata;	/* (k) mach state. */
 };
@@ -626,6 +633,9 @@ struct proc {
 	 */
 	LIST_ENTRY(proc) p_orphan;	/* (e) List of orphan processes. */
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
+	vm_offset_t	p_thrstack;	/* ( ) next addr for thread stack */
+	struct mtx	p_twqlock;	/* (n) thread workqueue lock. */
+	struct thrworkq *p_twq;		/* (^) thread workqueue. */
 	void		*p_machdata;	/* (c) Mach state data. */
 };
 
@@ -738,6 +748,9 @@ struct proc {
 #define	SW_VOL		0x0100		/* Voluntary switch. */
 #define	SW_INVOL	0x0200		/* Involuntary switch. */
 #define SW_PREEMPT	0x0400		/* The invol switch is a preemption */
+/* Callback type. */
+#define	SWCB_BLOCK		1	/* Thread is about to block. */
+#define	SWCB_UNBLOCK		2	/* Thread was just unblocked. */
 
 /* How values for thread_single(). */
 #define	SINGLE_NO_EXIT	0

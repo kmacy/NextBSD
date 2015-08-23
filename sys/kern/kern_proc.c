@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_ktrace.h"
 #include "opt_kstack_pages.h"
 #include "opt_stack.h"
+#include "opt_thrworkq.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -234,6 +235,10 @@ proc_init(void *mem, int size, int flags)
 	cv_init(&p->p_pwait, "ppwait");
 	cv_init(&p->p_dbgwait, "dbgwait");
 	TAILQ_INIT(&p->p_threads);	     /* all threads in proc */
+#ifdef THRWORKQ
+	mtx_init(&p->p_twqlock, "thr workq lock", NULL, MTX_DEF | MTX_DUPOK);
+	p->p_twq = NULL;
+#endif /* THRQORKQ */
 	EVENTHANDLER_INVOKE(process_init, p);
 	p->p_stats = pstats_alloc();
 	SDT_PROBE(proc, kernel, init, return, p, size, flags, 0, 0);

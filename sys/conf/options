@@ -222,6 +222,9 @@ P1003_1B_MQUEUE			opt_posix.h
 P1003_1B_SEMAPHORES		opt_posix.h
 _KPOSIX_PRIORITY_SCHEDULING	opt_posix.h
 
+# PThread WorkQueue Option
+THRWORKQ	opt_thrworkq.h
+
 # Do we want the config file compiled into the kernel?
 INCLUDE_CONFIG_FILE	opt_config.h
 
