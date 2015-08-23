@@ -2697,6 +2697,22 @@ systrace_args(int sysnum, void *params, uint64_t *uarg, int *n_args)
 		*n_args = 3;
 		break;
 	}
+	/* thr_stack */
+	case 467: {
+		struct thr_stack_args *p = params;
+		uarg[0] = p->stacksize; /* size_t */
+		uarg[1] = p->guardsize; /* size_t */
+		*n_args = 2;
+		break;
+	}
+	/* thr_workq */
+	case 468: {
+		struct thr_workq_args *p = params;
+		iarg[0] = p->cmd; /* int */
+		uarg[1] = (intptr_t) p->args; /* struct twq_param * */
+		*n_args = 2;
+		break;
+	}
 	/* sctp_peeloff */
 	case 471: {
 		struct sctp_peeloff_args *p = params;
@@ -8192,6 +8208,32 @@ systrace_entry_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 			break;
 		};
 		break;
+	/* thr_stack */
+	case 467:
+		switch(ndx) {
+		case 0:
+			p = "size_t";
+			break;
+		case 1:
+			p = "size_t";
+			break;
+		default:
+			break;
+		};
+		break;
+	/* thr_workq */
+	case 468:
+		switch(ndx) {
+		case 0:
+			p = "int";
+			break;
+		case 1:
+			p = "struct twq_param *";
+			break;
+		default:
+			break;
+		};
+		break;
 	/* sctp_peeloff */
 	case 471:
 		switch(ndx) {
@@ -11726,6 +11768,16 @@ systrace_return_setargdesc(int sysnum, int ndx, char *desc, size_t descsz)
 		break;
 	/* rtprio_thread */
 	case 466:
+		if (ndx == 0 || ndx == 1)
+			p = "int";
+		break;
+	/* thr_stack */
+	case 467:
+		if (ndx == 0 || ndx == 1)
+			p = "caddr_t";
+		break;
+	/* thr_workq */
+	case 468:
 		if (ndx == 0 || ndx == 1)
 			p = "int";
 		break;

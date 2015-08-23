@@ -395,6 +395,8 @@
 #define	SYS_thr_set_name	464
 #define	SYS_aio_fsync	465
 #define	SYS_rtprio_thread	466
+#define	SYS_thr_stack	467
+#define	SYS_thr_workq	468
 #define	SYS_sctp_peeloff	471
 #define	SYS_sctp_generic_sendmsg	472
 #define	SYS_sctp_generic_sendmsg_iov	473

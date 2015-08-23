@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_compat.h"
 #include "opt_ktrace.h"
+#include "opt_thrworkq.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -72,6 +73,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/umtx.h>
+#ifdef THRWORKQ
+#include <sys/thrworkq.h>
+#endif
 #ifdef KTRACE
 #include <sys/ktrace.h>
 #endif
@@ -204,6 +208,13 @@ exit1(struct thread *td, int rval, int signo)
 		printf("init died (signal %d, exit %d)\n", signo, rval);
 		panic("Going nowhere without my init!");
 	}
+
+#ifdef THRWORKQ
+	/*
+	 * Check if this process has a thread workqueue.
+	 */
+	thrworkq_exit(p);
+#endif
 
 	/*
 	 * Deref SU mp, since the thread does not return to userspace.

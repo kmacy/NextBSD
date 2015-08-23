@@ -848,8 +848,10 @@
 465	AUE_NULL	NOSTD	{ int aio_fsync(int op, struct aiocb *aiocbp); }
 466	AUE_RTPRIO	STD	{ int rtprio_thread(int function, \
 				    lwpid_t lwpid, struct rtprio *rtp); }
-467	AUE_NULL	UNIMPL nosys
-468	AUE_NULL	UNIMPL nosys
+467	AUE_NULL	STD	{ caddr_t thr_stack(size_t stacksize, \
+				    size_t guardsize); }
+468	AUE_NULL	STD	{ int thr_workq(int cmd, \
+				    struct twq_param *args); }
 469	AUE_NULL	UNIMPL	__getpath_fromfd
 470	AUE_NULL	UNIMPL	__getpath_fromaddr
 471	AUE_NULL	NOSTD	{ int sctp_peeloff(int sd, uint32_t name); }

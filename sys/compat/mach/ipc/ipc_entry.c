@@ -292,13 +292,14 @@ ipc_entry_lookup(ipc_space_t space, mach_port_name_t name)
 {
 	struct file *fp;
 	ipc_entry_t entry;
+	cap_rights_t rights;
 
 	assert(space->is_active);
 
 	if (curthread->td_proc->p_fd == NULL)
 		return (NULL);
 
-	if (fget(curthread, name, NULL, &fp) != 0) {
+	if (fget(curthread, name, cap_rights_init(&rights, CAP_KQUEUE_EVENT|CAP_KQUEUE_CHANGE), &fp) != 0) {
 		if (mach_debug_enable)
 			log(LOG_DEBUG, "%s:%d entry for port name: %d not found\n", curproc->p_comm, curproc->p_pid, name);
 		return (NULL);
@@ -321,13 +322,14 @@ ipc_entry_file_to_port(ipc_space_t space, mach_port_name_t name, ipc_object_t *o
 {
 	struct file *fp;
 	ipc_port_t port;
+	cap_rights_t rights;
 
 	assert(space->is_active);
 
 	if (curthread->td_proc->p_fd == NULL)
 		return (KERN_INVALID_ARGUMENT);
 
-	if (fget(curthread, name, NULL, &fp) != 0) {
+	if (fget(curthread, name, cap_rights_init(&rights, CAP_ALL1), &fp) != 0) {
 		log(LOG_DEBUG, "%s:%d entry for port name: %d not found\n", curproc->p_comm, curproc->p_pid, name);
 		return (KERN_INVALID_ARGUMENT);
 	}
