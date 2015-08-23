@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4
 EXTRA_DIST = uthash klib README.md
 
-pkgconfigdir = $(libdir)/pkgconfig
+pkgconfigdir = $(prefix)/libdata/pkgconfig
 pkgconfig_DATA = libucl.pc
 
 if LUA_SUB
