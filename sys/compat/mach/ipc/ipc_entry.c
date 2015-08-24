@@ -349,6 +349,21 @@ ipc_entry_file_to_port(ipc_space_t space, mach_port_name_t name, ipc_object_t *o
 	return (KERN_SUCCESS);
 }
 
+void
+ipc_entry_file_destroy(ipc_object_t objectp)
+{
+	ipc_port_t port;
+	struct file *fp;
+
+	if (curthread->td_proc->p_fd == NULL)
+		return;
+
+	port = (ipc_port_t)objectp;
+	fp = (void *)port->ip_context;
+	ipc_port_dealloc_special(port, current_space());
+	fdrop(fp, curthread);
+}
+
 kern_return_t
 ipc_entry_port_to_file(ipc_space_t space, mach_port_name_t *namep, ipc_object_t object)
 {
@@ -359,6 +374,8 @@ ipc_entry_port_to_file(ipc_space_t space, mach_port_name_t *namep, ipc_object_t 
 	MPASS(object != NULL);
 	MPASS(port->ip_flags & IP_CONTEXT_FILE);
 	fp = (void *)port->ip_context;
+	/* the receiver will have been set by the sender of the port */
+	port->ip_receiver = space;
 	ipc_port_dealloc_special(port, space);
 
 	/* Are sent file O_CLOEXEC? */

@@ -58,7 +58,7 @@
 #include "libc_private.h"
 #include "thr_private.h"
 
-char		*_usrstack;
+static char		*_usrstack;
 struct pthread	*_thr_initial;
 int		_libthr_debug;
 int		_thread_event_mask;
@@ -109,8 +109,6 @@ struct pthread_cond_attr _pthread_condattr_default = {
 pid_t		_thr_pid;
 int		_thr_is_smp = 0;
 size_t		_thr_guard_default;
-size_t		_thr_stack_default = THR_STACK_DEFAULT;
-size_t		_thr_stack_initial = THR_STACK_INITIAL;
 int		_thr_page_size;
 int		_thr_spinloops;
 int		_thr_yieldloops;
@@ -400,9 +398,8 @@ init_main_thread(struct pthread *thread)
 	 * resource limits, so this stack needs an explicitly mapped
 	 * red zone to protect the thread stack that is just beyond.
 	 */
-	if (mmap(_usrstack - _thr_stack_initial -
-	    _thr_guard_default, _thr_guard_default, 0, MAP_ANON,
-	    -1, 0) == MAP_FAILED)
+	if (mmap(_usrstack - THR_STACK_INITIAL - _thr_guard_default,
+		_thr_guard_default, PROT_NONE, MAP_ANON, -1, 0) == MAP_FAILED)
 		PANIC("Cannot allocate red zone for initial thread");
 
 	/*
@@ -414,8 +411,8 @@ init_main_thread(struct pthread *thread)
 	 *       actually free() it; it just puts it in the free
 	 *       stack queue for later reuse.
 	 */
-	thread->attr.stackaddr_attr = _usrstack - _thr_stack_initial;
-	thread->attr.stacksize_attr = _thr_stack_initial;
+	thread->attr.stackaddr_attr = _usrstack - THR_STACK_INITIAL;
+	thread->attr.stacksize_attr = THR_STACK_INITIAL;
 	thread->attr.guardsize_attr = _thr_guard_default;
 	thread->attr.flags |= THR_STACK_USER;
 
@@ -484,7 +481,7 @@ init_private(void)
 		if (env_bigstack != NULL || env_splitstack == NULL) {
 			if (getrlimit(RLIMIT_STACK, &rlim) == -1)
 				PANIC("Cannot get stack rlimit");
-			_thr_stack_initial = rlim.rlim_cur;
+			// XXX - _thr_stack_initial = rlim.rlim_cur;
 		}
 		len = sizeof(_thr_is_smp);
 		sysctlbyname("kern.smp.cpus", &_thr_is_smp, &len, NULL, 0);
@@ -492,7 +489,7 @@ init_private(void)
 		_thr_page_size = getpagesize();
 		_thr_guard_default = _thr_page_size;
 		_pthread_attr_default.guardsize_attr = _thr_guard_default;
-		_pthread_attr_default.stacksize_attr = _thr_stack_default;
+		_pthread_attr_default.stacksize_attr = THR_STACK_DEFAULT;
 		env = getenv("LIBPTHREAD_SPINLOOPS");
 		if (env)
 			_thr_spinloops = atoi(env);

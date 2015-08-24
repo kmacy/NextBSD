@@ -11714,28 +11714,17 @@ job_mig_spawn2(job_t j, mach_port_t rp, vm_offset_t indata, mach_msg_type_number
 	return kr;
 }
 
-#ifndef __FreeBSD__
 launch_data_t
-job_do_legacy_ipc_request(job_t j, launch_data_t request, mach_port_t asport __attribute__((unused)))
+job_do_ipc_request(job_t j, launch_data_t request, mach_port_t asport __attribute__((unused)))
 {
-	launch_data_t reply = NULL;
-
-	errno = ENOTSUP;
-	if (launch_data_get_type(request) == LAUNCH_DATA_STRING) {
-		if (strcmp(launch_data_get_string(request), LAUNCH_KEY_CHECKIN) == 0) {
-			reply = job_export(j);
-			job_checkin(j);
-		}
-	}
-
-	return reply;
+	return (ipc_process_msg(j, request));
 }
 
 #define LAUNCHD_MAX_LEGACY_FDS 128
 #define countof(x) (sizeof((x)) / sizeof((x[0])))
 
 kern_return_t
-job_mig_legacy_ipc_request(job_t j, vm_offset_t request, 
+job_mig_ipc_request(job_t j, vm_offset_t request, 
 	mach_msg_type_number_t requestCnt, mach_port_array_t request_fds,
 	mach_msg_type_number_t request_fdsCnt, vm_offset_t *reply,
 	mach_msg_type_number_t *replyCnt, mach_port_array_t *reply_fdps,
@@ -11777,7 +11766,7 @@ job_mig_legacy_ipc_request(job_t j, vm_offset_t request,
 		goto out_bad;
 	}
 
-	ldreply = job_do_legacy_ipc_request(j, ldrequest, asport);
+	ldreply = job_do_ipc_request(j, ldrequest, asport);
 	if (!ldreply) {
 		ldreply = launch_data_new_errno(errno);
 		if (!ldreply) {
@@ -11864,7 +11853,6 @@ out_bad:
 
 	return BOOTSTRAP_NO_MEMORY;
 }
-#endif
 
 void
 jobmgr_init(bool sflag)
