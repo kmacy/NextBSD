@@ -867,6 +867,11 @@ twq_addnewthread(struct thrworkq *wq)
 	thread_lock(td);
 	sched_fork_thread(td, newtd);
 	thread_unlock(td);
+	/*
+	 * tell suspend handling code that if this thread is inactive
+	 * to simply skip it
+	 */
+	newtd->td_flags |= TDF_WORKQ;
 	if (P_SHOULDSTOP(p))
 		newtd->td_flags |= TDF_ASTPENDING | TDF_NEEDSUSPCHK;
 	PROC_UNLOCK(p);
