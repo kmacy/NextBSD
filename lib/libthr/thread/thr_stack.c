@@ -83,7 +83,7 @@ static LIST_HEAD(, stack)	mstackq = LIST_HEAD_INITIALIZER(mstackq);
  *    |       Red Zone (guard page)       | red zone for 2nd thread
  *    |                                   |
  *    +-----------------------------------+
- *    |  stack 2 - _thr_stack_default     | top of 2nd thread stack
+ *    |  stack 2 - THR_STACK_DEFAULT      | top of 2nd thread stack
  *    |                                   |
  *    |                                   |
  *    |                                   |
@@ -94,7 +94,7 @@ static LIST_HEAD(, stack)	mstackq = LIST_HEAD_INITIALIZER(mstackq);
  *    |       Red Zone                    | red zone for 1st thread
  *    |                                   |
  *    +-----------------------------------+
- *    |  stack 1 - _thr_stack_default     | top of 1st thread stack
+ *    |  stack 1 - THR_STACK_DEFAULT      | top of 1st thread stack
  *    |                                   |
  *    |                                   |
  *    |                                   |
@@ -105,7 +105,7 @@ static LIST_HEAD(, stack)	mstackq = LIST_HEAD_INITIALIZER(mstackq);
  *    |       Red Zone                    |
  *    |                                   | red zone for main thread
  *    +-----------------------------------+
- *    | USRSTACK - _thr_stack_initial     | top of main thread stack
+ *    | KERN_USRSTACK - THR_STACK_INITIAL | top of main thread stack
  *    |                                   | ^
  *    |                                   | |
  *    |                                   | |
@@ -116,7 +116,6 @@ static LIST_HEAD(, stack)	mstackq = LIST_HEAD_INITIALIZER(mstackq);
  * high memory
  *
  */
-static char *last_stack = NULL;
 
 /*
  * Round size up to the nearest multiple of
@@ -194,11 +193,10 @@ _thr_stack_alloc(struct pthread_attr *attr)
 	struct stack *spare_stack;
 	size_t stacksize;
 	size_t guardsize;
-	char *stackaddr;
 
 	/*
 	 * Round up stack size to nearest multiple of _thr_page_size so
-	 * that mmap() * will work.  If the stack size is not an even
+	 * that thr_stack() will work.  If the stack size is not an even
 	 * multiple, we end up initializing things such that there is
 	 * unused space above the beginning of the stack, so the stack
 	 * sits snugly against its guard.
@@ -211,7 +209,7 @@ _thr_stack_alloc(struct pthread_attr *attr)
 
 	/*
 	 * Use the garbage collector lock for synchronization of the
-	 * spare stack lists and allocations from usrstack.
+	 * spare stack lists.
 	 */
 	THREAD_LIST_WRLOCK(curthread);
 	/*
@@ -246,43 +244,10 @@ _thr_stack_alloc(struct pthread_attr *attr)
 		THREAD_LIST_UNLOCK(curthread);
 	}
 	else {
-		/*
-		 * Allocate a stack from or below usrstack, depending
-		 * on the LIBPTHREAD_BIGSTACK_MAIN env variable.
-		 */
-		if (last_stack == NULL)
-			last_stack = _usrstack - _thr_stack_initial -
-			    _thr_guard_default;
-
-		/* Allocate a new stack. */
-		stackaddr = last_stack - stacksize - guardsize;
-
-		/*
-		 * Even if stack allocation fails, we don't want to try to
-		 * use this location again, so unconditionally decrement
-		 * last_stack.  Under normal operating conditions, the most
-		 * likely reason for an mmap() error is a stack overflow of
-		 * the adjacent thread stack.
-		 */
-		last_stack -= (stacksize + guardsize);
-
-		/* Release the lock before mmap'ing it. */
+		/* thr_stack() can block so release the lock */
 		THREAD_LIST_UNLOCK(curthread);
 
-		/* Map the stack and guard page together, and split guard
-		   page from allocated space: */
-		if ((stackaddr = mmap(stackaddr, stacksize + guardsize,
-		     _rtld_get_stack_prot(), MAP_STACK,
-		     -1, 0)) != MAP_FAILED &&
-		    (guardsize == 0 ||
-		     mprotect(stackaddr, guardsize, PROT_NONE) == 0)) {
-			stackaddr += guardsize;
-		} else {
-			if (stackaddr != MAP_FAILED)
-				munmap(stackaddr, stacksize + guardsize);
-			stackaddr = NULL;
-		}
-		attr->stackaddr_attr = stackaddr;
+		attr->stackaddr_attr = thr_stack(stacksize, guardsize);
 	}
 	if (attr->stackaddr_attr != NULL)
 		return (0);

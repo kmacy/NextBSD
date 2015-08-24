@@ -15,9 +15,9 @@ INCS=	a.out.h ar.h assert.h bitstring.h complex.h cpio.h _ctype.h ctype.h \
 	inttypes.h iso646.h kenv.h langinfo.h libgen.h limits.h link.h \
 	locale.h malloc.h malloc_np.h memory.h monetary.h mpool.h mqueue.h \
 	ndbm.h netconfig.h \
-	netdb.h nl_types.h nlist.h nss.h nsswitch.h paths.h \
-	printf.h proc_service.h pthread.h \
-	pthread_np.h pwd.h ranlib.h readpassphrase.h regex.h \
+	netdb.h nl_types.h nlist.h nss.h nsswitch.h paths.h printf.h \
+	proc_service.h pthread.h pthread_np.h pthread_workqueue.h \
+	pwd.h ranlib.h readpassphrase.h regex.h \
 	res_update.h resolv.h runetype.h search.h semaphore.h setjmp.h \
 	signal.h spawn.h stab.h stdalign.h stdbool.h stddef.h \
 	stdnoreturn.h stdio.h stdlib.h string.h stringlist.h \

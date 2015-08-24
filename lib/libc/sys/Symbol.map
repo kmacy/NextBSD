@@ -390,6 +390,8 @@ FBSD_1.3 {
 	pipe2;
 	posix_fadvise;
 	procctl;
+	thr_stack;
+	thr_workq;
 	wait6;
 };
 
@@ -1062,10 +1064,14 @@ FBSDprivate_1.0 {
 	__sys_thr_self;
 	_thr_set_name;
 	__sys_thr_set_name;
+	_thr_stack;
+	__sys_thr_stack;
 	_thr_suspend;
 	__sys_thr_suspend;
 	_thr_wake;
 	__sys_thr_wake;
+	_thr_workq;
+	__sys_thr_workq;
 	_ktimer_create;
 	__sys_ktimer_create;
 	_ktimer_delete;
