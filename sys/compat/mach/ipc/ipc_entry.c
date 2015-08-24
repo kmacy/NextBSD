@@ -374,6 +374,8 @@ ipc_entry_port_to_file(ipc_space_t space, mach_port_name_t *namep, ipc_object_t 
 	MPASS(object != NULL);
 	MPASS(port->ip_flags & IP_CONTEXT_FILE);
 	fp = (void *)port->ip_context;
+	/* the receiver will have been set by the sender of the port */
+	port->ip_receiver = space;
 	ipc_port_dealloc_special(port, space);
 
 	/* Are sent file O_CLOEXEC? */
