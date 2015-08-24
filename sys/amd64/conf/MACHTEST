@@ -77,6 +77,8 @@ options 	INCLUDE_CONFIG_FILE	# Include this file in kernel
 options		ALT_BREAK_TO_DEBUGGER
 options		OPENSOLARIS_WITNESS
 
+options		THRWORKQ
+
 # Debugging support.  Always need this:
 options 	KDB			# Enable kernel debugger support.
 options 	KDB_TRACE		# Print a stack trace for a panic.
