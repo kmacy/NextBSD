@@ -69,10 +69,13 @@ static int cmd_start_stop(int argc, char * const argv[]);
 static int cmd_bootstrap(int argc, char * const argv[]);
 static int cmd_load(int argc, char * const argv[]);
 static int cmd_remove(int argc, char * const argv[]);
+static int cmd_hello(int argc, char * const argv[]);
 static int cmd_list(int argc, char * const argv[]);
 static int cmd_dump(int argc, char * const argv[]);
 static int cmd_log(int argc, char * const argv[]);
 static int cmd_help(int argc, char * const argv[]);
+
+extern launch_data_t launch_msg_mach(launch_data_t d);
 
 mach_port_t bootstrap_port;
 
@@ -89,6 +92,7 @@ static const struct {
 	{ "list",	cmd_list,	"List jobs and information about jobs" },
 	{ "dump",	cmd_dump,       "Dumps job(s) plist(s)"},
 	{ "log",	cmd_log,	"Adjust logging level of launchd"},
+	{ "hello",	cmd_hello,	"test"},
 	{ "help",	cmd_help,	"This help output" },
 };
 
@@ -406,7 +410,7 @@ launch_msg_json(json_t *input)
 {
 	launch_data_t result;
 
-	result = launch_msg(to_launchd(input));
+	result = launch_msg_mach(to_launchd(input));
 
 	if (result == NULL)
 		return (NULL);
@@ -744,6 +748,21 @@ cmd_list(int argc, char * const argv[])
 		printf("%s\n", key);
 	}
 
+	return (0);
+}
+
+static int
+cmd_hello(int argc, char * const argv[])
+{
+	launch_data_t ld;
+	launch_data_t ret;
+
+	(void)argc;
+
+	ld = launch_data_new_string(argv[1]);
+	ret = launch_msg_mach(ld);
+
+	json_dumpf(to_json(ret), stdout, JSON_INDENT(4));
 	return (0);
 }
 
