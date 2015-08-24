@@ -894,7 +894,7 @@ launch_msg_mach(launch_data_t d)
 			goto out_bad;
 		}
 
-		request_fdsCnt = nout_fds * sizeof(request_fds[0]);
+		request_fdsCnt = nout_fds;
 		//mig_allocate((vm_address_t *)&request_fds, request_fdsCnt);
 		request_fds = malloc(request_fdsCnt);
 		if (!*request_fds) {
