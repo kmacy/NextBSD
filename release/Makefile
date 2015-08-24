@@ -191,6 +191,8 @@ disc1: packagesystem
 	echo debug.witness.trace=0 >> ${.TARGET}/etc/sysctl.conf
 	echo vfs.mountroot.timeout=\"10\" >> ${.TARGET}/boot/loader.conf
 	cp ${.CURDIR}/rc.local ${.TARGET}/etc
+	# XXXOP - try to work around installer lockup on random dev in a virtual machine
+	dd if=/dev/random of=${.TARGET}/boot/entropy bs=4k count=1
 	touch ${.TARGET}
 
 bootonly: packagesystem
@@ -217,6 +219,8 @@ bootonly: packagesystem
 	echo debug.witness.trace=0 >> ${.TARGET}/etc/sysctl.conf
 	echo vfs.mountroot.timeout=\"10\" >> ${.TARGET}/boot/loader.conf
 	cp ${.CURDIR}/rc.local ${.TARGET}/etc
+	# XXXOP - try to work around installer lockup on random dev in a virtual machine
+	dd if=/dev/random of=${.TARGET}/boot/entropy bs=4k count=1
 
 dvd: packagesystem
 # Install system
@@ -240,6 +244,8 @@ dvd: packagesystem
 	echo debug.witness.trace=0 >> ${.TARGET}/etc/sysctl.conf
 	echo vfs.mountroot.timeout=\"10\" >> ${.TARGET}/boot/loader.conf
 	cp ${.CURDIR}/rc.local ${.TARGET}/etc
+	# XXXOP - try to work around installer lockup on random dev in a virtual machine
+	dd if=/dev/random of=${.TARGET}/boot/entropy bs=4k count=1
 	touch ${.TARGET}
 
 release.iso: disc1.iso

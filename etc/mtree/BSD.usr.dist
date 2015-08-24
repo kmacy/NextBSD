@@ -32,6 +32,10 @@
         ..
         i18n
         ..
+        libxo
+            encoder
+            ..
+        ..
     ..
     lib32
         dtrace
