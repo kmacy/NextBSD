@@ -372,6 +372,7 @@ ixlv_configure_queues(struct ixlv_sc *sc)
 	struct ixl_queue	*que = vsi->queues;
 	struct tx_ring		*txr;
 	struct rx_ring		*rxr;
+	if_shared_ctx_t		sctx;
 	int			len, pairs;
 
 	struct i40e_virtchnl_vsi_queue_config_info *vqci;
@@ -386,6 +387,7 @@ ixlv_configure_queues(struct ixlv_sc *sc)
 		ixl_vc_schedule_retry(&sc->vc_mgr);
 		return;
 	}
+	sctx = iflib_get_sctx(sc->vsi.ctx);
 	vqci->vsi_id = sc->vsi_res->vsi_id;
 	vqci->num_queue_pairs = pairs;
 	vqpi = vqci->qpair;
@@ -397,17 +399,17 @@ ixlv_configure_queues(struct ixlv_sc *sc)
 		rxr = &que->rxr;
 		vqpi->txq.vsi_id = vqci->vsi_id;
 		vqpi->txq.queue_id = i;
-		vqpi->txq.ring_len = que->num_desc;
-		vqpi->txq.dma_ring_addr = txr->dma.pa;
+		vqpi->txq.ring_len = sctx->isc_ntxd;
+		vqpi->txq.dma_ring_addr = txr->tx_paddr;
 		/* Enable Head writeback */
 		vqpi->txq.headwb_enabled = 1;
-		vqpi->txq.dma_headwb_addr = txr->dma.pa +
-		    (que->num_desc * sizeof(struct i40e_tx_desc));
+		vqpi->txq.dma_headwb_addr = txr->tx_paddr +
+		    (sctx->isc_ntxd * sizeof(struct i40e_tx_desc));
 
 		vqpi->rxq.vsi_id = vqci->vsi_id;
 		vqpi->rxq.queue_id = i;
-		vqpi->rxq.ring_len = que->num_desc;
-		vqpi->rxq.dma_ring_addr = rxr->dma.pa;
+		vqpi->rxq.ring_len = sctx->isc_ntxd;
+		vqpi->rxq.dma_ring_addr = rxr->rx_paddr;
 		vqpi->rxq.max_pkt_size = vsi->max_frame_size;
 		vqpi->rxq.databuffer_size = rxr->mbuf_sz;
 		vqpi->rxq.splithdr_enabled = 0;
@@ -806,9 +808,10 @@ ixlv_update_stats_counters(struct ixlv_sc *sc, struct i40e_eth_stats *es)
 	uint64_t tx_discards;
 
 	tx_discards = es->tx_discards;
+#ifdef notyet	
 	for (int i = 0; i < vsi->num_queues; i++)
 		tx_discards += sc->vsi.queues[i].txr.br->br_drops;
-
+#endif
 	/* Update ifnet stats */
 	IXL_SET_IPACKETS(vsi, es->rx_unicast +
 	                   es->rx_multicast +
@@ -1001,7 +1004,6 @@ ixl_vc_init_mgr(struct ixlv_sc *sc, struct ixl_vc_mgr *mgr)
 	mgr->sc = sc;
 	mgr->current = NULL;
 	TAILQ_INIT(&mgr->pending);
-	callout_init_mtx(&mgr->callout, &sc->mtx, 0);
 }
 
 static void
@@ -1036,7 +1038,6 @@ ixl_vc_cmd_timeout(void *arg)
 {
 	struct ixl_vc_mgr *mgr = (struct ixl_vc_mgr *)arg;
 
-	IXLV_CORE_LOCK_ASSERT(mgr->sc);
 	ixl_vc_process_completion(mgr, I40E_ERR_TIMEOUT);
 }
 
@@ -1045,7 +1046,6 @@ ixl_vc_cmd_retry(void *arg)
 {
 	struct ixl_vc_mgr *mgr = (struct ixl_vc_mgr *)arg;
 
-	IXLV_CORE_LOCK_ASSERT(mgr->sc);
 	ixl_vc_send_current(mgr);
 }
 
@@ -1088,7 +1088,6 @@ void
 ixl_vc_enqueue(struct ixl_vc_mgr *mgr, struct ixl_vc_cmd *cmd,
 	    uint32_t req, ixl_vc_callback_t *callback, void *arg)
 {
-	IXLV_CORE_LOCK_ASSERT(mgr->sc);
 
 	if (cmd->flags & IXLV_VC_CMD_FLAG_BUSY) {
 		if (mgr->current == cmd)
@@ -1111,7 +1110,6 @@ ixl_vc_flush(struct ixl_vc_mgr *mgr)
 {
 	struct ixl_vc_cmd *cmd;
 
-	IXLV_CORE_LOCK_ASSERT(mgr->sc);
 	KASSERT(TAILQ_EMPTY(&mgr->pending) || mgr->current != NULL,
 	    ("ixlv: pending commands waiting but no command in progress"));
 

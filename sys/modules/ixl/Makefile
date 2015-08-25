@@ -5,7 +5,7 @@
 KMOD    = if_ixl
 SRCS    = device_if.h bus_if.h pci_if.h pci_iov_if.h opt_bdg.h ifdi_if.h
 SRCS    += opt_inet.h opt_inet6.h opt_rss.h
-SRCS    += if_ixl.c ixl_txrx.c i40e_osdep.c
+SRCS    += if_ixl.c if_ixl_common.c ixl_txrx.c i40e_osdep.c
 
 # Shared source
 SRCS    += i40e_common.c i40e_nvm.c i40e_adminq.c i40e_lan_hmc.c i40e_hmc.c

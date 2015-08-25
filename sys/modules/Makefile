@@ -632,7 +632,7 @@ _x86bios=	x86bios
 .if ${MACHINE_CPUARCH} == "amd64"
 _cloudabi64=	cloudabi64
 _ixl=		ixl
-#_ixlv=		ixlv
+_ixlv=		ixlv
 _linux64=	linux64
 _linux_common=	linux_common
 _ntb=		ntb

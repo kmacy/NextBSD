@@ -198,6 +198,12 @@ iflib_get_softc_ctx(if_ctx_t ctx)
 	return (&ctx->ifc_softc_ctx);
 }
 
+if_shared_ctx_t
+iflib_get_sctx(if_ctx_t ctx)
+{
+
+	return (ctx->ifc_sctx);
+}
 
 
 #define LINK_ACTIVE(ctx) ((ctx)->ifc_link_state == LINK_STATE_UP)
@@ -2370,7 +2376,7 @@ _task_fn_rx(void *context, int pending)
 			IFDI_INTR_ENABLE(ctx);
 		else {
 			DBG_COUNTER_INC(rx_intr_enables);
-			IFDI_RX_INTR_ENABLE(ctx, rxq->ifr_id);
+			IFDI_QUEUE_INTR_ENABLE(ctx, rxq->ifr_id);
 		}
 	}
 	if (more)
@@ -2918,7 +2924,7 @@ fail_intr_free:
 fail_queues:
 	/* XXX free queues */
 fail:
-	IFDI_ATTACH_CLEANUP(ctx);
+	IFDI_DETACH(ctx);
 	return (err);
 }
 

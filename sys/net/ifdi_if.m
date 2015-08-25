@@ -116,10 +116,6 @@ METHOD int attach_post {
 	if_ctx_t _ctx;
 };
 
-METHOD int attach_cleanup {
-	if_ctx_t _ctx;
-};
-
 METHOD int detach {
 	if_ctx_t _ctx;
 };
@@ -181,9 +177,9 @@ METHOD void intr_disable {
 	if_ctx_t _ctx;
 };
 
-METHOD void rx_intr_enable {
+METHOD void queue_intr_enable {
 	if_ctx_t _ctx;
-	uint16_t _rxqid;
+	uint16_t _qid;
 } DEFAULT null_queue_intr_enable;
 
 METHOD void link_intr_enable {

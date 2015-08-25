@@ -217,6 +217,8 @@ dev/ipmi/ipmi_pci.c		optional	ipmi pci
 dev/ipmi/ipmi_linux.c		optional	ipmi compat_linux32
 dev/ixl/if_ixl.c		optional	ixl pci \
 	compile-with "${NORMAL_C} -I$S/dev/ixl"
+dev/ixl/if_ixl_common.c		optional	ixl pci | ixlv  pci \
+	compile-with "${NORMAL_C} -I$S/dev/ixl"
 dev/ixl/if_ixlv.c		optional	ixlv pci \
 	compile-with "${NORMAL_C} -I$S/dev/ixl"
 dev/ixl/ixlvc.c			optional	ixlv pci \

@@ -95,6 +95,7 @@
 #include <dev/pci/pci_iov.h>
 #endif
 
+#include "ifdi_if.h"
 #include "i40e_type.h"
 #include "i40e_prototype.h"
 
@@ -586,15 +587,7 @@ ixl_fw_version_str(struct i40e_hw *hw)
 /*********************************************************************
  *  TXRX Function prototypes
  *********************************************************************/
-int	ixl_allocate_tx_data(struct ixl_queue *);
-int	ixl_allocate_rx_data(struct ixl_queue *);
 void	ixl_init_tx_ring(struct ixl_queue *);
-int	ixl_init_rx_ring(struct ixl_queue *);
-bool	ixl_rxeof(struct ixl_queue *, int);
-bool	ixl_txeof(struct ixl_queue *);
-void	ixl_free_vsi(struct ixl_vsi *);
-void	ixl_free_que_tx(struct ixl_queue *);
-void	ixl_txrx_init(if_shared_ctx_t);
 
 #ifdef IXL_FDIR
 void	ixl_atr(struct ixl_queue *, struct tcphdr *, int);
@@ -602,5 +595,13 @@ void	ixl_atr(struct ixl_queue *, struct tcphdr *, int);
 #if __FreeBSD_version >= 1100000
 uint64_t ixl_get_counter(if_t ifp, ift_counter cnt);
 #endif
+
+/*********************************************************************
+ *  common Function prototypes
+ *********************************************************************/
+
+int	ixl_if_media_change(if_ctx_t);
+int	ixl_if_queues_alloc(if_ctx_t, caddr_t *, uint64_t *, int);
+void ixl_if_queues_free(if_ctx_t ctx);
 
 #endif /* _IXL_H_ */
