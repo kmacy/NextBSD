@@ -247,10 +247,8 @@ TUNABLE_INT("hw.ixlv.tx_itr", &ixlv_tx_itr);
 SYSCTL_INT(_hw_ixlv, OID_AUTO, tx_itr, CTLFLAG_RDTUN,
     &ixlv_tx_itr, 0, "TX Interrupt Rate");
 
-
-
 extern struct if_txrx ixl_txrx;
-	
+
 static struct if_shared_ctx ixlv_sctx_init = {
 	.isc_magic = IFLIB_MAGIC,
 	.isc_q_align = PAGE_SIZE,/* max(DBA_ALIGN, PAGE_SIZE) */
@@ -667,7 +665,7 @@ ixlv_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 
 		}
 		break;
-#endif		
+#endif
 	case SIOCDELMULTI:
 		IOCTL_DBG_IF2(ifp, "SIOCDELMULTI");
 		if (sc->init_state == IXLV_RUNNING) {
@@ -852,7 +850,7 @@ ixlv_init_internal(if_ctx_t ctx)
 	ixlv_setup_vlan_filters(sc);
 
 	ixlv_init_multi(&sc->vsi);
-	
+
 	/* Prepare the queues for operation */
 	for (int i = 0; i < vsi->num_queues; i++, que++) {
 		ixl_init_tx_ring(que);
@@ -2382,4 +2380,3 @@ ixlv_sysctl_qrx_tail_handler(SYSCTL_HANDLER_ARGS)
 		return error;
 	return (0);
 }
-
