@@ -94,6 +94,8 @@ options 	WITNESS_SKIPSPIN	# Don't run witness on spinlocks for speed
 options 	MALLOC_DEBUG_MAXZONES=8	# Separate malloc(9) zones
 options 	DEBUG_REDZONE
 
+options		ALT_BREAK_TO_DEBUGGER
+
 # Make an SMP-capable kernel by default
 options 	SMP			# Symmetric MultiProcessor Kernel
 

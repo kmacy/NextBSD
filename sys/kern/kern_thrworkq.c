@@ -798,6 +798,7 @@ twq_addnewthread(struct thrworkq *wq)
 	wq->wq_nthreads++;
 
 	td = wq->wq_pthread;
+	MPASS(td->td_kstack != 0 && td->td_cpuset != NULL);
 
 	/*
 	 * See if we have a stack we can reuse.
@@ -836,7 +837,6 @@ twq_addnewthread(struct thrworkq *wq)
 	bcopy(&td->td_startcopy, &newtd->td_startcopy,
 	    __rangeof(struct thread, td_startcopy, td_endcopy));
 	newtd->td_proc = p;
-	newtd->td_ucred = crhold(td->td_ucred);
 
 	cpu_set_upcall(newtd, td);
 
@@ -860,13 +860,18 @@ twq_addnewthread(struct thrworkq *wq)
 	newtd->td_threadlist = (void *)tl;
 
 	PROC_LOCK(p);
-	p->p_flag |= P_HADTHREADS;
+	thread_cow_get_proc(newtd, p);
 	newtd->td_sigmask = td->td_sigmask;
 	thread_link(newtd, p);
 	bcopy(p->p_comm, newtd->td_name, sizeof(newtd->td_name));
 	thread_lock(td);
 	sched_fork_thread(td, newtd);
 	thread_unlock(td);
+	/*
+	 * tell suspend handling code that if this thread is inactive
+	 * to simply skip it
+	 */
+	newtd->td_flags |= TDF_WORKQ;
 	if (P_SHOULDSTOP(p))
 		newtd->td_flags |= TDF_ASTPENDING | TDF_NEEDSUSPCHK;
 	PROC_UNLOCK(p);
@@ -896,6 +901,7 @@ static int
 twq_init_workqueue(struct proc *p, struct twq_param *arg)
 {
 	struct thrworkq *wq;
+	struct thread *td, *newtd;
 	uint32_t  i, j;
 	size_t wq_size;
 	char *ptr, *nptr;
@@ -913,6 +919,33 @@ twq_init_workqueue(struct proc *p, struct twq_param *arg)
 	    (smp_cpus * WORKQ_OS_NUMPRIOS * sizeof(uint64_t)) +
 	    sizeof(uint64_t);
 
+	/* create private proto thread to serve as parent */
+	td = curthread;
+	newtd = thread_alloc(KSTACK_PAGES);
+	if (newtd == NULL)
+		return (ENOMEM);
+	bzero(&newtd->td_startzero,
+	    __rangeof(struct thread, td_startzero, td_endzero));
+	bcopy(&td->td_startcopy, &newtd->td_startcopy,
+	    __rangeof(struct thread, td_startcopy, td_endcopy));
+
+	if (td->td_cpuset != NULL)
+		newtd->td_cpuset = cpuset_ref(td->td_cpuset);
+	else
+		cpuset_setthread(newtd->td_tid, cpuset_root);
+	newtd->td_proc = p;
+	cpu_set_upcall(newtd, td);
+
+	PROC_LOCK(p);
+	p->p_flag |= P_HADTHREADS;
+	newtd->td_sigmask = td->td_sigmask;
+	thread_lock(td);
+	sched_fork_thread(td, newtd);
+	thread_unlock(td);
+	bcopy(p->p_comm, newtd->td_name, sizeof(newtd->td_name));
+	PROC_UNLOCK(p);
+	/***************************************************/
+
 	ptr = malloc(wq_size, M_THRWORKQ, M_WAITOK | M_ZERO);
 	maxthreads = wq_max_threads;
 	ssptr = malloc(sizeof(void *) * maxthreads, M_THRWORKQ,
@@ -926,6 +959,9 @@ twq_init_workqueue(struct proc *p, struct twq_param *arg)
 		free(ptr, M_THRWORKQ);
 		free(ssptr, M_THRWORKQ);
 		free(calloutp, M_THRWORKQ);
+
+		cpuset_rel(newtd->td_cpuset);
+		thread_free(newtd);
 		return (EINVAL);
 	}
 
@@ -944,7 +980,7 @@ twq_init_workqueue(struct proc *p, struct twq_param *arg)
 	else
 		wq->wq_stacksize = round_page(arg->twq_stacksize);
 	wq->wq_guardsize = round_page(arg->twq_guardsize);
-	wq->wq_pthread = curthread;
+	wq->wq_pthread = newtd;
 
 	wq->wq_stacklist = ssptr;
 	wq->wq_stacktop = 0;
@@ -1275,6 +1311,10 @@ thrworkq_exit(struct proc *p)
 
 		free(tl, M_THRWORKQ);
 	}
+	td = wq->wq_pthread;
+	wq->wq_pthread = NULL;
+	cpuset_rel(td->td_cpuset);
+	thread_free(td);
 
 	callout_drain(wq->wq_atimer_call);
 	free(wq->wq_atimer_call, M_THRWORKQ);

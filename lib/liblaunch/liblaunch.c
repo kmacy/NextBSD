@@ -43,7 +43,10 @@
 #include <assert.h>
 #include <uuid/uuid.h>
 #include <sys/syscall.h>
+#include <sys/fileport.h>
 #include <dlfcn.h>
+
+#include "job.h"
 
 struct _launch_data {
 	uint64_t type;
@@ -175,6 +178,7 @@ struct _launch {
 };
 
 static launch_data_t launch_data_array_pop_first(launch_data_t where);
+launch_data_t launch_msg_mach(launch_data_t d);
 static int _fd(int fd);
 static void launch_client_init(void);
 static void launch_msg_getmsgs(launch_data_t m, void *context);
@@ -858,9 +862,129 @@ launch_data_unpack(uint8_t *data, size_t data_size, int *fds, size_t fd_cnt, siz
 	return r;
 }
 
+launch_data_t
+launch_msg_mach(launch_data_t d)
+{
+	vm_offset_t request;
+	mach_msg_type_number_t requestCnt;
+	mach_port_array_t request_fds;
+	mach_msg_type_number_t request_fdsCnt;
+	vm_offset_t reply ;
+	mach_msg_type_number_t replyCnt;
+	mach_port_array_t reply_fds;
+	mach_msg_type_number_t reply_fdsCnt;
+	launch_data_t ldreply;
+	size_t i;
+	size_t nfds = 0;
+	kern_return_t kr;
+
+	requestCnt = 1024 * 1024;
+	//mig_allocate(&request, requestCnt);
+	request = (vm_offset_t)malloc(requestCnt);
+
+	int out_fds[128];
+	size_t nout_fds = 0;
+	size_t sz = launch_data_pack(d, (void *)request, requestCnt, out_fds, &nout_fds);
+	if (!sz) {
+		goto out_bad;
+	}
+
+	if (nout_fds) {
+		if (nout_fds > 128) {
+			goto out_bad;
+		}
+
+		request_fdsCnt = nout_fds;
+		//mig_allocate((vm_address_t *)&request_fds, request_fdsCnt);
+		request_fds = malloc(request_fdsCnt);
+		if (!*request_fds) {
+			goto out_bad;
+		}
+
+		for (i = 0; i < nout_fds; i++) {
+			mach_port_t fp = MACH_PORT_NULL;
+			/* Whatever. Worst case is that we insert MACH_PORT_NULL. Not a big
+			 * deal. Note, these get stuffed into an array whose disposition is
+			 * mach_port_move_send_t, so we don't have to worry about them after
+			 * returning.
+			 */
+			if (fileport_makeport(out_fds[i], &fp) != 0) {
+				fprintf(stderr, "Could not pack response descriptor at index: %lu: %d: %s", i, errno, strerror(errno));
+			}
+			request_fds[i] = fp;
+		}
+	} else {
+		request_fds = NULL;
+		request_fdsCnt = 0;
+	}
+
+	kr = vproc_mig_ipc_request(bootstrap_port,
+		request,
+		requestCnt,
+		request_fds,
+		request_fdsCnt,
+		&reply,
+		&replyCnt,
+		&reply_fds,
+		&reply_fdsCnt,
+		0);
+
+	if (kr != KERN_SUCCESS) {
+		fprintf(stderr, "vproc_mig_ipc_request: kr=%x\n", kr);
+		return NULL;
+	}
+
+	nfds = reply_fdsCnt / sizeof((reply_fds)[0]);
+	if (nfds > 128) {
+		fprintf(stderr, "Too many incoming descriptors: %lu", nfds);
+		return NULL;
+	}
+
+	int in_fds[128];
+	for (i = 0; i < nfds; i++) {
+		in_fds[i] = fileport_makefd(reply_fds[i]);
+		if (in_fds[i] == -1) {
+			fprintf(stderr, "Bad descriptor passed in legacy IPC request at index: %lu", i);
+		}
+	}
+
+
+	size_t dataoff = 0;
+	size_t fdoff = 0;
+	ldreply = launch_data_unpack((void *)reply, replyCnt, in_fds, nfds, &dataoff, &fdoff);
+	if (!ldreply) {
+		fprintf(stderr, "Invalid legacy IPC reply passed.");
+		goto out_bad;
+	}
+
+	mig_deallocate(request, requestCnt);
+
+	return (ldreply);
+
+out_bad:
+	for (i = 0; i < nfds; i++) {
+		(void)close(in_fds[i]);
+	}
+
+//	for (i = 0; i < nout_fds; i++) {
+//		(void)launchd_mport_deallocate((*reply_fds)[i]);
+//	}
+
+	if (request) {
+		mig_deallocate(request, requestCnt);
+	}
+
+	if (ldreply) {
+		launch_data_free(ldreply);
+	}
+
+	return (NULL);
+}
+
 int
 launchd_msg_send(launch_t lh, launch_data_t d)
 {
+
 	struct launch_msg_header lmh;
 	struct cmsghdr *cm = NULL;
 	struct msghdr mh;
@@ -1349,7 +1473,9 @@ int
 _fd(int fd)
 {
 	if (fd >= 0)
-		fcntl(fd, F_SETFD, FD_CLOEXEC);
+		if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) {
+			syslog(LOG_ERR | LOG_CONS, "fcntl failed for fd %d: %m", fd);
+		}
 	return fd;
 }
 

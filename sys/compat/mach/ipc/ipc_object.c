@@ -568,9 +568,16 @@ ipc_object_destroy(
 	ipc_object_t		object,
 	mach_msg_type_name_t	msgt_name)
 {
+	ipc_port_t port;
+
 	assert(IO_VALID(object));
 	assert(io_otype(object) == IOT_PORT);
 
+	port = (ipc_port_t)object;
+	if (port->ip_flags & IP_CONTEXT_FILE) {
+		ipc_entry_file_destroy(object);
+		return;
+	}
 	switch (msgt_name) {
 	case MACH_MSG_TYPE_PORT_SEND:
 		ipc_port_release_send((ipc_port_t) object);
