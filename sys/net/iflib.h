@@ -114,7 +114,7 @@ typedef struct pci_vendor_info {
 
 #define PVID(vendor, devid, name) {vendor, devid, 0, 0, 0, 0, name}
 #define PVID_OEM(vendor, devid, svid, sdevid, revid, name) {vendor, devid, svid, sdevid, revid, 0, name}
-#define PVID_END {0, 0, 0, 0, 0, 0, 0}
+#define PVID_END {0, 0, 0, 0, 0, 0, NULL}
 
 typedef struct if_txrx {
 	int (*ift_txd_encap) (void *, if_pkt_info_t);
@@ -206,6 +206,7 @@ if_t iflib_get_ifp(if_ctx_t ctx);
 struct ifmedia *iflib_get_media(if_ctx_t ctx);
 
 if_softc_ctx_t iflib_get_softc_ctx(if_ctx_t ctx);
+if_shared_ctx_t iflib_get_sctx(if_ctx_t ctx);
 
 void iflib_set_mac(if_ctx_t ctx, uint8_t mac[ETHER_ADDR_LEN]);
 

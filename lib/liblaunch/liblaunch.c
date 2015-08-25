@@ -909,7 +909,7 @@ launch_msg_mach(launch_data_t d)
 			 * returning.
 			 */
 			if (fileport_makeport(out_fds[i], &fp) != 0) {
-				fprintf(stderr, "Could not pack response descriptor at index: %lu: %d: %s", i, errno, strerror(errno));
+				fprintf(stderr, "Could not pack response descriptor at index: %zu: %d: %s", i, errno, strerror(errno));
 			}
 			request_fds[i] = fp;
 		}
@@ -936,7 +936,7 @@ launch_msg_mach(launch_data_t d)
 
 	nfds = reply_fdsCnt / sizeof((reply_fds)[0]);
 	if (nfds > 128) {
-		fprintf(stderr, "Too many incoming descriptors: %lu", nfds);
+		fprintf(stderr, "Too many incoming descriptors: %zu", nfds);
 		return NULL;
 	}
 
@@ -944,7 +944,7 @@ launch_msg_mach(launch_data_t d)
 	for (i = 0; i < nfds; i++) {
 		in_fds[i] = fileport_makefd(reply_fds[i]);
 		if (in_fds[i] == -1) {
-			fprintf(stderr, "Bad descriptor passed in legacy IPC request at index: %lu", i);
+			fprintf(stderr, "Bad descriptor passed in legacy IPC request at index: %zu", i);
 		}
 	}
 

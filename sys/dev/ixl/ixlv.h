@@ -104,7 +104,6 @@ struct ixlv_sc {
 	struct device		*dev;
 
 	struct resource		*pci_mem;
-	struct resource		*msix_mem;
 
 	enum ixlv_state_t	init_state;
 
@@ -114,8 +113,7 @@ struct ixlv_sc {
 	void			*tag;
 	struct resource 	*res; /* For the AQ */
 
-	struct ifmedia		media;
-	struct callout		timer;
+	struct ifmedia		*media;
 	int			msix;
 	int			pf_version;
 	int			if_flags;
@@ -123,15 +121,12 @@ struct ixlv_sc {
 	bool			link_up;
 	u32			link_speed;
 
-	struct mtx		mtx;
-
 	u32			qbase;
 	u32 			admvec;
-	struct timeout_task	timeout;
+#ifdef notyet
 	struct task     	aq_irq;
 	struct task     	aq_sched;
-	struct taskqueue	*tq;
-
+#endif	
 	struct ixl_vsi		vsi;
 
 	/* Filter lists */
@@ -166,7 +161,6 @@ struct ixlv_sc {
 	u8			aq_buffer[IXL_AQ_BUF_SZ];
 };
 
-#define IXLV_CORE_LOCK_ASSERT(sc)	mtx_assert(&(sc)->mtx, MA_OWNED)
 /*
 ** This checks for a zero mac addr, something that will be likely
 ** unless the Admin on the Host has created one.
