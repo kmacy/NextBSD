@@ -465,6 +465,7 @@ struct adapter {
 	 * either used for legacy, or for Link
 	 * when doing MSIX
 	 */
+        struct if_irq           irq;
 	void			*tag;
 	struct resource 	*res;
 
