@@ -147,6 +147,14 @@ extern int gL1CacheEnabled;
 
 #include "shim.h"
 
+
+#define RETURN_NO_MEMORY()										\
+	do {														\
+		if (uflag)												\
+			printf("launchd failed on line: %d\n", __LINE__);	\
+		return BOOTSTRAP_NO_MEMORY;								\
+} while (0)
+
 #define POSIX_SPAWN_IOS_INTERACTIVE 0
 
 #if TARGET_OS_EMBEDDED
@@ -8072,7 +8080,7 @@ job_mig_create_server(job_t j, cmd_t server_cmd, uid_t server_uid, boolean_t on_
 	job_t js;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (unlikely(j->deny_job_creation)) {
@@ -8082,7 +8090,7 @@ job_mig_create_server(job_t j, cmd_t server_cmd, uid_t server_uid, boolean_t on_
 #if HAVE_SANDBOX
 	const char **argv = (const char **)mach_cmd2argv(server_cmd);
 	if (unlikely(argv == NULL)) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 	if (unlikely(sandbox_check(ldc->pid, "job-creation", SANDBOX_FILTER_PATH, argv[0]) > 0)) {
 		free(argv);
@@ -8109,7 +8117,7 @@ job_mig_create_server(job_t j, cmd_t server_cmd, uid_t server_uid, boolean_t on_
 	js = job_new_via_mach_init(j, server_cmd, server_uid, on_demand);
 
 	if (unlikely(js == NULL)) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	*server_portp = js->j_port;
@@ -8123,7 +8131,7 @@ job_mig_send_signal(job_t j, mach_port_t srp, name_t targetlabel, int sig)
 	job_t otherj;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (unlikely(ldc->euid != 0 && ldc->euid != getuid()) || j->deny_job_creation) {
@@ -8188,7 +8196,7 @@ job_mig_log_forward(job_t j, vm_offset_t inval, mach_msg_type_number_t invalCnt)
 	struct ldcred *ldc = runtime_get_caller_creds();
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (!job_assumes(j, j->per_user)) {
@@ -8204,7 +8212,7 @@ job_mig_log_drain(job_t j, mach_port_t srp, vm_offset_t *outval, mach_msg_type_n
 	struct ldcred *ldc = runtime_get_caller_creds();
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (unlikely(ldc->euid)) {
@@ -8226,7 +8234,7 @@ job_mig_swap_complex(job_t j, vproc_gsk_t inkey, vproc_gsk_t outkey,
 	struct ldcred *ldc = runtime_get_caller_creds();
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (inkey && ldc->pid != j->p) {
@@ -8348,7 +8356,7 @@ job_mig_swap_integer(job_t j, vproc_gsk_t inkey, vproc_gsk_t outkey, int64_t inv
 	int oldmask;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (inkey && ldc->pid != j->p) {
@@ -8587,7 +8595,7 @@ kern_return_t
 job_mig_post_fork_ping(job_t j, task_t child_task, mach_port_t *asport)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	job_log(j, LOG_DEBUG, "Post fork ping.");
@@ -8647,7 +8655,7 @@ kern_return_t
 job_mig_get_listener_port_rights(job_t j, mach_port_array_t *sports, mach_msg_type_number_t *sports_cnt)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	size_t cnt = 0;
@@ -8665,7 +8673,7 @@ job_mig_get_listener_port_rights(job_t j, mach_port_array_t *sports, mach_msg_ty
 	mach_port_array_t sports2 = NULL;
 	mig_allocate((vm_address_t *)&sports2, cnt * sizeof(sports2[0]));
 	if (!sports2) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	size_t i = 0;
@@ -8713,7 +8721,7 @@ job_mig_reboot2(job_t j, uint64_t flags)
 	pid_t pid_to_log;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (unlikely(!pid1_magic)) {
@@ -8760,7 +8768,7 @@ kern_return_t
 job_mig_getsocket(job_t j, name_t spr)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (j->deny_job_creation) {
@@ -8777,7 +8785,7 @@ job_mig_getsocket(job_t j, name_t spr)
 	ipc_server_init();
 
 	if (unlikely(!sockpath)) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	strncpy(spr, sockpath, sizeof(name_t));
@@ -8789,7 +8797,7 @@ kern_return_t
 job_mig_log(job_t j, int pri, int err, logmsg_t msg)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if ((errno = err)) {
@@ -8937,7 +8945,7 @@ job_mig_lookup_per_user_context(job_t j, uid_t which_user, mach_port_t *up_cont)
 	job_t jpu;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (launchd_osinstaller) {
@@ -8984,7 +8992,7 @@ job_mig_check_in2(job_t j, name_t servicename, mach_port_t *serviceportp, uuid_t
 	job_t jo;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (j->dedicated_instance) {
@@ -9020,7 +9028,7 @@ job_mig_check_in2(job_t j, name_t servicename, mach_port_t *serviceportp, uuid_t
 			}
 #endif
 			if (unlikely((ms = machservice_new(j, servicename, serviceportp, per_pid_service)) == NULL)) {
-				return BOOTSTRAP_NO_MEMORY;
+				RETURN_NO_MEMORY();
 			}
 
 			// Treat this like a legacy job.
@@ -9069,7 +9077,7 @@ job_mig_register2(job_t j, name_t servicename, mach_port_t serviceport, uint64_t
 	bool per_pid_service = flags & BOOTSTRAP_PER_PID_SERVICE;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (!per_pid_service && !j->legacy_LS_job) {
@@ -9122,7 +9130,7 @@ job_mig_register2(job_t j, name_t servicename, mach_port_t serviceport, uint64_t
 		if (likely(ms = machservice_new(j, servicename, &serviceport, flags & BOOTSTRAP_PER_PID_SERVICE ? true : false))) {
 			machservice_request_notifications(ms);
 		} else {
-			return BOOTSTRAP_NO_MEMORY;
+			RETURN_NO_MEMORY();
 		}
 	}
 
@@ -9142,7 +9150,7 @@ job_mig_look_up2(job_t j, mach_port_t srp, name_t servicename, mach_port_t *serv
 	bool privileged = flags & BOOTSTRAP_PRIVILEGED_SERVER;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	bool xpc_req = (j->mgr->properties & BOOTSTRAP_PROPERTY_XPC_DOMAIN);
@@ -9284,7 +9292,7 @@ kern_return_t
 job_mig_parent(job_t j, mach_port_t srp, mach_port_t *parentport)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	job_log(j, LOG_DEBUG, "Requested parent bootstrap port");
@@ -9306,7 +9314,7 @@ kern_return_t
 job_mig_get_root_bootstrap(job_t j, mach_port_t *rootbsp)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (inherited_bootstrap_port == MACH_PORT_NULL) {
@@ -9333,7 +9341,7 @@ job_mig_info(job_t j, name_array_t *servicenamesp,
 	jobmgr_t jm;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 #if TARGET_OS_EMBEDDED
@@ -9417,7 +9425,7 @@ out_bad:
 		mig_deallocate((vm_address_t)service_actives, cnt * sizeof(service_actives[0]));
 	}
 
-	return BOOTSTRAP_NO_MEMORY;
+	RETURN_NO_MEMORY();
 }
 
 kern_return_t
@@ -9429,7 +9437,7 @@ job_mig_lookup_children(job_t j, mach_port_array_t *child_ports,
 {
 	kern_return_t kr = BOOTSTRAP_NO_MEMORY;
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	struct ldcred *ldc = runtime_get_caller_creds();
@@ -9573,7 +9581,7 @@ kern_return_t
 job_mig_port_for_label(job_t j __attribute__((unused)), name_t label, mach_port_t *mp)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	struct ldcred *ldc = runtime_get_caller_creds();
@@ -9612,7 +9620,7 @@ job_mig_set_security_session(job_t j, uuid_t uuid, mach_port_t asport)
 #endif
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	uuid_string_t uuid_str;
@@ -9710,7 +9718,7 @@ job_mig_move_subset(job_t j, mach_port_t target_subset, name_t session_type, mac
 	jobmgr_t jmr = NULL;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (job_mig_intran2(root_jobmgr, target_subset, ldc->pid)) {
@@ -9829,7 +9837,7 @@ kern_return_t
 job_mig_init_session(job_t j, name_t session_type, mach_port_t asport)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	job_t j2;
@@ -9886,7 +9894,7 @@ job_mig_switch_to_session(job_t j, mach_port_t requestor_port, name_t session_na
 	struct ldcred *ldc = runtime_get_caller_creds();
 	if (!jobmgr_assumes(root_jobmgr, j != NULL)) {
 		jobmgr_log(root_jobmgr, LOG_ERR, "%s() called with NULL job: PID %d", __func__, ldc->pid);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (j->mgr->shutting_down) {
@@ -9924,7 +9932,7 @@ job_mig_switch_to_session(job_t j, mach_port_t requestor_port, name_t session_na
 
 	if (!job_assumes(j, target_jm != NULL)) {
 		job_log(j, LOG_WARNING, "Could not find %s session!", session_name);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	// Remove the job from it's current job manager.
@@ -9989,7 +9997,7 @@ job_mig_take_subset(job_t j, mach_port_t *reqport, mach_port_t *rcvright,
 	job_t ji;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	jm = j->mgr;
@@ -10112,7 +10120,7 @@ out_bad:
 		mig_deallocate((vm_address_t)ports, cnt * sizeof(ports[0]));
 	}
 
-	return BOOTSTRAP_NO_MEMORY;
+	RETURN_NO_MEMORY();
 }
 
 kern_return_t
@@ -10122,7 +10130,7 @@ job_mig_subset(job_t j, mach_port_t requestorport, mach_port_t *subsetportp)
 	jobmgr_t jmr;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 	if (j->mgr->shutting_down) {
 		return BOOTSTRAP_UNKNOWN_SERVICE;
@@ -10137,7 +10145,7 @@ job_mig_subset(job_t j, mach_port_t requestorport, mach_port_t *subsetportp)
 	// Since we use recursion, we need an artificial depth for subsets
 	if (unlikely(bsdepth > 100)) {
 		job_log(j, LOG_ERR, "Mach sub-bootstrap create request failed. Depth greater than: %d", bsdepth);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	char name[NAME_MAX];
@@ -10147,7 +10155,7 @@ job_mig_subset(job_t j, mach_port_t requestorport, mach_port_t *subsetportp)
 		if (unlikely(requestorport == MACH_PORT_NULL)) {
 			return BOOTSTRAP_NOT_PRIVILEGED;
 		}
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	*subsetportp = jmr->jm_port;
@@ -10397,7 +10405,7 @@ xpc_domain_set_environment(job_t j, mach_port_t rp, mach_port_t bsport, mach_por
 
 		jm->error = errno;
 		jobmgr_remove(jm);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 #ifdef notyet
 #if !TARGET_OS_EMBEDDED
@@ -10463,7 +10471,7 @@ xpc_domain_load_services(job_t j, vm_offset_t services_buff, mach_msg_type_numbe
 	size_t offset = 0;
 	launch_data_t services = launch_data_unpack((void *)services_buff, services_sz, NULL, 0, &offset, NULL);
 	if (!services) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	int error = _xpc_domain_import_services(j, services);
@@ -10531,7 +10539,7 @@ kern_return_t
 xpc_domain_get_service_name(job_t j, event_name_t name)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (!j->xpc_service) {
@@ -10581,7 +10589,7 @@ xpc_domain_add_services(job_t j, vm_offset_t services_buff, mach_msg_type_number
 	size_t offset = 0;
 	launch_data_t services = launch_data_unpack((void *)services_buff, services_sz, NULL, 0, &offset, NULL);
 	if (!services) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	int error = _xpc_domain_import_services(j, services);
@@ -11524,7 +11532,7 @@ job_mig_kickstart(job_t j, name_t targetlabel, pid_t *out_pid, unsigned int flag
 	job_t otherj;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (unlikely(!(otherj = job_find(NULL, targetlabel)))) {
@@ -11557,7 +11565,7 @@ job_mig_kickstart(job_t j, name_t targetlabel, pid_t *out_pid, unsigned int flag
 	if (!job_assumes(j, otherj && otherj->p)) {
 		// <rdar://problem/6787083> Clear this flag if we failed to start the job.
 		otherj->stall_before_exec = false;
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	*out_pid = otherj->p;
@@ -11574,7 +11582,7 @@ job_mig_spawn_internal(job_t j, vm_offset_t indata, mach_msg_type_number_t indat
 	job_t jr;
 
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (unlikely(j->deny_job_creation)) {
@@ -11637,7 +11645,7 @@ job_mig_spawn_internal(job_t j, vm_offset_t indata, mach_msg_type_number_t indat
 			*outj = jr;
 			return BOOTSTRAP_NAME_IN_USE;
 		default:
-			return BOOTSTRAP_NO_MEMORY;
+			RETURN_NO_MEMORY();
 		}
 	}
 
@@ -11655,12 +11663,12 @@ job_mig_spawn_internal(job_t j, vm_offset_t indata, mach_msg_type_number_t indat
 
 	if (!job_assumes(j, jr != NULL)) {
 		job_remove(jr);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	if (!job_assumes(jr, jr->p)) {
 		job_remove(jr);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	job_log(jr, LOG_DEBUG, "Spawned by PID %u: %s", j->p, j->label);
@@ -11722,6 +11730,12 @@ job_do_ipc_request(job_t j, launch_data_t request, mach_port_t asport __attribut
 
 #define LAUNCHD_MAX_LEGACY_FDS 128
 #define countof(x) (sizeof((x)) / sizeof((x[0])))
+#define LOG_USER_FAIL()											\
+do {															\
+		if (uflag)												\
+			printf("launchd ipc_request failed on line: %d\n", __LINE__);	\
+		goto out_bad;											\
+} while (0)
 
 kern_return_t
 job_mig_ipc_request(job_t j, vm_offset_t request, 
@@ -11731,7 +11745,7 @@ job_mig_ipc_request(job_t j, vm_offset_t request,
 	mach_msg_type_number_t *reply_fdsCnt, mach_port_t asport)
 {
 	if (!j) {
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	/* TODO: Once we support actions other than checking in, we must check the
@@ -11741,7 +11755,7 @@ job_mig_ipc_request(job_t j, vm_offset_t request,
 	size_t nfds = request_fdsCnt / sizeof(request_fds[0]);
 	if (nfds > LAUNCHD_MAX_LEGACY_FDS) {
 		job_log(j, LOG_ERR, "Too many incoming descriptors: %lu", nfds);
-		return BOOTSTRAP_NO_MEMORY;
+		RETURN_NO_MEMORY();
 	}
 
 	int in_fds[LAUNCHD_MAX_LEGACY_FDS];
@@ -11763,21 +11777,21 @@ job_mig_ipc_request(job_t j, vm_offset_t request,
 	launch_data_t ldrequest = launch_data_unpack((void *)request, requestCnt, in_fds, nfds, &dataoff, &fdoff);
 	if (!ldrequest) {
 		job_log(j, LOG_ERR, "Invalid legacy IPC request passed.");
-		goto out_bad;
+		LOG_USER_FAIL();
 	}
 
 	ldreply = job_do_ipc_request(j, ldrequest, asport);
 	if (!ldreply) {
 		ldreply = launch_data_new_errno(errno);
 		if (!ldreply) {
-			goto out_bad;
+			LOG_USER_FAIL();
 		}
 	}
 
 	*replyCnt = 10 * 1024 * 1024;
 	mig_allocate(reply, *replyCnt);
 	if (!*reply) {
-		goto out_bad;
+		LOG_USER_FAIL();
 	}
 
 	int out_fds[LAUNCHD_MAX_LEGACY_FDS];
@@ -11785,19 +11799,19 @@ job_mig_ipc_request(job_t j, vm_offset_t request,
 	size_t sz = launch_data_pack(ldreply, (void *)*reply, *replyCnt, out_fds, &nout_fds);
 	if (!sz) {
 		job_log(j, LOG_ERR, "Could not pack legacy IPC reply.");
-		goto out_bad;
+		LOG_USER_FAIL();
 	}
 
 	if (nout_fds) {
 		if (nout_fds > 128) {
 			job_log(j, LOG_ERR, "Too many outgoing descriptors: %lu", nout_fds);
-			goto out_bad;
+			LOG_USER_FAIL();
 		}
 
 		*reply_fdsCnt = nout_fds * sizeof((*reply_fdps)[0]);
 		mig_allocate((vm_address_t *)reply_fdps, *reply_fdsCnt);
 		if (!*reply_fdps) {
-			goto out_bad;
+			LOG_USER_FAIL();
 		}
 
 		for (i = 0; i < nout_fds; i++) {
@@ -11851,7 +11865,7 @@ out_bad:
 		launch_data_free(ldreply);
 	}
 
-	return BOOTSTRAP_NO_MEMORY;
+	RETURN_NO_MEMORY();
 }
 
 void
