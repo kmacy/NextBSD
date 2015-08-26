@@ -99,6 +99,7 @@ static void ixgbe_if_vlan_unregister(if_ctx_t ctx, u16 vtag);
 static uint64_t	ixgbe_get_counter(struct ifnet *, ift_counter);
 #endif
 
+static void ixgbe_enable_queue(struct adapter *adapter, u32 vector);
 static void ixgbe_add_device_sysctls(struct adapter *adapter);
 static int ixgbe_allocate_pci_resources(struct adapter *adapter);
 static int ixgbe_setup_msix(struct adapter *adapter);
@@ -136,10 +137,15 @@ static void ixgbe_config_delay_values(struct adapter *adapter);
 /* Sysctl handlers */
 static int ixgbe_set_flowcntl(SYSCTL_HANDLER_ARGS);
 static int ixgbe_set_advertise(SYSCTL_HANDLER_ARGS);
+static int ixgbe_sysctl_interrupt_rate_handler(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_thermal_test(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_dmac(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_phy_temp(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_phy_overtemp_occurred(SYSCTL_HANDLER_ARGS);
+static int ixgbe_sysctl_rdh_handler(SYSCTL_HANDLER_ARGS);
+static int ixgbe_sysctl_rdt_handler(SYSCTL_HANDLER_ARGS);
+static int ixgbe_sysctl_tdt_handler(SYSCTL_HANDLER_ARGS);
+static int ixgbe_sysctl_tdh_handler(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_wol_enable(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_wufc(SYSCTL_HANDLER_ARGS);
 static int ixgbe_sysctl_eee_enable(SYSCTL_HANDLER_ARGS);
@@ -586,7 +592,8 @@ ixgbe_if_attach_post(if_ctx_t ctx)
   struct adapter  *adapter; 
   struct ixgbe_hw *hw;
   int             error = 0;
-
+  u32             ctrl_ext; 
+  
   dev = iflib_get_dev(ctx);
   adapter = iflib_get_softc(ctx);
   hw = &adapter->hw;
@@ -639,7 +646,7 @@ ixgbe_if_attach_post(if_ctx_t ctx)
   IXGBE_WRITE_REG(hw, IXGBE_CTRL_EXT, ctrl_ext);
   
  err_mac_hmc:
-  ixgbe_free_pci_resurces(adapter);
+  ixgbe_free_pci_resources(adapter);
   free(adapter->mta, M_DEVBUF); 
   
   return (error);
@@ -695,7 +702,7 @@ ixgbe_interface_setup(if_ctx_t ctx)
 
   struct ifnet   *ifp = iflib_get_ifp(ctx); 
   struct adapter *adapter = iflib_get_softc(ctx);
-  uint64_t cap; 
+  uint64_t cap = 0;
   
   INIT_DEBUGOUT("ixgbe_interface_setup: begin");
 
@@ -874,18 +881,17 @@ ixgbe_config_link(struct adapter *adapter)
 			err = ixgbe_check_link(hw, &adapter->link_speed,
 			    &adapter->link_up, FALSE);
 		if (err)
-			goto out;
+			return;
 		autoneg = hw->phy.autoneg_advertised;
 		if ((!autoneg) && (hw->mac.ops.get_link_capabilities))
                 	err  = hw->mac.ops.get_link_capabilities(hw,
 			    &autoneg, &negotiate);
 		if (err)
-			goto out;
+			return;
 		if (hw->mac.ops.setup_link)
                 	err = hw->mac.ops.setup_link(hw,
 			    autoneg, adapter->link_up);
 	}
-out:
 }
 
  
@@ -1261,8 +1267,78 @@ ixgbe_add_hw_stats(struct adapter *adapter)
 			"1024-1522 byte frames transmitted");
 }
 
+/** ixgbe_sysctl_tdh_handler - Handler function
+ *  Retrieves the TDH value from the hardware
+ */
+static int 
+ixgbe_sysctl_tdh_handler(SYSCTL_HANDLER_ARGS)
+{
+	int error;
 
- 
+	struct tx_ring *txr = ((struct tx_ring *)oidp->oid_arg1);
+	if (!txr) return 0;
+
+	unsigned val = IXGBE_READ_REG(&txr->adapter->hw, IXGBE_TDH(txr->me));
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return error;
+	return 0;
+}
+
+/** ixgbe_sysctl_tdt_handler - Handler function
+ *  Retrieves the TDT value from the hardware
+ */
+static int 
+ixgbe_sysctl_tdt_handler(SYSCTL_HANDLER_ARGS)
+{
+	int error;
+
+	struct tx_ring *txr = ((struct tx_ring *)oidp->oid_arg1);
+	if (!txr) return 0;
+
+	unsigned val = IXGBE_READ_REG(&txr->adapter->hw, IXGBE_TDT(txr->me));
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return error;
+	return 0;
+}
+
+/** ixgbe_sysctl_rdh_handler - Handler function
+ *  Retrieves the RDH value from the hardware
+ */
+static int 
+ixgbe_sysctl_rdh_handler(SYSCTL_HANDLER_ARGS)
+{
+	int error;
+
+	struct rx_ring *rxr = ((struct rx_ring *)oidp->oid_arg1);
+	if (!rxr) return 0;
+
+	unsigned val = IXGBE_READ_REG(&rxr->adapter->hw, IXGBE_RDH(rxr->me));
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return error;
+	return 0;
+}
+
+/** ixgbe_sysctl_rdt_handler - Handler function
+ *  Retrieves the RDT value from the hardware
+ */
+static int 
+ixgbe_sysctl_rdt_handler(SYSCTL_HANDLER_ARGS)
+{
+	int error;
+
+	struct rx_ring *rxr = ((struct rx_ring *)oidp->oid_arg1);
+	if (!rxr) return 0;
+
+	unsigned val = IXGBE_READ_REG(&rxr->adapter->hw, IXGBE_RDT(rxr->me));
+	error = sysctl_handle_int(oidp, &val, 0, req);
+	if (error || !req->newptr)
+		return error;
+	return 0;
+}
+
 /*
 ** This routine is run via an vlan config EVENT,
 ** it enables us to use the HW Filter table since
@@ -1562,6 +1638,7 @@ ixgbe_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	}
 	return (0);
  fail:
+        iflib_irq_free(ctx, &adapter->irq); 
 	que = adapter->queues;
         for (int i = 0; i < adapter->num_queues; i++, que++)
 	  iflib_irq_free(ctx, &que->que_irq);
@@ -1578,8 +1655,8 @@ ixgbe_msix_que(void *arg)
 {
 	struct ix_queue	*que = arg;
 	struct adapter  *adapter = que->adapter;
-	struct tx_ring	*txr = que->txr;
-	struct rx_ring	*rxr = que->rxr;
+	struct tx_ring	*txr = &que->txr;
+	struct rx_ring	*rxr = &que->rxr;
 	u32		newitr = 0;
 
 	if (ixgbe_enable_aim == FALSE)
@@ -1954,7 +2031,35 @@ ixgbe_msix_link(void *arg)
 	IXGBE_WRITE_REG(&adapter->hw, IXGBE_EIMS, IXGBE_EIMS_OTHER);
 	return (FILTER_HANDLED); 
 }
-	
+
+static int
+ixgbe_sysctl_interrupt_rate_handler(SYSCTL_HANDLER_ARGS)
+{
+	int error;
+	struct ix_queue *que = ((struct ix_queue *)oidp->oid_arg1);
+	unsigned int reg, usec, rate;
+
+	reg = IXGBE_READ_REG(&que->adapter->hw, IXGBE_EITR(que->msix));
+	usec = ((reg & 0x0FF8) >> 3);
+	if (usec > 0)
+		rate = 500000 / usec;
+	else
+		rate = 0;
+	error = sysctl_handle_int(oidp, &rate, 0, req);
+	if (error || !req->newptr)
+		return error;
+	reg &= ~0xfff; /* default, no limitation */
+	ixgbe_max_interrupt_rate = 0;
+	if (rate > 0 && rate < 500000) {
+		if (rate < 1000)
+			rate = 1000;
+		ixgbe_max_interrupt_rate = rate;
+		reg |= ((4000000/rate) & 0xff8 );
+	}
+	IXGBE_WRITE_REG(&que->adapter->hw, IXGBE_EITR(que->msix), reg);
+	return 0;
+}
+
 static void
 ixgbe_add_device_sysctls(struct adapter *adapter)
 {
@@ -2112,7 +2217,8 @@ ixgbe_setup_optics(struct adapter *adapter)
 	if (layer & IXGBE_PHYSICAL_LAYER_1000BASE_T) {
 		adapter->optics = IFM_1000_T;
 		return;
-	}
+
+       }
 
 	if (layer & IXGBE_PHYSICAL_LAYER_1000BASE_SX) {
 		adapter->optics = IFM_1000_SX;
@@ -2186,8 +2292,6 @@ static int
 ixgbe_if_detach(if_ctx_t ctx)
 {
   struct adapter *adapter = iflib_get_softc(ctx);
-  struct ix_queue *que    = adapter->queues;
-  struct tx_ring *txr     = adapter->tx_rings;
   u32 ctrl_ext;
   
   INIT_DEBUGOUT("ixgbe_detach: begin");
@@ -2218,8 +2322,6 @@ ixgbe_setup_low_power_mode(struct adapter *adapter)
   struct ixgbe_hw *hw = &adapter->hw;
   device_t dev = adapter->dev;
   s32 error = 0;
-  
-  mtx_assert(&adapter->core_mtx, MA_OWNED);
   
   /* Limit power management flow to X550EM baseT */
   if (hw->device_id == IXGBE_DEV_ID_X550EM_X_10G_T
@@ -2295,6 +2397,7 @@ static int
 ixgbe_if_resume(if_ctx_t ctx)
 {
   struct adapter *adapter = iflib_get_softc(ctx);
+  device_t dev  = iflib_get_dev(ctx); 
   struct ifnet *ifp = adapter->ifp;
   struct ixgbe_hw *hw = &adapter->hw;
   u32 wus;
@@ -2330,9 +2433,10 @@ ixgbe_if_resume(if_ctx_t ctx)
  *                                                                              
  *  return 0 on success, EINVAL on failure                                      
  **********************************************************************/
-static void
+static int
 ixgbe_if_mtu_set(if_ctx_t ctx, uint32_t mtu)
 {
+  int error = 0; 
   struct adapter *adapter = iflib_get_softc(ctx);
 
   IOCTL_DEBUGOUT("ioctl: SIOCIFMTU (Set Interface MTU)");
@@ -2343,7 +2447,7 @@ ixgbe_if_mtu_set(if_ctx_t ctx, uint32_t mtu)
     adapter->max_frame_size = mtu + IXGBE_MTU_HDR;
   }
     
-  return(0);
+  return error;
 }
  
  /*********************************************************************
@@ -2794,13 +2898,11 @@ static void
 ixgbe_if_timer(if_ctx_t ctx, uint16_t qid)
 {
 	struct adapter		*adapter = iflib_get_softc(ctx);
-	struct device_t         dev = iflib_get_dev(ctx);
 	struct ix_queue	        *que = &adapter->queues[qid];
         u64		        queues = 0;
-	int		        hung = 0;
 
 	/* Keep track of queues with work for soft irq */
-	if (que->txr->busy)
+	if (que->txr.busy)
 	  queues |= ((u64)1 << que->me);
 
 	if (qid != 0)
@@ -2809,7 +2911,7 @@ ixgbe_if_timer(if_ctx_t ctx, uint16_t qid)
 	/* Check for pluggable optics */
 	if (adapter->sfp_probe)
 		if (!ixgbe_sfp_probe(adapter))
-			goto out; /* Nothing to do */
+			return; /* Nothing to do */
 
 	ixgbe_update_link_status(adapter);
 	ixgbe_update_stats_counters(adapter);
@@ -2817,8 +2919,6 @@ ixgbe_if_timer(if_ctx_t ctx, uint16_t qid)
 	
 	/* Fire off the adminq task */
 	iflib_admin_intr_deferred(ctx);
-	
- out:
 }
 
 /*
@@ -2900,7 +3000,7 @@ static void
 ixgbe_update_link_status(struct adapter *adapter)
 {
   struct ifnet	*ifp = adapter->ifp;
-  device_t dev  = adapter->dev;
+  device_t	dev = adapter->dev;
   
   if (adapter->link_up){ 
     if (adapter->link_active == FALSE) {
@@ -3090,7 +3190,7 @@ ixgbe_if_queue_intr_enable(if_ctx_t ctx, uint16_t rxqid)
 	struct adapter	*adapter = iflib_get_softc(ctx);
 	struct ix_queue *que = &adapter->queues[rxqid];
 
-	ixgbe_enable_queue(adapter->hw, que->me);
+	ixgbe_enable_queue(adapter, que->me);
 }
  
 /*
@@ -3099,7 +3199,7 @@ ixgbe_if_queue_intr_enable(if_ctx_t ctx, uint16_t rxqid)
 **
 */
 
-static inline void
+static void
 ixgbe_enable_queue(struct adapter *adapter, u32 vector)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
@@ -3119,7 +3219,7 @@ ixgbe_enable_queue(struct adapter *adapter, u32 vector)
 	}
 }
 
-static inline void
+static void
 ixgbe_disable_queue(struct adapter *adapter, u32 vector)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
@@ -3468,40 +3568,6 @@ ixgbe_sysctl_wol_enable(SYSCTL_HANDLER_ARGS)
 }
 
 /*
- * Sysctl to enable/disable the Energy Efficient Ethernet capability,
- * if supported by the adapter.
- * Values:
- *	0 - disabled
- *	1 - enabled
- */
-static int
-ixgbe_sysctl_eee_enable(SYSCTL_HANDLER_ARGS)
-{
-	struct adapter *adapter = (struct adapter *) arg1;
-	struct ixgbe_hw *hw = &adapter->hw;
-	struct ifnet *ifp = iflib_get_ifp(adapter->ctx);
-	int new_eee_enabled, error = 0;
-
-	new_eee_enabled = adapter->eee_enabled;
-	error = sysctl_handle_int(oidp, &new_eee_enabled, 0, req);
-	if ((error) || (req->newptr == NULL))
-		return (error);
-	if (new_eee_enabled == adapter->eee_enabled)
-		return (0);
-
-	if (new_eee_enabled > 0 && !hw->mac.ops.setup_eee)
-		return (ENODEV);
-	else
-		adapter->eee_enabled = !!(new_eee_enabled);
-
-	/* Re-initialize hardware if it's already running */
-	if (ifp->if_drv_flags & IFF_DRV_RUNNING)
-	  ifp->if_init(ifp);
-
-	return (0);
-}
-
-/*
  * Read-only sysctl indicating whether EEE support was negotiated
  * on the link.
  */
@@ -3654,29 +3720,6 @@ ixgbe_sysctl_phy_overtemp_occurred(SYSCTL_HANDLER_ARGS)
 	return (sysctl_handle_int(oidp, 0, reg, req));
 } 
  
-/* Thermal Shutdown Trigger (internal MAC)
-**   - Set this to 1 to cause an overtemp event to occur
-*/
-static int
-ixgbe_sysctl_thermal_test(SYSCTL_HANDLER_ARGS)
-{
-	struct adapter	*adapter = (struct adapter *) arg1;
-	struct ixgbe_hw *hw = &adapter->hw;
-	int error, fire = 0;
-
-	error = sysctl_handle_int(oidp, &fire, 0, req);
-	if ((error) || (req->newptr == NULL))
-		return (error);
-
-	if (fire) {
-		u32 reg = IXGBE_READ_REG(hw, IXGBE_EICS);
-		reg |= IXGBE_EICR_TS;
-		IXGBE_WRITE_REG(hw, IXGBE_EICS, reg);
-	}
-
-	return (0);
-}
-
  /*
  * Sysctl to enable/disable the Energy Efficient Ethernet capability,
  * if supported by the adapter.
@@ -3709,20 +3752,6 @@ ixgbe_sysctl_eee_enable(SYSCTL_HANDLER_ARGS)
 	  ifp->if_init(ifp); 
 
 	return (0);
-}
-
- /* Read-only sysctl indicating whether RX Link is in LPI state. */
-static int
-ixgbe_sysctl_eee_rx_lpi_status(SYSCTL_HANDLER_ARGS)
-{
-	struct adapter *adapter = (struct adapter *) arg1;
-	struct ixgbe_hw *hw = &adapter->hw;
-	bool status;
-
-	status = !!(IXGBE_READ_REG(hw, IXGBE_EEE_STAT) &
-	    IXGBE_EEE_RX_LPI_STATUS);
-
-	return (sysctl_handle_int(oidp, 0, status, req));
 }
 
 #ifdef PCI_IOV

@@ -367,7 +367,7 @@ struct tx_ring {
 	unsigned long   	no_tx_map_avail;
 	unsigned long   	no_tx_dma_setup;
 	u64			no_desc_avail;
-	u64			total_packets;
+        u64			total_packets;
 };
 
 
@@ -378,6 +378,7 @@ struct rx_ring {
 	struct ix_queue	*que;
 	struct adapter		*adapter;
 	struct mtx		rx_mtx;
+        struct lro_ctrl         lro; 
 	u32			me;
 	u32			tail;
 	union ixgbe_adv_rx_desc	*rx_base;
@@ -419,6 +420,9 @@ struct ix_queue {
 	int			busy;
 	struct tx_ring		txr;
 	struct rx_ring		rxr;
+
+        struct if_irq           que_irq; 
+  
 	u64			irqs;
 };
 
