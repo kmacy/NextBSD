@@ -344,11 +344,12 @@ int _bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
     struct vm_page **ma, bus_size_t tlen, int ma_offs, int flags,
     bus_dma_segment_t *segs, int *segp);
 
+#if !defined(__i386__) && !defined(__amd64__)
 bus_dma_segment_t *_bus_dmamap_complete(bus_dma_tag_t dmat,
 			   		bus_dmamap_t map,
 					bus_dma_segment_t *segs,
 					int nsegs, int error);
-
+#endif
 #endif /* __sparc64__ */
 
 #endif /* _BUS_DMA_H_ */

@@ -69,14 +69,6 @@ struct bounce_zone;
 
 extern struct bus_dma_impl bus_dma_nobounce_kernel_impl;
 
-struct bus_dma_tag {
-	struct bus_dma_tag_common common;
-	int			map_count;
-	int			bounce_flags;
-	bus_dma_segment_t	*segments;
-	struct bounce_zone	*bounce_zone;
-};
-
 struct bounce_page {
 	vm_offset_t	vaddr;		/* kva of bounce buffer */
 	bus_addr_t	busaddr;	/* Physical address */
@@ -601,6 +593,36 @@ _bus_dmamap_addseg(bus_dma_tag_t dmat, bus_addr_t curaddr,
 	return (sgsize);
 }
 
+static int
+_bus_dmamap_addseg_noboundary(bus_dma_tag_t dmat, bus_addr_t curaddr,
+    bus_size_t sgsize, bus_dma_segment_t *segs, int *segp)
+{
+	int seg;
+
+	/*
+	 * Insert chunk into a segment, coalescing with
+	 * previous segment if possible.
+	 */
+	seg = *segp;
+	if (seg == -1) {
+		seg = 0;
+		segs[seg].ds_addr = curaddr;
+		segs[seg].ds_len = sgsize;
+	} else {
+		if (curaddr == segs[seg].ds_addr + segs[seg].ds_len &&
+		    (segs[seg].ds_len + sgsize) <= dmat->common.maxsegsz)
+			segs[seg].ds_len += sgsize;
+		else {
+			if (++seg >= dmat->common.nsegments)
+				return (0);
+			segs[seg].ds_addr = curaddr;
+			segs[seg].ds_len = sgsize;
+		}
+	}
+	*segp = seg;
+	return (sgsize);
+}
+
 /*
  * Utility function to load a physical buffer.  segp contains
  * the starting segment on entrace, and the ending segment on exit.
@@ -739,7 +761,6 @@ nobounce_bus_dmamap_load_kernel_buffer(bus_dma_tag_t dmat, bus_dmamap_t map __un
 
 	if (segs == NULL)
 		segs = dmat->segments;
-
 	vaddr = (vm_offset_t)buf;
 	while (buflen > 0) {
 		/*
@@ -753,8 +774,10 @@ nobounce_bus_dmamap_load_kernel_buffer(bus_dma_tag_t dmat, bus_dmamap_t map __un
 		max_sgsize = MIN(buflen, dmat->common.maxsegsz);
 		sgsize = PAGE_SIZE - ((vm_offset_t)curaddr & PAGE_MASK);
 		sgsize = MIN(sgsize, max_sgsize);
-		sgsize = _bus_dmamap_addseg(dmat, curaddr, sgsize, segs,
-		    segp);
+		if (dmat->common.boundary == 0)
+			sgsize = _bus_dmamap_addseg_noboundary(dmat, curaddr, sgsize, segs, segp);
+		else
+			sgsize = _bus_dmamap_addseg(dmat, curaddr, sgsize, segs, segp);
 		if (sgsize == 0)
 			break;
 		vaddr += sgsize;
@@ -778,16 +801,6 @@ bounce_bus_dmamap_waitok(bus_dma_tag_t dmat, bus_dmamap_t map,
 	map->dmat = dmat;
 	map->callback = callback;
 	map->callback_arg = callback_arg;
-}
-
-static bus_dma_segment_t *
-bounce_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
-    bus_dma_segment_t *segs, int nsegs, int error)
-{
-
-	if (segs == NULL)
-		segs = dmat->segments;
-	return (segs);
 }
 
 /*
@@ -1128,7 +1141,7 @@ struct bus_dma_impl bus_dma_bounce_impl = {
 	.load_buffer = bounce_bus_dmamap_load_buffer,
 	.load_ma = bus_dmamap_load_ma_triv,
 	.map_waitok = bounce_bus_dmamap_waitok,
-	.map_complete = bounce_bus_dmamap_complete,
+	.map_complete = NULL,
 	.map_unload = bounce_bus_dmamap_unload,
 	.map_sync = bounce_bus_dmamap_sync
 };
@@ -1144,7 +1157,7 @@ struct bus_dma_impl bus_dma_nobounce_kernel_impl = {
 	.load_buffer = nobounce_bus_dmamap_load_kernel_buffer,
 	.load_ma = bus_dmamap_load_ma_triv,
 	.map_waitok = bounce_bus_dmamap_waitok,
-	.map_complete = bounce_bus_dmamap_complete,
+	.map_complete = NULL,
 	.map_unload = bounce_bus_dmamap_unload,
 	.map_sync = bounce_bus_dmamap_sync
 };
