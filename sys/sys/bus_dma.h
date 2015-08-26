@@ -78,15 +78,17 @@
 /*
  * Flags used in various bus DMA methods.
  */
-#define	BUS_DMA_WAITOK		0x00	/* safe to sleep (pseudo-flag) */
-#define	BUS_DMA_NOWAIT		0x01	/* not safe to sleep */
-#define	BUS_DMA_ALLOCNOW	0x02	/* perform resource allocation now */
-#define	BUS_DMA_COHERENT	0x04	/* hint: map memory in a coherent way */
-#define	BUS_DMA_ZERO		0x08	/* allocate zero'ed memory */
-#define	BUS_DMA_BUS1		0x10	/* placeholders for bus functions... */
-#define	BUS_DMA_BUS2		0x20
-#define	BUS_DMA_BUS3		0x40
-#define	BUS_DMA_BUS4		0x80
+#define	BUS_DMA_WAITOK		0x0000	/* safe to sleep (pseudo-flag) */
+#define	BUS_DMA_NOWAIT		0x0001	/* not safe to sleep */
+#define	BUS_DMA_ALLOCNOW	0x0002	/* perform resource allocation now */
+#define	BUS_DMA_COHERENT	0x0004	/* hint: map memory in a coherent way */
+#define	BUS_DMA_ZERO		0x0008	/* allocate zero'ed memory */
+#define	BUS_DMA_BUS1		0x0010	/* placeholders for bus functions... */
+#define	BUS_DMA_BUS2		0x0020
+#define	BUS_DMA_BUS3		0x0040
+#define	BUS_DMA_BUS4		0x0080
+#define	BUS_DMA_KERNEL		0x0100	/* loaded memory will always be in the kernel_pmap */
+
 
 /*
  * The following two flags are non-standard or specific to only certain
@@ -342,11 +344,12 @@ int _bus_dmamap_load_ma(bus_dma_tag_t dmat, bus_dmamap_t map,
     struct vm_page **ma, bus_size_t tlen, int ma_offs, int flags,
     bus_dma_segment_t *segs, int *segp);
 
+#if !defined(__i386__) && !defined(__amd64__)
 bus_dma_segment_t *_bus_dmamap_complete(bus_dma_tag_t dmat,
 			   		bus_dmamap_t map,
 					bus_dma_segment_t *segs,
 					int nsegs, int error);
-
+#endif
 #endif /* __sparc64__ */
 
 #endif /* _BUS_DMA_H_ */

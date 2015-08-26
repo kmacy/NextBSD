@@ -181,10 +181,8 @@ __rw_rlock(volatile uintptr_t *c, const char *file, int line)
 	v = rw->rw_lock;
 
 	if (RW_CAN_READ_TD(td, v)  && atomic_cmpset_acq_ptr(&rw->rw_lock, v, v + RW_ONE_READER)) {
-#ifdef INVARIANTS
-		td->td_locks++;
 		td->td_rw_rlocks++;
-#endif
+		TD_LOCKS_INC(td);
 		return;
 	}
 	__rw_rlock_hard(c, file, line);
@@ -196,16 +194,15 @@ __rw_runlock(volatile uintptr_t *c, const char *file, int line)
 {
 	struct rwlock *rw;
 	uintptr_t v;
+	struct thread *td;
 
 	rw = rwlock2rw(c);
 	v = rw->rw_lock;
 
 	if ((!(v & RW_LOCK_WAITERS) || (RW_READERS(v) > 1)) && atomic_cmpset_rel_ptr(&rw->rw_lock, v, v - RW_ONE_READER)) {
-#ifdef INVARIANTS
-		struct thread *td = curthread;
-		td->td_locks--;
+		td = curthread;
+		TD_LOCKS_DEC(td);
 		td->td_rw_rlocks--;
-#endif
 		return;
 	}
 	_rw_runlock_cookie(c, file, line);

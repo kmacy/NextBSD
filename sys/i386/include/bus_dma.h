@@ -29,6 +29,30 @@
 #ifndef _I386_BUS_DMA_H_
 #define _I386_BUS_DMA_H_
 
+#include <sys/param.h>
 #include <sys/bus_dma.h>
+#include <x86/include/busdma_impl.h>
+
+struct bus_dma_tag {
+	struct bus_dma_tag_common common;
+	int			map_count;
+	int			bounce_flags;
+	bus_dma_segment_t	*segments;
+	struct bounce_zone	*bounce_zone;
+};
+
+static __inline bus_dma_segment_t *
+_bus_dmamap_complete(bus_dma_tag_t dmat, bus_dmamap_t map,
+    bus_dma_segment_t *segs, int nsegs, int error)
+{
+	struct bus_dma_tag_common *tc;
+
+	tc = (struct bus_dma_tag_common *)dmat;
+	if (__predict_false(tc->impl->map_complete != NULL))
+		segs = tc->impl->map_complete(dmat, map, segs, nsegs, error);
+	if (__predict_false(segs == NULL))
+		segs = dmat->segments;
+	return (segs);
+}
 
 #endif /* _I386_BUS_DMA_H_ */

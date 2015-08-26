@@ -2296,7 +2296,7 @@ iflib_txq_drain(struct mp_ring *r, uint32_t cidx, uint32_t pidx)
 			m_freem(r->items[(cidx + i) & (r->size-1)]);
 			r->items[(cidx + i) & (r->size-1)] = NULL;
 		}
-		return (0);
+		return (avail);
 	}
 	iflib_completed_tx_reclaim(txq, RECLAIM_THRESH(ctx));
 	if (if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_OACTIVE ) {
@@ -2554,13 +2554,17 @@ iflib_if_qflush(if_t ifp)
 	iflib_txq_t txq = ctx->ifc_txqs;
 	int i;
 
+	CTX_LOCK(ctx);
 	ctx->ifc_flags |= IFC_QFLUSH;
-
+	CTX_UNLOCK(ctx);
 	for (i = 0; i < NQSETS(ctx); i++, txq++)
-		iflib_txq_check_drain(txq, 0);
+		while (!mp_ring_is_idle(txq->ift_br[0]))
+			iflib_txq_check_drain(txq, 0);
+	CTX_LOCK(ctx);
+	ctx->ifc_flags &= ~IFC_QFLUSH;
+	CTX_UNLOCK(ctx);
 
 	if_qflush(ifp);
-	ctx->ifc_flags &= ~IFC_QFLUSH;
 }
 
 static int
