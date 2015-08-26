@@ -5,6 +5,7 @@
 #endif
 
 #include "ixgbe.h"
+#include "ifdi_if.h"
 
 #ifdef	RSS
 #include <net/rss_config.h>
@@ -30,50 +31,41 @@ char ixgbe_driver_version[] = "3.1.0";
  *
  *  { Vendor ID, Device ID, SubVendor ID, SubDevice ID, String Index }
  *********************************************************************/
-static ixgbe_vendor_info_t ixgbe_vendor_info_array[] =
+static pci_vendor_info_t ixgbe_vendor_info_array[] =
 {
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AF_DUAL_PORT, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AF_SINGLE_PORT, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598EB_CX4, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AT, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AT2, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598_DA_DUAL_PORT, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598_CX4_DUAL_PORT, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598EB_XF_LR, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598_SR_DUAL_PORT_EM, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598EB_SFP_LOM, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_KX4, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_KX4_MEZZ, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_XAUI_LOM, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_CX4, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_T3_LOM, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_COMBO_BACKPLANE, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_BACKPLANE_FCOE, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_SF2, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_FCOE, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599EN_SFP, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_SF_QP, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_QSFP_SF_QP, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X540T, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X540T1, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550T, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550EM_X_KR, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550EM_X_KX4, 0, 0, 0, 0},
-  {IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550EM_X_10G_T, 0, 0, 0, 0},
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AF_DUAL_PORT,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AF_SINGLE_PORT,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598EB_CX4,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AT,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598AT2,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598_DA_DUAL_PORT,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598_CX4_DUAL_PORT,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598EB_XF_LR,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598_SR_DUAL_PORT_EM,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82598EB_SFP_LOM,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_KX4,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_KX4_MEZZ,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_XAUI_LOM,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_CX4,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_T3_LOM,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_COMBO_BACKPLANE,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_BACKPLANE_FCOE,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_SF2,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_FCOE,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599EN_SFP,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_SFP_SF_QP,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_82599_QSFP_SF_QP,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X540T,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X540T1,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550T,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550EM_X_KR,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550EM_X_KX4,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
+  PVID(IXGBE_INTEL_VENDOR_ID, IXGBE_DEV_ID_X550EM_X_10G_T,  "Intel(R) PRO/10GbE PCI-Express Network Driver"),
 	/* required last entry */
-  {0, 0, 0, 0, 0, 0}
+  PVID_END
 };
-
-/*********************************************************************
- *  Table of branding strings
- *********************************************************************/
-
-static char    *ixgbe_strings[] = {
-	"Intel(R) PRO/10GbE PCI-Express Network Driver"
-};
-
 
 /*********************************************************************
  *  Function prototypes
@@ -81,7 +73,7 @@ static char    *ixgbe_strings[] = {
 static void *ixgbe_register(device_t dev);
 static int ixgbe_if_attach_pre(if_ctx_t ctx);
 static int ixgbe_if_attach_post(if_ctx_t ctx);
-static int ixgbe_if_detach(if_ctx_tx ctx);
+static int ixgbe_if_detach(if_ctx_t ctx);
 static int ixgbe_if_shutdown(if_ctx_t ctx);
 static int ixgbe_if_suspend(if_ctx_t ctx);
 static int ixgbe_if_resume(if_ctx_t ctx);
@@ -90,13 +82,13 @@ static void ixgbe_if_stop(if_ctx_t ctx);
 static void ixgbe_if_init(if_ctx_t ctx);
 static void ixgbe_if_enable_intr(if_ctx_t ctx);
 static void ixgbe_if_disable_intr(if_ctx_t ctx);
-static void ixgbe_if_rx_intr_enable(if_ctx_t ctx, uint16_t rxqid);
+static void ixgbe_if_queue_intr_enable(if_ctx_t ctx, uint16_t qid);
 static void ixgbe_if_media_status(if_ctx_t ctx, struct ifmediareq * ifmr);
 static int ixgbe_if_media_change(if_ctx_t ctx);
 static int ixgbe_if_msix_intr_assign(if_ctx_t, int);
-static void ixgbe_if_mtu_set(if_ctx_t ctx, uint32_t mtu);
+static int ixgbe_if_mtu_set(if_ctx_t ctx, uint32_t mtu);
 static void ixgbe_if_multi_set(if_ctx_t ctx);
-static void ixgbe_if_promisc_set(if_ctx_t ctx, int flags);
+static int ixgbe_if_promisc_set(if_ctx_t ctx, int flags);
 static int ixgbe_if_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs, int nqs);
 static void ixgbe_if_queues_free(if_ctx_t ctx);
 static void ixgbe_if_timer(if_ctx_t ctx, uint16_t); 
@@ -219,7 +211,7 @@ static device_method_t ixgbe_if_methods[] = {
   DEVMETHOD(ifdi_msix_intr_assign, ixgbe_if_msix_intr_assign),
   DEVMETHOD(ifdi_intr_enable, ixgbe_if_enable_intr), 
   DEVMETHOD(ifdi_intr_disable, ixgbe_if_disable_intr),
-  DEVMETHOD(ifdi_rx_intr_enable, ixgbe_if_rx_intr_enable),
+  DEVMETHOD(ifdi_queue_intr_enable, ixgbe_if_queue_intr_enable),
   DEVMETHOD(ifdi_queues_alloc, ixgbe_if_queues_alloc),
   DEVMETHOD(ifdi_queues_free, ixgbe_if_queues_free),
   DEVMETHOD(ifdi_multi_set, ixgbe_if_multi_set),
@@ -229,10 +221,10 @@ static device_method_t ixgbe_if_methods[] = {
   DEVMETHOD(ifdi_promisc_set, ixgbe_if_promisc_set),
   DEVMETHOD(ifdi_timer, ixgbe_if_timer), 
   DEVMETHOD_END
-}
+};
 
 static driver_t ixgbe_if_driver = {
-  "ixgbe_if", ixgbe_if_methods, sizeof(struct adapter); 
+  "ixgbe_if", ixgbe_if_methods, sizeof(struct adapter)
 };
 
 /*
@@ -293,9 +285,12 @@ SYSCTL_INT(_hw_ix, OID_AUTO, enable_msix, CTLFLAG_RDTUN, &ixgbe_enable_msix, 0,
  * number of cpus with a max of 8. This
  * can be overriden manually here.
  */
+#if 0
+/* determined by iflib */
 static int ixgbe_num_queues = 0;
 SYSCTL_INT(_hw_ix, OID_AUTO, num_queues, CTLFLAG_RDTUN, &ixgbe_num_queues, 0,
     "Number of queues to configure, 0 indicates autoconfigure");
+#endif
 
 /*
 ** Number of TX descriptors per ring,
@@ -341,7 +336,7 @@ static struct if_shared_ctx ixgbe_sctx_init = {
   	.isc_magic = IFLIB_MAGIC,
 	.isc_q_align = PAGE_SIZE,/* max(DBA_ALIGN, PAGE_SIZE) */
 	.isc_tx_maxsize = IXGBE_TSO_SIZE,
-	.isc_tx_nsegments = 32, /* NEED TO SET */
+
 	.isc_tx_maxsegsize = PAGE_SIZE*4,
 
 	.isc_rx_maxsize = PAGE_SIZE*4,
@@ -350,17 +345,15 @@ static struct if_shared_ctx ixgbe_sctx_init = {
 	.isc_ntxd = DEFAULT_TXD,
 	.isc_nrxd = DEFAULT_RXD,
 	.isc_nfl = 1,
-	.isc_qsizes[0] = roundup2((DEFAULT_TXD * sizeof(struct ixgbe_adv_tx_desc)) +
+	.isc_qsizes[0] = roundup2((DEFAULT_TXD * sizeof(union ixgbe_adv_tx_desc)) +
 							  sizeof(u32), DBA_ALIGN),
 	.isc_qsizes[1] = roundup2(DEFAULT_RXD *
 							  sizeof(union ixgbe_adv_rx_desc), DBA_ALIGN),
 	.isc_nqs = 2,
-	.isc_msix_bar = MSIX_82588_BAR, /* NEED TO SET */
+
 	.isc_admin_intrcnt = 1,
-	.isc_vendor_id = IXGBE_INTEL_VENDOR_ID,	
 	.isc_vendor_info = ixgbe_vendor_info_array,
 	.isc_driver_version = ixgbe_driver_version,
-	.isc_vendor_strings = ixgbe_strings,
 	.isc_txrx = &ixgbe_txrx,
 	.isc_driver = &ixgbe_if_driver,
 };
@@ -441,10 +434,10 @@ ixgbe_register(device_t dev)
     ixgbe_sctx->isc_ntxd = ixgbe_rxd;
   }
   
-  ixgbe_sctx->isc_qsizes[0] = roundup2((ixgbe_sctx->isc_ntxd * sizeof(struct ixgbe_adv_tx_desc)) +
+  ixgbe_sctx->isc_qsizes[0] = roundup2((ixgbe_sctx->isc_ntxd * sizeof(union ixgbe_adv_tx_desc)) +
 							  sizeof(u32), DBA_ALIGN);
-  ixgbe_sctx->isc_qsizes[1] = roundup2((ixgbe_rxd *
-					sizeof(union ixgbe_adv_rx_desc), DBA_ALIGN);
+  ixgbe_sctx->isc_qsizes[1] = roundup2(ixgbe_rxd *
+										sizeof(union ixgbe_adv_rx_desc), DBA_ALIGN);
 
   return (ixgbe_sctx);
 }
@@ -465,6 +458,8 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
   device_t dev;
   struct adapter *adapter;
   struct ixgbe_hw *hw;
+  uint16_t csum;
+  int error;
   
   INIT_DEBUGOUT("ixgbe_attach: begin");
 
@@ -473,12 +468,18 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
   adapter = iflib_get_softc(ctx);
   adapter->dev = adapter->osdep.dev = dev;
   hw = &adapter->hw;
-
+  adapter->shared = iflib_get_softc_ctx(ctx);
+  adapter->shared->isc_msix_bar = PCIR_BAR(MSIX_82598_BAR), /* NEED TO SET */
+  adapter->shared->isc_tx_nsegments = 32, /* NEED TO SET */
+	
+  
   /* Sysctls */
   ixgbe_add_device_sysctls(adapter);
 
   /* Identify hardware revision */
   ixgbe_identify_hardware(adapter);   
+
+  /* XXX check exact MAC type to get correct MSIX BAR */
   
   /* Do base PCI setup - map BAR0 */
   if (ixgbe_allocate_pci_resources(adapter)) {
@@ -573,20 +574,22 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
   iflib_set_mac(ctx, hw->mac.addr); 
   
  err_late:
-  ixgbe_if_free_pci_resources(adapter);
+  ixgbe_free_pci_resources(adapter);
   
   return (error);
 }
 
 static int
-  ixgbe_if_attach_post(if_ctx_t ctx)
+ixgbe_if_attach_post(if_ctx_t ctx)
 {
   device_t dev;
   struct adapter  *adapter; 
+  struct ixgbe_hw *hw;
   int             error = 0;
 
   dev = iflib_get_dev(ctx);
   adapter = iflib_get_softc(ctx);
+  hw = &adapter->hw;
 
   error = ixgbe_interface_setup(ctx);
   if (error) {
@@ -2180,7 +2183,7 @@ ixgbe_allocate_pci_resources(struct adapter *adapter)
  *  return 0 on success, positive on failure
  *********************************************************************/
 static int
-ixgbe_if_detach(if_ctx_tx ctx)
+ixgbe_if_detach(if_ctx_t ctx)
 {
   struct adapter *adapter = iflib_get_softc(ctx);
   struct ix_queue *que    = adapter->queues;
@@ -3082,7 +3085,7 @@ ixgbe_if_disable_intr(if_ctx_t ctx)
 
 
 static void
-ixgbe_if_rx_intr_enable(if_ctx_t ctx, uint16_t rxqid)
+ixgbe_if_queue_intr_enable(if_ctx_t ctx, uint16_t rxqid)
 {
 	struct adapter	*adapter = iflib_get_softc(ctx);
 	struct ix_queue *que = &adapter->queues[rxqid];
@@ -3198,7 +3201,6 @@ ixgbe_free_pci_resources(struct adapter * adapter)
 
  /* Sysctls */
  /*
-/*
 ** Set flow control using sysctl:
 ** Flow control values:
 ** 	0 - off

@@ -62,6 +62,7 @@
 #include <net/bpf.h>
 #include <net/if_types.h>
 #include <net/if_vlan_var.h>
+#include <net/iflib.h>
 
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
@@ -331,37 +332,18 @@ struct ixgbe_mc_addr {
 };
 
 /*
-** Driver queue struct: this is the interrupt container
-**  for the associated tx and rx ring.
-*/
-struct ix_queue {
-	struct adapter		*adapter;
-	u32			msix;           /* This queue's MSIX vector */
-	u32			eims;           /* This queue's EIMS bit */
-	u32			eitr_setting;
-	u32			me;
-	struct resource		*res;
-	void			*tag;
-	int			busy;
-	struct tx_ring		*txr;
-	struct rx_ring		*rxr;
-	struct task		que_task;
-	struct taskqueue	*tq;
-	u64			irqs;
-};
-
-/*
  * The transmit ring, one per queue
  */
 struct tx_ring {
-        struct adapter		*adapter;
+	struct ix_queue	*que;
+	struct adapter		*adapter;
 	struct mtx		tx_mtx;
 	u32			me;
 	u32			tail;
 	int			busy;
 	union ixgbe_adv_tx_desc	*tx_base;
 	struct ixgbe_tx_buf	*tx_buffers;
-	struct ixgbe_dma_alloc	txdma;
+	uint64_t tx_paddr;
 	volatile u16		tx_avail;
 	u16			next_avail_desc;
 	u16			next_to_clean;
@@ -393,23 +375,18 @@ struct tx_ring {
  * The Receive ring, one per rx queue
  */
 struct rx_ring {
-        struct adapter		*adapter;
+	struct ix_queue	*que;
+	struct adapter		*adapter;
 	struct mtx		rx_mtx;
 	u32			me;
 	u32			tail;
 	union ixgbe_adv_rx_desc	*rx_base;
-	struct ixgbe_dma_alloc	rxdma;
-	struct lro_ctrl		lro;
-	bool			lro_enabled;
+	uint64_t rx_paddr;
 	bool			hw_rsc;
 	bool			vtag_strip;
-        u16			next_to_refresh;
-        u16 			next_to_check;
-	u16			num_desc;
 	u16			mbuf_sz;
 	u16			process_limit;
 	char			mtx_name[16];
-	struct ixgbe_rx_buf	*rx_buffers;
 	bus_dma_tag_t		ptag;
 
 	u32			bytes; /* Used for AIM calc */
@@ -425,6 +402,24 @@ struct rx_ring {
 #ifdef IXGBE_FDIR
 	u64			flm;
 #endif
+};
+
+/*
+** Driver queue struct: this is the interrupt container
+**  for the associated tx and rx ring.
+*/
+struct ix_queue {
+	struct adapter		*adapter;
+	u32			msix;           /* This queue's MSIX vector */
+	u32			eims;           /* This queue's EIMS bit */
+	u32			eitr_setting;
+	u32			me;
+	struct resource		*res;
+	void			*tag;
+	int			busy;
+	struct tx_ring		txr;
+	struct rx_ring		rxr;
+	u64			irqs;
 };
 
 #ifdef PCI_IOV
@@ -451,6 +446,11 @@ struct ixgbe_vf {
 
 /* Our adapter structure */
 struct adapter {
+	if_ctx_t ctx;
+	if_softc_ctx_t shared;
+#define num_queues shared->isc_nqsets
+#define max_frame_size shared->isc_max_frame_size
+
 	struct ifnet		*ifp;
 	struct ixgbe_hw		hw;
 
@@ -480,7 +480,6 @@ struct adapter {
 	eventhandler_tag 	vlan_detach;
 
 	u16			num_vlans;
-	u16			num_queues;
 
 	/*
 	** Shadow VFTA table, this is needed because
@@ -495,7 +494,6 @@ struct adapter {
 	u32			fc; /* local flow ctrl setting */
 	int			advertise;  /* link speeds */
 	bool			link_active;
-	u16			max_frame_size;
 	u16			num_segs;
 	u32			link_speed;
 	bool			link_up;
@@ -691,19 +689,6 @@ drbr_needs_enqueue(struct ifnet *ifp, struct buf_ring *br)
         return (!buf_ring_empty(br));
 }
 #endif
-
-/*
-** Find the number of unrefreshed RX descriptors
-*/
-static inline u16
-ixgbe_rx_unrefreshed(struct rx_ring *rxr)
-{       
-	if (rxr->next_to_check > rxr->next_to_refresh)
-		return (rxr->next_to_check - rxr->next_to_refresh - 1);
-	else
-		return ((rxr->num_desc + rxr->next_to_check) -
-		    rxr->next_to_refresh - 1);
-}       
 
 /*
 ** This checks for a zero mac addr, something that will be likely
