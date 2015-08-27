@@ -475,8 +475,9 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
 	dev = iflib_get_dev(ctx);
 	adapter = iflib_get_softc(ctx);
 	adapter->dev = adapter->osdep.dev = dev;
-	hw = &adapter->hw;
 	adapter->shared = iflib_get_softc_ctx(ctx);
+	adapter->media = iflib_get_media(ctx);
+	hw = &adapter->hw;
   
 	/* Sysctls */
 	ixgbe_add_device_sysctls(adapter);
@@ -496,8 +497,7 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
 	/* Do base PCI setup - map BAR0 */
 	if (ixgbe_allocate_pci_resources(adapter)) {
 		device_printf(dev, "Allocation of PCI resources failed\n");
-		error = ENXIO;
-		goto err_late;
+		return (ENXIO);
 	}
   
 	/*
@@ -529,7 +529,7 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
 	if (adapter->mta == NULL) {
 		device_printf(dev, "Can not allocate multicast setup array\n");
 		error = ENOMEM;
-		goto err_late;
+		goto err_pci;
 	}
   
 	/* Initialize the shared code */
@@ -584,8 +584,10 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
 	ixgbe_setup_optics(adapter);
 
 	iflib_set_mac(ctx, hw->mac.addr);
-  
+	return (0);  
 err_late:
+	free(adapter->mta, M_DEVBUF);
+err_pci:
 	ixgbe_free_pci_resources(adapter);
   
 	return (error);
@@ -607,7 +609,7 @@ ixgbe_if_attach_post(if_ctx_t ctx)
 	error = ixgbe_interface_setup(ctx);
 	if (error) {
 		device_printf(dev, "Interface setup failed: %d\n", error);
-		goto err_mac_hmc;
+		goto err;
 	}
 
 	/* Initialize statistics */
@@ -650,11 +652,10 @@ ixgbe_if_attach_post(if_ctx_t ctx)
 	ctrl_ext = IXGBE_READ_REG(hw, IXGBE_CTRL_EXT);
 	ctrl_ext |= IXGBE_CTRL_EXT_DRV_LOAD;
 	IXGBE_WRITE_REG(hw, IXGBE_CTRL_EXT, ctrl_ext);
-  
-err_mac_hmc:
-	ixgbe_free_pci_resources(adapter);
-	free(adapter->mta, M_DEVBUF);
-  
+
+	return (0);
+err:
+	ixgbe_if_detach(ctx);
 	return (error);
 } 
 
@@ -755,7 +756,7 @@ ixgbe_interface_setup(if_ctx_t ctx)
 	ixgbe_add_media_types(adapter);
 
 	/* Autoselect media by default */
-	ifmedia_set(&adapter->media, IFM_ETHER | IFM_AUTO);
+	ifmedia_set(adapter->media, IFM_ETHER | IFM_AUTO);
 
 	return (0);
 }
@@ -812,24 +813,24 @@ ixgbe_add_media_types(struct adapter *adapter)
 
 	/* Media types with matching FreeBSD media defines */
 	if (layer & IXGBE_PHYSICAL_LAYER_10GBASE_T)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_T, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_T, 0, NULL);
 	if (layer & IXGBE_PHYSICAL_LAYER_1000BASE_T)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_1000_T, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_1000_T, 0, NULL);
 	if (layer & IXGBE_PHYSICAL_LAYER_100BASE_TX)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_100_TX, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_100_TX, 0, NULL);
 	
 	if (layer & IXGBE_PHYSICAL_LAYER_SFP_PLUS_CU ||
 	    layer & IXGBE_PHYSICAL_LAYER_SFP_ACTIVE_DA)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_TWINAX, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_TWINAX, 0, NULL);
 
 	if (layer & IXGBE_PHYSICAL_LAYER_10GBASE_LR)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_LR, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_LR, 0, NULL);
 	if (layer & IXGBE_PHYSICAL_LAYER_10GBASE_SR)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_SR, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_SR, 0, NULL);
 	if (layer & IXGBE_PHYSICAL_LAYER_10GBASE_CX4)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_CX4, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_CX4, 0, NULL);
 	if (layer & IXGBE_PHYSICAL_LAYER_1000BASE_SX)
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_1000_SX, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_1000_SX, 0, NULL);
 	/*
 	** Other (no matching FreeBSD media type):
 	** To workaround this, we'll assign these completely
@@ -838,17 +839,17 @@ ixgbe_add_media_types(struct adapter *adapter)
 	if (layer & IXGBE_PHYSICAL_LAYER_10GBASE_KR) {
 		device_printf(dev, "Media supported: 10GbaseKR\n");
 		device_printf(dev, "10GbaseKR mapped to 10GbaseSR\n");
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_SR, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_SR, 0, NULL);
 	}
 	if (layer & IXGBE_PHYSICAL_LAYER_10GBASE_KX4) {
 		device_printf(dev, "Media supported: 10GbaseKX4\n");
 		device_printf(dev, "10GbaseKX4 mapped to 10GbaseCX4\n");
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_10G_CX4, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_10G_CX4, 0, NULL);
 	}
 	if (layer & IXGBE_PHYSICAL_LAYER_1000BASE_KX) {
 		device_printf(dev, "Media supported: 1000baseKX\n");
 		device_printf(dev, "1000baseKX mapped to 1000baseCX\n");
-		ifmedia_add(&adapter->media, IFM_ETHER | IFM_1000_CX, 0, NULL);
+		ifmedia_add(adapter->media, IFM_ETHER | IFM_1000_CX, 0, NULL);
 	}
 	if (layer & IXGBE_PHYSICAL_LAYER_1000BASE_BX) {
 		/* Someday, someone will care about you... */
@@ -856,13 +857,13 @@ ixgbe_add_media_types(struct adapter *adapter)
 	}
 	
 	if (hw->device_id == IXGBE_DEV_ID_82598AT) {
-		ifmedia_add(&adapter->media,
+		ifmedia_add(adapter->media,
 					IFM_ETHER | IFM_1000_T | IFM_FDX, 0, NULL);
-		ifmedia_add(&adapter->media,
+		ifmedia_add(adapter->media,
 					IFM_ETHER | IFM_1000_T, 0, NULL);
 	}
 
-	ifmedia_add(&adapter->media, IFM_ETHER | IFM_AUTO, 0, NULL);
+	ifmedia_add(adapter->media, IFM_ETHER | IFM_AUTO, 0, NULL);
 }
 
 static void
@@ -2501,12 +2502,6 @@ ixgbe_if_init(if_ctx_t ctx)
 	ixgbe_if_multi_set(ctx); 
 	
 	/* Determine the correct mbuf pool
-	** for doing jumbo frames */
-	if (adapter->max_frame_size <= MCLBYTES)
-		adapter->rx_mbuf_sz = MCLBYTES;
-	else
-		adapter->rx_mbuf_sz = MJUMPAGESIZE;
-
 	/* Enable SDP & MSIX interrupts based on adapter */
 	ixgbe_config_gpie(adapter);
 
@@ -2559,7 +2554,6 @@ ixgbe_if_init(if_ctx_t ctx)
 				msec_delay(1);
 		}
 		wmb();
-
 		IXGBE_WRITE_REG(hw, IXGBE_RDT(rxr->me), adapter->num_rx_desc - 1);
 	}
 
@@ -2817,6 +2811,7 @@ ixgbe_config_delay_values(struct adapter *adapter)
  **********************************************************************/
 #define IXGBE_RAR_ENTRIES 16
  
+/* XXX re-work see if_multiaddr_count and if_multi_apply */
 static void
 ixgbe_if_multi_set(if_ctx_t ctx)
 {
