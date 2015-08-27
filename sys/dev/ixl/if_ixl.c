@@ -1391,7 +1391,7 @@ ixl_del_multi(struct ixl_vsi *vsi)
 }
 
 static int
-ixl_mc_filter_apply(void *arg, struct ifmultiaddr *ifma)
+ixl_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count __unused)
 {
 	struct ixl_vsi *vsi = arg;
 

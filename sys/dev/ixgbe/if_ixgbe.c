@@ -2715,7 +2715,23 @@ ixgbe_config_delay_values(struct adapter *adapter)
  *
  **********************************************************************/
 #define IXGBE_RAR_ENTRIES 16
- 
+
+static int
+ixgbe_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
+{
+	struct adapter *adapter = arg;
+	struct ixgbe_mc_addr *mta = adapter->mta;
+
+	if (ifma->ifma_addr->sa_family != AF_LINK)
+		return (0);
+    if (count == MAX_NUM_MULTICAST_ADDRESSES)
+		return (0);
+    bcopy(LLADDR((struct sockaddr_dl *) ifma->ifma_addr),
+	  mta[count].addr, IXGBE_ETH_LENGTH_OF_ADDRESS);
+    mta[count].vmdq = adapter->pool;
+	return (1);
+}
+
 static void
 ixgbe_if_multi_set(if_ctx_t ctx)
 {
@@ -2732,16 +2748,7 @@ ixgbe_if_multi_set(if_ctx_t ctx)
   mta = adapter->mta;
   bzero(mta, sizeof(*mta) * MAX_NUM_MULTICAST_ADDRESSES);
 
-  TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
-    if (ifma->ifma_addr->sa_family != AF_LINK)
-      continue;
-    if (mcnt == MAX_NUM_MULTICAST_ADDRESSES)
-      break;
-    bcopy(LLADDR((struct sockaddr_dl *) ifma->ifma_addr),
-	  mta[mcnt].addr, IXGBE_ETH_LENGTH_OF_ADDRESS);
-    mta[mcnt].vmdq = adapter->pool;
-		mcnt++;
-  }
+  mcnt = if_multi_apply(iflib_get_ifp(ctx, ixgbe_mc_filter_apply, adapter);
   
   fctrl = IXGBE_READ_REG(&adapter->hw, IXGBE_FCTRL);
   fctrl |= (IXGBE_FCTRL_UPE | IXGBE_FCTRL_MPE);
