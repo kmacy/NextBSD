@@ -1721,7 +1721,7 @@ ixlv_init_multi(struct ixl_vsi *vsi)
 }
 
 static int
-ixlv_mc_filter_apply(void *arg, struct ifmultiaddr *ifma)
+ixlv_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count __unused)
 {
 	struct ixlv_sc *sc = arg;
 

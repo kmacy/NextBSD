@@ -367,7 +367,7 @@ struct tx_ring {
 	unsigned long   	no_tx_map_avail;
 	unsigned long   	no_tx_dma_setup;
 	u64			no_desc_avail;
-	u64			total_packets;
+        u64			total_packets;
 };
 
 
@@ -378,6 +378,7 @@ struct rx_ring {
 	struct ix_queue	*que;
 	struct adapter		*adapter;
 	struct mtx		rx_mtx;
+        struct lro_ctrl         lro; 
 	u32			me;
 	u32			tail;
 	union ixgbe_adv_rx_desc	*rx_base;
@@ -419,6 +420,9 @@ struct ix_queue {
 	int			busy;
 	struct tx_ring		txr;
 	struct rx_ring		rxr;
+
+        struct if_irq           que_irq; 
+  
 	u64			irqs;
 };
 
@@ -458,26 +462,19 @@ struct adapter {
 	struct device		*dev;
 
 	struct resource		*pci_mem;
-	struct resource		*msix_mem;
 
 	/*
 	 * Interrupt resources: this set is
 	 * either used for legacy, or for Link
 	 * when doing MSIX
 	 */
-        struct if_irq           irq;
+	struct if_irq           irq;
 	void			*tag;
 	struct resource 	*res;
 
-	struct ifmedia		media;
-	struct callout		timer;
+	struct ifmedia		*media;
 	int			msix;
 	int			if_flags;
-
-	struct mtx		core_mtx;
-
-	eventhandler_tag 	vlan_attach;
-	eventhandler_tag 	vlan_detach;
 
 	u16			num_vlans;
 
@@ -506,14 +503,12 @@ struct adapter {
 	bool			wol_support;
 	u32			wufc;
 
-	/* Mbuf cluster size */
-	u32			rx_mbuf_sz;
-
 	/* Support for pluggable optics */
 	bool			sfp_probe;
-	struct task     	link_task;  /* Link tasklet */
+#if 0
 	struct task     	mod_task;   /* SFP tasklet */
 	struct task     	msf_task;   /* Multispeed Fiber */
+#endif	
 #ifdef PCI_IOV
 	struct task		mbx_task;   /* VF -> PF mailbox interrupt */
 #endif /* PCI_IOV */
@@ -521,9 +516,9 @@ struct adapter {
 	int			fdir_reinit;
 	struct task     	fdir_task;
 #endif
+#if 0
 	struct task		phy_task;   /* PHY intr tasklet */
-	struct taskqueue	*tq;
-
+#endif	
 	/*
 	** Queues: 
 	**   This is the irq holder, it has
@@ -537,15 +532,12 @@ struct adapter {
 	 *	Allocated at run time, an array of rings.
 	 */
 	struct tx_ring		*tx_rings;
-	u32			num_tx_desc;
-
 	/*
 	 * Receive rings:
 	 *	Allocated at run time, an array of rings.
 	 */
 	struct rx_ring		*rx_rings;
 	u64			active_queues;
-	u32			num_rx_desc;
 
 	/* Multicast array memory */
 	struct ixgbe_mc_addr	*mta;
