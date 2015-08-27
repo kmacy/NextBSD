@@ -596,6 +596,7 @@ ixgbe_rx_checksum(u32 staterr, struct mbuf * mp, u32 ptype)
  *  Parse the packet type to determine the appropriate hash
  *
  ******************************************************************/
+#ifdef RSS
 static int 
 ixgbe_determine_rsstype(u16 pkt_info)
 {
@@ -622,4 +623,4 @@ ixgbe_determine_rsstype(u16 pkt_info)
        return M_HASHTYPE_OPAQUE;
      }
 }
-
+#endif

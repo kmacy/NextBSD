@@ -231,6 +231,11 @@ static device_method_t ixgbe_if_methods[] = {
   DEVMETHOD_END
 };
 
+/*
+ * note that if (adapter->msix_mem) is replaced by:
+ * if (adapter->intr_type == IFLIB_INTR_MSIX)
+ */
+
 static driver_t ixgbe_if_driver = {
   "ixgbe_if", ixgbe_if_methods, sizeof(struct adapter)
 };
@@ -879,9 +884,7 @@ ixgbe_config_link(struct adapter *adapter)
 		if (hw->phy.multispeed_fiber) {
 			hw->mac.ops.setup_sfp(hw);
 			ixgbe_enable_tx_laser(hw);
-			taskqueue_enqueue(adapter->tq, &adapter->msf_task);
-		} else
-			taskqueue_enqueue(adapter->tq, &adapter->mod_task);
+		} 
 	} else {
 		if (hw->mac.ops.check_link)
 			err = ixgbe_check_link(hw, &adapter->link_speed,
@@ -1394,8 +1397,8 @@ ixgbe_if_vlan_unregister(if_ctx_t ctx, u16 vtag)
 static void
 ixgbe_setup_vlan_hw_support(struct adapter *adapter)
 {
-	struct ifnet 	*ifp = adapter->ifp;
 	struct ixgbe_hw *hw = &adapter->hw;
+    struct ifnet 	*ifp = adapter->ifp;
 	struct rx_ring	*rxr;
 	u32		ctrl;
 
@@ -1563,31 +1566,6 @@ ixgbe_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	device_t        dev = iflib_get_dev(ctx);
 	int 		error, rid, vector = 0;
 	int		cpu_id = 0;
-#ifdef	RSS
-	cpuset_t	cpu_mask;
-#endif
-
-#ifdef	RSS
-	/*
-	 * If we're doing RSS, the number of queues needs to
-	 * match the number of RSS buckets that are configured.
-	 *
-	 * + If there's more queues than RSS buckets, we'll end
-	 *   up with queues that get no traffic.
-	 *
-	 * + If there's more RSS buckets than queues, we'll end
-	 *   up having multiple RSS buckets map to the same queue,
-	 *   so there'll be some contention.
-	 */
-	if (adapter->num_queues != rss_getnumbuckets()) {
-		device_printf(dev,
-					  "%s: number of queues (%d) != number of RSS buckets (%d)"
-					  "; performance will be impacted.\n",
-					  __func__,
-					  adapter->num_queues,
-					  rss_getnumbuckets());
-	}
-#endif
 
 	/* Admin Que is vector 0*/
 	rid = vector + 1;
@@ -1969,10 +1947,6 @@ ixgbe_msix_link(void *arg)
 	/* Clear interrupt with write */
 	IXGBE_WRITE_REG(hw, IXGBE_EICR, reg_eicr);
 
-	/* Link status change */
-	if (reg_eicr & IXGBE_EICR_LSC)
-		taskqueue_enqueue(adapter->tq, &adapter->link_task);
-
 	if (adapter->hw.mac.type != ixgbe_mac_82598EB) {
 #ifdef IXGBE_FDIR
 		if (reg_eicr & IXGBE_EICR_FLOW_DIR) {
@@ -1981,7 +1955,6 @@ ixgbe_msix_link(void *arg)
 				return;
 			/* Disable the interrupt */
 			IXGBE_WRITE_REG(hw, IXGBE_EIMC, IXGBE_EICR_FLOW_DIR);
-			taskqueue_enqueue(adapter->tq, &adapter->fdir_task);
 		} else
 #endif
 			if (reg_eicr & IXGBE_EICR_ECC) {
@@ -1997,10 +1970,6 @@ ixgbe_msix_link(void *arg)
 			device_printf(adapter->dev, "System shutdown required!\n");
 			IXGBE_WRITE_REG(hw, IXGBE_EICR, IXGBE_EICR_TS);
 		}
-#ifdef PCI_IOV
-		if (reg_eicr & IXGBE_EICR_MAILBOX)
-			taskqueue_enqueue(adapter->tq, &adapter->mbx_task);
-#endif
 		
 	}
 	/* Pluggable optics-related interrupt */
@@ -2012,10 +1981,8 @@ ixgbe_msix_link(void *arg)
 	if (ixgbe_is_sfp(hw)) {
 		if (reg_eicr & IXGBE_EICR_GPI_SDP1_BY_MAC(hw)) {
 			IXGBE_WRITE_REG(hw, IXGBE_EICR, IXGBE_EICR_GPI_SDP1_BY_MAC(hw));
-			taskqueue_enqueue(adapter->tq, &adapter->msf_task);
 		} else if (reg_eicr & mod_mask) {
 			IXGBE_WRITE_REG(hw, IXGBE_EICR, mod_mask);
-			taskqueue_enqueue(adapter->tq, &adapter->mod_task);
 		}
 	}
 
@@ -2031,7 +1998,6 @@ ixgbe_msix_link(void *arg)
 	if (hw->device_id == IXGBE_DEV_ID_X550EM_X_10G_T &&
 	    (reg_eicr & IXGBE_EICR_GPI_SDP0_X540)) {
 		IXGBE_WRITE_REG(hw, IXGBE_EICR, IXGBE_EICR_GPI_SDP0_X540);
-		taskqueue_enqueue(adapter->tq, &adapter->phy_task);
 	}
  
 	IXGBE_WRITE_REG(&adapter->hw, IXGBE_EIMS, IXGBE_EIMS_OTHER);
@@ -2501,7 +2467,6 @@ ixgbe_if_init(if_ctx_t ctx)
 	/* Setup Multicast table */
 	ixgbe_if_multi_set(ctx); 
 	
-	/* Determine the correct mbuf pool
 	/* Enable SDP & MSIX interrupts based on adapter */
 	ixgbe_config_gpie(adapter);
 
@@ -2554,7 +2519,6 @@ ixgbe_if_init(if_ctx_t ctx)
 				msec_delay(1);
 		}
 		wmb();
-		IXGBE_WRITE_REG(hw, IXGBE_RDT(rxr->me), adapter->num_rx_desc - 1);
 	}
 
 	/* Enable Receive engine */
@@ -2827,25 +2791,22 @@ ixgbe_mc_filter_apply(void *arg, struct ifmultiaddr *ifma, int count)
 	return (1);
 }
 
-
 static void
 ixgbe_if_multi_set(if_ctx_t ctx)
 {
 	u32                  fctrl;
 	u8                   *update_ptr;
-	struct ifmultiaddr   *ifma;
 	struct adapter       *adapter = iflib_get_softc(ctx);
 	struct ixgbe_mc_addr *mta;
 	int                  mcnt = 0; 
 	struct ifnet         *ifp =  iflib_get_ifp(ctx);
   
 	IOCTL_DEBUGOUT("ixgbe_if_multi_set: begin");
-	
 
 	mta = adapter->mta;
 	bzero(mta, sizeof(*mta) * MAX_NUM_MULTICAST_ADDRESSES);
-	
-	mcnt = if_multi_apply(iflib_get_ifp(ctx, ixgbe_mc_filter_apply, adapter);
+
+	mcnt = if_multi_apply(iflib_get_ifp(ctx), ixgbe_mc_filter_apply, adapter);
   
 	fctrl = IXGBE_READ_REG(&adapter->hw, IXGBE_FCTRL);
 	fctrl |= (IXGBE_FCTRL_UPE | IXGBE_FCTRL_MPE);
@@ -2862,8 +2823,7 @@ ixgbe_if_multi_set(if_ctx_t ctx)
   
 	if (mcnt < MAX_NUM_MULTICAST_ADDRESSES) {
 		update_ptr = (u8 *)mta;
-		ixgbe_update_mc_addr_list(&adapter->hw,
-								  update_ptr, mcnt, ixgbe_mc_array_itr, TRUE);
+		ixgbe_update_mc_addr_list(&adapter->hw, update_ptr, mcnt, ixgbe_mc_array_itr, TRUE);
 	}
   
     IOCTL_DEBUGOUT("ixgbe_if_multi_set: end"); 
@@ -2968,11 +2928,10 @@ ixgbe_if_stop(if_ctx_t ctx)
 {
 	struct ifnet   *ifp;
 	struct adapter *adapter = iflib_get_softc(ctx);
+
 	struct ixgbe_hw *hw = &adapter->hw;
 	ifp = adapter->ifp;
    
-	mtx_assert(&adapter->core_mtx, MA_OWNED);
-
 	INIT_DEBUGOUT("ixgbe_stop: begin\n");
 
 	ixgbe_reset_hw(hw);
@@ -3147,16 +3106,16 @@ ixgbe_if_enable_intr(if_ctx_t ctx)
 	IXGBE_WRITE_REG(hw, IXGBE_EIMS, mask);
 
 	/* With MSI-X we use auto clear */
-	if (adapter->msix_mem) {
-		mask = IXGBE_EIMS_ENABLE_MASK;
-		/* Don't autoclear Link */
-		mask &= ~IXGBE_EIMS_OTHER;
-		mask &= ~IXGBE_EIMS_LSC;
+     if (adapter->intr_type == IFLIB_INTR_MSIX) {
+		 mask = IXGBE_EIMS_ENABLE_MASK;
+		 /* Don't autoclear Link */
+		 mask &= ~IXGBE_EIMS_OTHER;
+		 mask &= ~IXGBE_EIMS_LSC;
 #ifdef PCI_IOV
-		mask &= ~IXGBE_EIMS_MAILBOX;
+		 mask &= ~IXGBE_EIMS_MAILBOX;
 #endif
-		IXGBE_WRITE_REG(hw, IXGBE_EIAC, mask);
-	}
+		 IXGBE_WRITE_REG(hw, IXGBE_EIAC, mask);
+	 }
 
 	/*
 	** Now enable all queues, this is done separately to
@@ -3173,7 +3132,7 @@ static void
 ixgbe_if_disable_intr(if_ctx_t ctx)
 {
 	struct adapter *adapter = iflib_get_softc(ctx);
-	if (adapter->msix_mem)
+	if (adapter->intr_type == IFLIB_INTR_MSIX)
 		IXGBE_WRITE_REG(&adapter->hw, IXGBE_EIAC, 0);
 	if (adapter->hw.mac.type == ixgbe_mac_82598EB) {
 		IXGBE_WRITE_REG(&adapter->hw, IXGBE_EIMC, ~0);
@@ -3249,23 +3208,6 @@ ixgbe_free_pci_resources(struct adapter * adapter)
 {
 	struct 		ix_queue *que = adapter->queues;
 	device_t	dev = iflib_get_dev(adapter->ctx); 
-	int		rid, memrid;
-
-	if (adapter->hw.mac.type == ixgbe_mac_82598EB)
-		memrid = PCIR_BAR(MSIX_82598_BAR);
-	else
-		memrid = PCIR_BAR(MSIX_82599_BAR);
-
-	/*
-	** There is a slight possibility of a failure mode
-	** in attach that will result in entering this function
-	** before interrupt resources have been initialized, and
-	** in that case we do not want to execute the loops below
-	** We can detect this reliably by the state of the adapter
-	** res pointer.
-	*/
-	if (adapter->res == NULL)
-		goto mem;
 
 	/*
 	**  Release all msix queue resources:
@@ -3274,32 +3216,14 @@ ixgbe_free_pci_resources(struct adapter * adapter)
 		iflib_irq_free(adapter->ctx, &que->que_irq); 
 	}
 
-
-	/* Clean the Legacy or Link interrupt last */
-	if (adapter->vector) /* we are doing MSIX */
-		rid = adapter->vector + 1;
-	else
-		(adapter->msix != 0) ? (rid = 1):(rid = 0);
-
-	if (adapter->tag != NULL) {
-		bus_teardown_intr(dev, adapter->res, adapter->tag);
-		adapter->tag = NULL;
-	}
-	if (adapter->res != NULL)
-		bus_release_resource(dev, SYS_RES_IRQ, rid, adapter->res);
-mem:
-	if (adapter->msix)
-		pci_release_msi(dev);
-	
-	if (adapter->msix_mem != NULL)
-		bus_release_resource(dev, SYS_RES_MEMORY,
-							 memrid, adapter->msix_mem);
-	
+	/*
+	 * Free link/admin interrupt
+	 */
+	if (adapter->intr_type == IFLIB_INTR_MSIX)
+		iflib_irq_free(adapter->ctx, &adapter->irq);
 	if (adapter->pci_mem != NULL)
 		bus_release_resource(dev, SYS_RES_MEMORY,
 							 PCIR_BAR(0), adapter->pci_mem);
-
-	return;
 }
 
 /* Sysctls */

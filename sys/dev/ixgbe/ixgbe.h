@@ -454,7 +454,7 @@ struct adapter {
 	if_softc_ctx_t shared;
 #define num_queues shared->isc_nqsets
 #define max_frame_size shared->isc_max_frame_size
-
+#define intr_type shared->isc_intr
 	struct ifnet		*ifp;
 	struct ixgbe_hw		hw;
 
