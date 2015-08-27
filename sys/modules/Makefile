@@ -473,7 +473,8 @@ _txp=		txp
 .if ${MK_SOURCELESS_UCODE} != "no" && ${MACHINE_CPUARCH} != "arm" && \
 	${MACHINE_ARCH:C/mips(el)?/mips/} != "mips" && \
 	${MACHINE_ARCH} != "powerpc"
-_cxgbe=		cxgbe
+# disable until conversion complete
+#_cxgbe=		cxgbe
 .endif
 
 .if ${MACHINE_CPUARCH} != "arm" && ${MACHINE_CPUARCH} != "mips" && \
@@ -525,8 +526,9 @@ _io=		io
 .if ${MK_OFED} != "no" || defined(ALL_MODULES)
 _ipoib=         ipoib
 .endif
-_ix=		ix
-_ixv=		ixv
+# disable until conversion complete
+#_ix=		ix
+#_ixv=		ixv
 _linprocfs=	linprocfs
 _linsysfs=	linsysfs
 _linux=		linux
