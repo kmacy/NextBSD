@@ -879,8 +879,8 @@ launch_msg_mach(launch_data_t d)
 	kern_return_t kr;
 
 	requestCnt = 1024 * 1024;
-	//mig_allocate(&request, requestCnt);
-	request = (vm_offset_t)malloc(requestCnt);
+	mig_allocate(&request, requestCnt);
+	//request = (vm_offset_t)malloc(requestCnt);
 
 	int out_fds[128];
 	size_t nout_fds = 0;
