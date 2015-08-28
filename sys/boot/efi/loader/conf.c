@@ -31,14 +31,17 @@ __FBSDID("$FreeBSD$");
 #include <bootstrap.h>
 #include <efi.h>
 #include <efilib.h>
+#include "../zfs/libzfs.h"
 
 struct devsw *devsw[] = {
 	&efipart_dev,
 	&efinet_dev,
+        &zfs_dev,
 	NULL
 };
 
 struct fs_ops *file_system[] = {
+        &zfs_fsops,
 	&dosfs_fsops,
 	&ufs_fsops,
 	&cd9660_fsops,
