@@ -10,6 +10,8 @@ MAN=		iscsid.8
 
 LIBADD=		md util
 
+WANTS_PIE=	yes
+
 WARNS=		6
 
 .include <bsd.prog.mk>

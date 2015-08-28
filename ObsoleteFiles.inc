@@ -55,6 +55,9 @@ OLD_FILES+=usr/share/man/man4/dtrace-proc.4.gz
 OLD_FILES+=usr/share/man/man4/dtrace-sched.4.gz
 OLD_FILES+=usr/share/man/man4/dtrace-tcp.4.gz
 OLD_FILES+=usr/share/man/man4/dtrace-udp.4.gz
+# 20150624
+OLD_LIBS+=usr/lib/libugidfw.so.4
+OLD_LIBS+=usr/lib32/libugidfw.so.4
 # 20150604: Move nvlist man pages to section 9.
 OLD_FILES+=usr/share/man/man3/libnv.3.gz
 OLD_FILES+=usr/share/man/man3/nvlist.3.gz
@@ -655,6 +658,10 @@ OLD_FILES+=usr/tests/usr.sbin/pw/pw_modify
 # 20141202: update to mandoc CVS 20141201
 OLD_FILES+=usr.bin/preconv
 OLD_FILES+=share/man/man1/preconv.1.gz
+# 20141204 ibcs support removal
+OLD_FILES+=etc/rc.d/archdep
+OLD_FILES+=shate/examples/ibcs2/README
+OLD_FILES+=shate/examples/ibcs2/hello.uu
 # 20141129: mrouted rc.d scripts removed from base
 OLD_FILES+=etc/rc.d/mrouted
 # 20141126: convert sbin/mdconfig/tests to ATF format tests

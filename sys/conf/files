@@ -446,7 +446,7 @@ contrib/dev/acpica/components/parser/psxface.c		optional acpi
 contrib/dev/acpica/components/resources/rsaddr.c	optional acpi
 contrib/dev/acpica/components/resources/rscalc.c	optional acpi
 contrib/dev/acpica/components/resources/rscreate.c	optional acpi
-contrib/dev/acpica/components/resources/rsdump.c	optional acpi
+contrib/dev/acpica/components/resources/rsdump.c	optional acpi acpi_debug
 contrib/dev/acpica/components/resources/rsdumpinfo.c	optional acpi
 contrib/dev/acpica/components/resources/rsinfo.c	optional acpi
 contrib/dev/acpica/components/resources/rsio.c		optional acpi
@@ -3156,6 +3156,15 @@ gnu/fs/reiserfs/reiserfs_stree.c	optional reiserfs
 gnu/fs/reiserfs/reiserfs_vfsops.c	optional reiserfs
 gnu/fs/reiserfs/reiserfs_vnops.c	optional reiserfs
 #
+hardenedbsd/hbsd_pax_common.c		optional pax
+hardenedbsd/hbsd_pax_log.c		optional pax
+hardenedbsd/hbsd_pax_aslr.c		optional pax pax_aslr
+hardenedbsd/hbsd_pax_hardening.c	optional pax pax_hardening
+hardenedbsd/hbsd_pax_noexec.c		optional pax pax_noexec
+hardenedbsd/hbsd_pax_segvguard.c	optional pax pax_segvguard
+#
+hardenedbsd/hbsd_ptrace_hardening.c	optional pax pax_ptrace_hardening | pax_ptrace_hardening_grp
+#
 isa/isa_if.m			standard
 isa/isa_common.c		optional isa
 isa/isahint.c			optional isa
@@ -4183,6 +4192,7 @@ security/mac/mac_cred.c		optional mac
 security/mac/mac_framework.c	optional mac
 security/mac/mac_inet.c		optional mac inet | mac inet6
 security/mac/mac_inet6.c	optional mac inet6
+security/mac/mac_jail.c		optional mac
 security/mac/mac_label.c	optional mac
 security/mac/mac_net.c		optional mac
 security/mac/mac_pipe.c		optional mac

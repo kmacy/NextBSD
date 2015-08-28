@@ -30,6 +30,7 @@ __FBSDID("$FreeBSD$");
 #include "opt_compat.h"
 #include "opt_inet.h"
 #include "opt_inet6.h"
+#include "opt_pax.h"
 
 #define __ELF_WORD_SIZE 32
 
@@ -55,6 +56,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mount.h>
 #include <sys/mutex.h>
 #include <sys/namei.h>
+#include <sys/pax.h>
 #include <sys/proc.h>
 #include <sys/procctl.h>
 #include <sys/reboot.h>
@@ -444,10 +446,6 @@ freebsd32_mprotect(struct thread *td, struct freebsd32_mprotect_args *uap)
 	ap.addr = PTRIN(uap->addr);
 	ap.len = uap->len;
 	ap.prot = uap->prot;
-#if defined(__amd64__)
-	if (i386_read_exec && (ap.prot & PROT_READ) != 0)
-		ap.prot |= PROT_EXEC;
-#endif
 	return (sys_mprotect(td, &ap));
 }
 
@@ -461,11 +459,6 @@ freebsd32_mmap(struct thread *td, struct freebsd32_mmap_args *uap)
 	int flags	 = uap->flags;
 	int fd		 = uap->fd;
 	off_t pos	 = PAIR32TO64(off_t,uap->pos);
-
-#if defined(__amd64__)
-	if (i386_read_exec && (prot & PROT_READ))
-		prot |= PROT_EXEC;
-#endif
 
 	ap.addr = (void *) addr;
 	ap.len = len;
@@ -2807,12 +2800,16 @@ freebsd32_copyout_strings(struct image_params *imgp)
 		execpath_len = strlen(imgp->execpath) + 1;
 	else
 		execpath_len = 0;
-	arginfo = (struct freebsd32_ps_strings *)curproc->p_sysent->
-	    sv_psstrings;
-	if (imgp->proc->p_sysent->sv_sigcode_base == 0)
+	arginfo = (struct freebsd32_ps_strings *)curproc->p_psstrings;
+	imgp->proc->p_sigcode_base = imgp->proc->p_sysent->sv_sigcode_base;
+	if (imgp->proc->p_sigcode_base == 0)
 		szsigcode = *(imgp->proc->p_sysent->sv_szsigcode);
-	else
+	else {
 		szsigcode = 0;
+#ifdef PAX_ASLR
+		pax_aslr_vdso(imgp->proc, &(imgp->proc->p_sigcode_base));
+#endif
+	}
 	destp =	(uintptr_t)arginfo;
 
 	/*

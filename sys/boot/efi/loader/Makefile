@@ -12,6 +12,8 @@ MK_SSP=		no
 PROG=		loader.sym
 INTERNALPROG=
 
+#LIBZFSBOOT=	${.OBJDIR}/../../zfs/libzfsboot.a
+
 .PATH: ${.CURDIR}/../../efi/loader
 # architecture-specific loader code
 SRCS=	autoload.c \
@@ -22,7 +24,10 @@ SRCS=	autoload.c \
 	main.c \
 	self_reloc.c \
 	smbios.c \
-	vers.c
+	vers.c \
+        ${ZFS_C}
+
+ZFS_C = ${.CURDIR}/../../zfs/zfs.c
 
 .PATH: ${.CURDIR}/arch/${MACHINE}
 # For smbios.c
@@ -36,6 +41,8 @@ CFLAGS+=	-I${.CURDIR}/../include/${MACHINE}
 CFLAGS+=	-I${.CURDIR}/../../../contrib/dev/acpica/include
 CFLAGS+=	-I${.CURDIR}/../../..
 CFLAGS+=	-I${.CURDIR}/../../i386/libi386
+CFLAGS+=	-I${.CURDIR}/../../zfs
+CFLAGS+=	-I${.CURDIR}/../../../cddl/boot/zfs
 CFLAGS+=	-DNO_PCI -DEFI
 
 # make buildenv doesn't set DESTDIR, this means LIBSTAND
@@ -68,7 +75,7 @@ HAVE_BCACHE=    yes
 CFLAGS+=	-DEFI_STAGING_SIZE=${EFI_STAGING_SIZE}
 .endif
 
-# Always add MI sources 
+# Always add MI sources
 .PATH:		${.CURDIR}/../../common
 .include	"${.CURDIR}/../../common/Makefile.inc"
 CFLAGS+=	-I${.CURDIR}/../../common

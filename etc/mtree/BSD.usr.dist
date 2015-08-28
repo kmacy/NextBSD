@@ -16,8 +16,6 @@
         ..
     ..
     lib
-        aout
-        ..
         clang
             3.6.1
                 include
@@ -28,15 +26,15 @@
                 ..
             ..
         ..
-        compat
-            aout
-            ..
-        ..
         dtrace
         ..
         engines
         ..
         i18n
+        ..
+        libxo
+            encoder
+            ..
         ..
     ..
     lib32
@@ -340,8 +338,6 @@
             hast
             ..
             hostapd
-            ..
-            ibcs2
             ..
             indent
             ..

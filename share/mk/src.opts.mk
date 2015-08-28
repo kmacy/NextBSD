@@ -89,7 +89,6 @@ __DEFAULT_YES_OPTIONS = \
     FMTREE \
     FORTH \
     FP_LIBC \
-    FREEBSD_UPDATE \
     FTP \
     GAMES \
     GCOV \
@@ -179,6 +178,7 @@ __DEFAULT_NO_OPTIONS = \
     CLANG_EXTRAS \
     DTRACE_TESTS \
     EISA \
+    FREEBSD_UPDATE \
     HESIOD \
     LLDB \
     NAND \

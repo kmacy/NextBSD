@@ -1359,6 +1359,8 @@ dounmount(struct mount *mp, int flags, struct thread *td)
 		vput(coveredvp);
 	}
 	vfs_event_signal(NULL, VQ_UNMOUNT, 0);
+	if (mp == rootdevmp)
+		rootdevmp = NULL;
 	vfs_mount_destroy(mp);
 	return (0);
 }
@@ -1614,7 +1616,7 @@ vfs_scanopt(struct vfsoptlist *opts, const char *name, const char *fmt, ...)
 }
 
 int
-vfs_setopt(struct vfsoptlist *opts, const char *name, void *value, int len)
+vfs_setopt(struct vfsoptlist *opts, const char *name, void *value, size_t len)
 {
 	struct vfsopt *opt;
 
@@ -1635,7 +1637,7 @@ vfs_setopt(struct vfsoptlist *opts, const char *name, void *value, int len)
 }
 
 int
-vfs_setopt_part(struct vfsoptlist *opts, const char *name, void *value, int len)
+vfs_setopt_part(struct vfsoptlist *opts, const char *name, void *value, size_t len)
 {
 	struct vfsopt *opt;
 

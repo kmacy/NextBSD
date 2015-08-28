@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_ddb.h"
 #include "opt_init_path.h"
+#include "opt_pax.h"
 #include "opt_verbose_sysinit.h"
 
 #include <sys/param.h>
@@ -61,6 +62,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/syscallsubr.h>
 #include <sys/sysctl.h>
+#include <sys/pax.h>
 #include <sys/proc.h>
 #include <sys/racct.h>
 #include <sys/resourcevar.h>
@@ -116,6 +118,15 @@ SYSCTL_INT(_debug, OID_AUTO, boothowto, CTLFLAG_RD, &boothowto, 0,
 int	bootverbose = BOOTVERBOSE;
 SYSCTL_INT(_debug, OID_AUTO, bootverbose, CTLFLAG_RW, &bootverbose, 0,
 	"Control the output of verbose kernel messages");
+
+/* Want to avoid defining INVARIANTS if not already defined */
+#ifdef INVARIANTS
+static int	invariants = 1;
+#else
+static int	invariants = 0;
+#endif
+SYSCTL_INT(_debug, OID_AUTO, invariants, CTLFLAG_RD, &invariants, 0,
+	"Kernel compiled with invariants");
 
 /*
  * This ensures that there is at least one entry so that the sysinit_set
@@ -413,6 +424,7 @@ struct sysentvec null_sysvec = {
 	.sv_syscallnames = NULL,
 	.sv_schedtail	= NULL,
 	.sv_thread_detach = NULL,
+	.sv_pax_aslr_init = NULL,
 };
 
 /*
@@ -480,6 +492,11 @@ proc0_init(void *dummy __unused)
 	p->p_flag = P_SYSTEM | P_INMEM;
 	p->p_flag2 = 0;
 	p->p_state = PRS_NORMAL;
+#ifdef PAX
+	p->p_pax = PAX_NOTE_ALL_DISABLED;
+#endif
+	p->p_usrstack = USRSTACK;
+	p->p_psstrings = PS_STRINGS;
 	knlist_init_mtx(&p->p_klist, &p->p_mtx);
 	STAILQ_INIT(&p->p_ktr);
 	p->p_nice = NZERO;
@@ -497,6 +514,9 @@ proc0_init(void *dummy __unused)
 	td->td_flags = TDF_INMEM;
 	td->td_pflags = TDP_KTHREAD;
 	td->td_cpuset = cpuset_thread0();
+#ifdef PAX
+	td->td_pax = PAX_NOTE_ALL_DISABLED;
+#endif
 	vm_domain_policy_init(&td->td_vm_dom_policy);
 	vm_domain_policy_set(&td->td_vm_dom_policy, VM_POLICY_NONE, -1);
 	vm_domain_policy_init(&p->p_vm_dom_policy);
@@ -677,7 +697,7 @@ static char init_path[MAXPATHLEN] =
 #ifdef	INIT_PATH
     __XSTRING(INIT_PATH);
 #else
-    "/sbin/init:/sbin/oinit:/sbin/init.bak:/rescue/init";
+    "/sbin/launchd:/sbin/init:/sbin/oinit:/sbin/init.bak:/rescue/init";
 #endif
 SYSCTL_STRING(_kern, OID_AUTO, init_path, CTLFLAG_RD, init_path, 0,
 	"Path used to search the init process");
@@ -704,7 +724,8 @@ start_init(void *dummy)
 	vm_offset_t addr;
 	struct execve_args args;
 	int options, error;
-	char *var, *path, *next, *s;
+	char *var;
+	char *path, *next, *s;
 	char *ucp, **uap, *arg0, *arg1;
 	struct thread *td;
 	struct proc *p;
@@ -724,7 +745,7 @@ start_init(void *dummy)
 	/*
 	 * Need just enough stack to hold the faked-up "execve()" arguments.
 	 */
-	addr = p->p_sysent->sv_usrstack - PAGE_SIZE;
+	addr = p->p_usrstack - PAGE_SIZE;
 	if (vm_map_find(&p->p_vmspace->vm_map, NULL, 0, &addr, PAGE_SIZE, 0,
 	    VMFS_NO_SPACE, VM_PROT_ALL, VM_PROT_ALL, 0) != 0)
 		panic("init: couldn't allocate argument space");
@@ -751,7 +772,7 @@ start_init(void *dummy)
 		 * Move out the boot flag argument.
 		 */
 		options = 0;
-		ucp = (char *)p->p_sysent->sv_usrstack;
+		ucp = (char *)p->p_usrstack;
 		(void)subyte(--ucp, 0);		/* trailing zero */
 		if (boothowto & RB_SINGLE) {
 			(void)subyte(--ucp, 's');

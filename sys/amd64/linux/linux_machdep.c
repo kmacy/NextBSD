@@ -250,7 +250,7 @@ linux_mmap2(struct thread *td, struct linux_mmap2_args *args)
 			 * mmap's return value.
 			 */
 			PROC_LOCK(p);
-			p->p_vmspace->vm_maxsaddr = (char *)USRSTACK -
+			p->p_vmspace->vm_maxsaddr = (char *)p->p_usrstack -
 			    lim_cur_proc(p, RLIMIT_STACK);
 			PROC_UNLOCK(p);
 		}
