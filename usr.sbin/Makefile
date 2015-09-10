@@ -38,7 +38,6 @@ SUBDIR=	adduser \
 	iostat \
 	iovctl \
 	kldxref \
-	mailwrapper \
 	makefs \
 	memcontrol \
 	mergemaster \
