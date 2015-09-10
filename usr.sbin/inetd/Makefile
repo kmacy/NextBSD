@@ -24,4 +24,6 @@ CFLAGS+= -DIPSEC
 LIBADD+=	ipsec
 .endif
 
+WANTS_PIE=	yes
+
 .include <bsd.prog.mk>

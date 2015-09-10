@@ -34,6 +34,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_compat.h"
 #include "opt_compat_mach.h"
+#include "opt_pax.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -46,6 +47,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/vnode.h>
+#include <sys/pax.h>
 #include <sys/ptrace.h>
 #include <sys/rwlock.h>
 #include <sys/sx.h>
@@ -700,6 +702,12 @@ kern_ptrace(struct thread *td, int req, pid_t pid, void *addr, int data)
 		}
 	}
 	AUDIT_ARG_PROCESS(p);
+
+#ifdef PAX_PTRACE_HARDENING
+	error = pax_ptrace_hardening(td);
+	if (error)
+		goto fail;
+#endif
 
 	if ((p->p_flag & P_WEXIT) != 0) {
 		error = ESRCH;

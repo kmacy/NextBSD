@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_compat.h"
 #include "opt_hwpmc_hooks.h"
+#include "opt_pax.h"
 #include "opt_vm.h"
 
 #include <sys/param.h>
@@ -55,6 +56,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/sysproto.h>
 #include <sys/filedesc.h>
+#include <sys/pax.h>
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/procctl.h>
@@ -193,11 +195,14 @@ sys_mmap(td, uap)
 	struct file *fp;
 	vm_offset_t addr;
 	vm_size_t size, pageoff;
-	vm_prot_t cap_maxprot;
-	int align, error, flags, prot;
+	vm_prot_t cap_maxprot, prot;
+	int align, error, flags;
 	off_t pos;
 	struct vmspace *vms = td->td_proc->p_vmspace;
 	cap_rights_t rights;
+#ifdef PAX_ASLR
+	int pax_aslr_done;
+#endif
 
 	addr = (vm_offset_t) uap->addr;
 	size = uap->len;
@@ -206,6 +211,10 @@ sys_mmap(td, uap)
 	pos = uap->pos;
 
 	fp = NULL;
+
+#ifdef PAX_ASLR
+	pax_aslr_done = 0;
+#endif
 
 	/*
 	 * Ignore old flags that used to be defined but did not do anything.
@@ -221,14 +230,9 @@ sys_mmap(td, uap)
 	 * ld.so sometimes issues anonymous map requests with non-zero
 	 * pos.
 	 */
-	if (!SV_CURPROC_FLAG(SV_AOUT)) {
-		if ((uap->len == 0 && curproc->p_osrel >= P_OSREL_MAP_ANON) ||
-		    ((flags & MAP_ANON) != 0 && (uap->fd != -1 || pos != 0)))
-			return (EINVAL);
-	} else {
-		if ((flags & MAP_ANON) != 0)
-			pos = 0;
-	}
+	if ((uap->len == 0 && curproc->p_osrel >= P_OSREL_MAP_ANON) ||
+	    ((flags & MAP_ANON) != 0 && (uap->fd != -1 || pos != 0)))
+		return (EINVAL);
 
 	if (flags & MAP_STACK) {
 		if ((uap->fd != -1) ||
@@ -271,6 +275,11 @@ sys_mmap(td, uap)
 	    align >> MAP_ALIGNMENT_SHIFT < PAGE_SHIFT))
 		return (EINVAL);
 
+#if defined(MAP_32BIT) && defined(PAX_HARDENING)
+	if (pax_disallow_map32bit_active(td, flags))
+		return (EPERM);
+#endif
+
 	/*
 	 * Check for illegal addresses.  Watch out for address wrap... Note
 	 * that VM_*_ADDRESS are not constants due to casts (argh).
@@ -302,7 +311,13 @@ sys_mmap(td, uap)
 		 */
 		if (addr + size > MAP_32BIT_MAX_ADDR)
 			addr = 0;
-#endif
+#ifdef PAX_ASLR
+		PROC_LOCK(td->td_proc);
+		pax_aslr_mmap_map_32bit(td->td_proc, &addr, (vm_offset_t)uap->addr, flags);
+		pax_aslr_done = 1;
+		PROC_UNLOCK(td->td_proc);
+#endif /* PAX_ASLR */
+#endif /* MAP_32BIT */
 	} else {
 		/*
 		 * XXX for non-fixed mappings where no hint is provided or
@@ -318,6 +333,12 @@ sys_mmap(td, uap)
 		    lim_max(td, RLIMIT_DATA))))
 			addr = round_page((vm_offset_t)vms->vm_daddr +
 			    lim_max(td, RLIMIT_DATA));
+#ifdef PAX_ASLR
+		PROC_LOCK(td->td_proc);
+		pax_aslr_mmap(td->td_proc, &addr, (vm_offset_t)uap->addr, flags);
+		pax_aslr_done = 1;
+		PROC_UNLOCK(td->td_proc);
+#endif
 	}
 	if (size == 0) {
 		/*
@@ -333,8 +354,18 @@ sys_mmap(td, uap)
 		 *
 		 * This relies on VM_PROT_* matching PROT_*.
 		 */
+#ifdef PAX_NOEXEC
+		cap_maxprot = VM_PROT_ALL;
+
+		pax_pageexec(td->td_proc, &prot, &cap_maxprot);
+		pax_mprotect(td->td_proc, &prot, &cap_maxprot);
+
+		error = vm_mmap_object(&vms->vm_map, &addr, size, prot,
+		    cap_maxprot, flags, NULL, pos, FALSE, td);
+#else
 		error = vm_mmap_object(&vms->vm_map, &addr, size, prot,
 		    VM_PROT_ALL, flags, NULL, pos, FALSE, td);
+#endif
 	} else {
 		/*
 		 * Mapping file, get fp for validation and don't let the
@@ -360,6 +391,14 @@ sys_mmap(td, uap)
 			goto done;
 		}
 
+#ifdef PAX_NOEXEC
+		pax_pageexec(td->td_proc, &prot, &cap_maxprot);
+		pax_mprotect(td->td_proc, &prot, &cap_maxprot);
+#endif
+#ifdef PAX_ASLR
+		KASSERT((flags & MAP_FIXED) == MAP_FIXED || pax_aslr_done == 1,
+		    ("%s: ASLR reqiured ...", __func__));
+#endif
 		/* This relies on VM_PROT_* matching PROT_*. */
 		error = fo_mmap(fp, &vms->vm_map, &addr, size, prot,
 		    cap_maxprot, flags, pos, td);
@@ -426,13 +465,6 @@ ommap(td, uap)
 	nargs.addr = uap->addr;
 	nargs.len = uap->len;
 	nargs.prot = cvtbsdprot[uap->prot & 0x7];
-#ifdef COMPAT_FREEBSD32
-#if defined(__amd64__)
-	if (i386_read_exec && SV_PROC_FLAG(td->td_proc, SV_ILP32) &&
-	    nargs.prot != 0)
-		nargs.prot |= PROT_EXEC;
-#endif
-#endif
 	nargs.flags = 0;
 	if (uap->flags & OMAP_ANON)
 		nargs.flags |= MAP_ANON;

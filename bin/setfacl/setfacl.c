@@ -39,6 +39,7 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ftw.h>
 
 #include "setfacl.h"
 
@@ -70,8 +71,14 @@ uint have_mask;
 uint need_mask;
 uint have_stdin;
 uint n_flag;
+static int h_flag;
+static int R_flag;
+static unsigned int carried_error;
+static acl_type_t acl_type;
 
 static void	add_filename(const char *filename);
+static acl_t	sanitize_inheritance(const struct stat *sb, acl_t acl);
+static int	walk_path(const char *path, const struct stat *sb, int flag, struct FTW *ftwp);
 static void	usage(void);
 
 static void
@@ -88,11 +95,221 @@ add_filename(const char *filename)
 	TAILQ_INSERT_TAIL(&filelist, file, next);
 }
 
+static acl_t
+sanitize_inheritance(const struct stat *sb, acl_t acl)
+{
+	acl_t acl_new;
+	acl_entry_t acl_entry;
+	acl_flagset_t acl_flagset;
+	int acl_brand, entry_id;
+
+	acl_get_brand_np(acl, &acl_brand);
+	if (acl_brand != ACL_BRAND_NFS4)
+		return (acl);
+
+	if (S_ISDIR(sb->st_mode) != 0)
+		return (acl);
+
+	acl_new = acl_dup(acl);
+
+	entry_id = ACL_FIRST_ENTRY;
+	while (acl_get_entry(acl_new, entry_id, &acl_entry) == 1) {
+		entry_id = ACL_NEXT_ENTRY;
+		acl_get_flagset_np(acl_entry, &acl_flagset);
+		if (acl_get_flag_np(acl_flagset, ACL_ENTRY_INHERIT_ONLY)) {
+			acl_delete_entry(acl_new, acl_entry);
+			continue;
+		}
+		acl_delete_flag_np(acl_flagset, ACL_ENTRY_FILE_INHERIT
+		    | ACL_ENTRY_DIRECTORY_INHERIT
+		    | ACL_ENTRY_NO_PROPAGATE_INHERIT);
+	}
+
+	return acl_new;
+}
+
+static int
+walk_path(const char *path, const struct stat *sb, int flag, struct FTW *ftwp __unused)
+{
+	acl_t acl, acl_backup=NULL;
+	acl_entry_t unused_entry;
+	struct sf_entry *entry;
+	unsigned int local_error;
+	int ret;
+
+	local_error = 0;
+
+	if (acl_type == ACL_TYPE_DEFAULT && (flag & FTW_D) == 0) {
+		warnx("%s: default ACL may only be set on a directory",
+			path);
+		carried_error++;
+		return (R_flag == 0);
+	}
+
+	if (h_flag)
+		ret = lpathconf(path, _PC_ACL_NFS4);
+	else
+		ret = pathconf(path, _PC_ACL_NFS4);
+	if (ret > 0) {
+		if (acl_type == ACL_TYPE_DEFAULT) {
+			warnx("%s: there are no default entries "
+				"in NFSv4 ACLs", path);
+			carried_error++;
+			return (R_flag == 0);
+		}
+		acl_type = ACL_TYPE_NFS4;
+	} else if (ret == 0) {
+		if (acl_type == ACL_TYPE_NFS4)
+			acl_type = ACL_TYPE_ACCESS;
+	} else if (ret < 0 && errno != EINVAL) {
+		warn("%s: pathconf(..., _PC_ACL_NFS4) failed",
+			path);
+	}
+
+	if (h_flag)
+		acl = acl_get_link_np(path, acl_type);
+	else
+		acl = acl_get_file(path, acl_type);
+	if (acl == NULL) {
+		if (h_flag)
+			warn("%s: acl_get_link_np() failed",
+				path);
+		else
+			warn("%s: acl_get_file() failed",
+				path);
+		carried_error++;
+		return (R_flag == 0);
+	}
+
+	/* cycle through each option */
+	TAILQ_FOREACH(entry, &entrylist, next) {
+		if (local_error)
+			continue;
+
+		switch(entry->op) {
+		case OP_ADD_ACL:
+			if (R_flag && acl_type == ACL_TYPE_NFS4
+			    && (flag & FTW_D) == 0) {
+				acl_backup = acl_dup(entry->acl);
+				entry->acl = sanitize_inheritance(sb, entry->acl);
+			}
+			local_error += add_acl(entry->acl,
+				entry->entry_number, &acl, path);
+			if (R_flag && acl_type == ACL_TYPE_NFS4
+			    && (flag & FTW_D) == 0) {
+				acl_free(entry->acl);
+				entry->acl = acl_backup;
+			}
+			break;
+		case OP_MERGE_ACL:
+			if (R_flag && acl_type == ACL_TYPE_NFS4
+			    && (flag & FTW_D) == 0) {
+				acl_backup = acl_dup(entry->acl);
+				entry->acl = sanitize_inheritance(sb, entry->acl);
+			}
+			local_error += merge_acl(entry->acl, &acl,
+				path);
+			if (R_flag && acl_type == ACL_TYPE_NFS4
+			    && (flag & FTW_D) == 0) {
+				acl_free(entry->acl);
+				entry->acl = acl_backup;
+			}
+			need_mask = 1;
+			break;
+		case OP_REMOVE_EXT:
+			/*
+				* Don't try to call remove_ext() for empty
+				* default ACL.
+				*/
+			if (acl_type == ACL_TYPE_DEFAULT &&
+				acl_get_entry(acl, ACL_FIRST_ENTRY,
+				&unused_entry) == 0) {
+				local_error += remove_default(&acl,
+					path);
+				break;
+			}
+			remove_ext(&acl, path);
+			need_mask = 0;
+			break;
+		case OP_REMOVE_DEF:
+			if (acl_type == ACL_TYPE_NFS4) {
+				warnx("%s: there are no default entries in NFSv4 ACLs; "
+					"cannot remove", path);
+				local_error++;
+				break;
+			}
+			if (acl_delete_def_file(path) == -1) {
+				warn("%s: acl_delete_def_file() failed",
+					path);
+				local_error++;
+			}
+			if (acl_type == ACL_TYPE_DEFAULT)
+				local_error += remove_default(&acl,
+					path);
+			need_mask = 0;
+			break;
+		case OP_REMOVE_ACL:
+			local_error += remove_acl(entry->acl, &acl,
+				path);
+			need_mask = 1;
+			break;
+		case OP_REMOVE_BY_NUMBER:
+			local_error += remove_by_number(entry->entry_number,
+				&acl, path);
+			need_mask = 1;
+			break;
+		}
+	}
+
+	/*
+	* Don't try to set an empty default ACL; it will always fail.
+	* Use acl_delete_def_file(3) instead.
+	*/
+	if (acl_type == ACL_TYPE_DEFAULT &&
+		acl_get_entry(acl, ACL_FIRST_ENTRY, &unused_entry) == 0) {
+		if (acl_delete_def_file(path) == -1) {
+			warn("%s: acl_delete_def_file() failed",
+				path);
+			carried_error++;
+		}
+		return (R_flag == 0);
+	}
+
+	/* don't bother setting the ACL if something is broken */
+	if (local_error) {
+		carried_error++;
+		return (R_flag == 0);
+	}
+
+	if (acl_type != ACL_TYPE_NFS4 && need_mask &&
+		set_acl_mask(&acl, path) == -1) {
+		warnx("%s: failed to set ACL mask", path);
+		carried_error++;
+	} else if (h_flag) {
+		if (acl_set_link_np(path, acl_type,
+			acl) == -1) {
+			carried_error++;
+			warn("%s: acl_set_link_np() failed",
+				path);
+		}
+	} else {
+		if (acl_set_file(path, acl_type,
+			acl) == -1) {
+			carried_error++;
+			warn("%s: acl_set_file() failed",
+				path);
+		}
+	}
+
+	acl_free(acl);
+	return (R_flag == 0);
+}
+
 static void
 usage(void)
 {
 
-	fprintf(stderr, "usage: setfacl [-bdhkn] [-a position entries] "
+	fprintf(stderr, "usage: setfacl [-bdhknR] [-a position entries] "
 	    "[-m entries] [-M file] [-x entries] [-X file] [file ...]\n");
 	exit(1);
 }
@@ -100,26 +317,22 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
-	acl_t acl;
-	acl_type_t acl_type;
-	acl_entry_t unused_entry;
 	char filename[PATH_MAX];
-	int local_error, carried_error, ch, i, entry_number, ret;
-	int h_flag;
+	int ch, i, entry_number;
 	struct sf_file *file;
 	struct sf_entry *entry;
 	const char *fn_dup;
 	char *end;
-	struct stat sb;
 
 	acl_type = ACL_TYPE_ACCESS;
-	carried_error = local_error = 0;
+	carried_error = 0;
 	h_flag = have_mask = have_stdin = n_flag = need_mask = 0;
+	R_flag = 0;
 
 	TAILQ_INIT(&entrylist);
 	TAILQ_INIT(&filelist);
 
-	while ((ch = getopt(argc, argv, "M:X:a:bdhkm:nx:")) != -1)
+	while ((ch = getopt(argc, argv, "M:RX:a:bdhkm:nx:")) != -1)
 		switch(ch) {
 		case 'M':
 			entry = zmalloc(sizeof(struct sf_entry));
@@ -128,6 +341,9 @@ main(int argc, char *argv[])
 				err(1, "%s: get_acl_from_file() failed", optarg);
 			entry->op = OP_MERGE_ACL;
 			TAILQ_INSERT_TAIL(&entrylist, entry, next);
+			break;
+		case 'R':
+			R_flag = 1;
 			break;
 		case 'X':
 			entry = zmalloc(sizeof(struct sf_entry));
@@ -227,157 +443,11 @@ main(int argc, char *argv[])
 
 	/* cycle through each file */
 	TAILQ_FOREACH(file, &filelist, next) {
-		local_error = 0;
-
-		if (stat(file->filename, &sb) == -1) {
-			warn("%s: stat() failed", file->filename);
+		if (nftw(file->filename, walk_path, 5, h_flag ? FTW_PHYS : 0) < 0) {
+			warn("%s: nftw() failed", file->filename);
 			carried_error++;
 			continue;
 		}
-
-		if (acl_type == ACL_TYPE_DEFAULT && S_ISDIR(sb.st_mode) == 0) {
-			warnx("%s: default ACL may only be set on a directory",
-			    file->filename);
-			carried_error++;
-			continue;
-		}
-
-		if (h_flag)
-			ret = lpathconf(file->filename, _PC_ACL_NFS4);
-		else
-			ret = pathconf(file->filename, _PC_ACL_NFS4);
-		if (ret > 0) {
-			if (acl_type == ACL_TYPE_DEFAULT) {
-				warnx("%s: there are no default entries "
-			           "in NFSv4 ACLs", file->filename);
-				carried_error++;
-				continue;
-			}
-			acl_type = ACL_TYPE_NFS4;
-		} else if (ret == 0) {
-			if (acl_type == ACL_TYPE_NFS4)
-				acl_type = ACL_TYPE_ACCESS;
-		} else if (ret < 0 && errno != EINVAL) {
-			warn("%s: pathconf(..., _PC_ACL_NFS4) failed",
-			    file->filename);
-		}
-
-		if (h_flag)
-			acl = acl_get_link_np(file->filename, acl_type);
-		else
-			acl = acl_get_file(file->filename, acl_type);
-		if (acl == NULL) {
-			if (h_flag)
-				warn("%s: acl_get_link_np() failed",
-				    file->filename);
-			else
-				warn("%s: acl_get_file() failed",
-				    file->filename);
-			carried_error++;
-			continue;
-		}
-
-		/* cycle through each option */
-		TAILQ_FOREACH(entry, &entrylist, next) {
-			if (local_error)
-				continue;
-
-			switch(entry->op) {
-			case OP_ADD_ACL:
-				local_error += add_acl(entry->acl,
-				    entry->entry_number, &acl, file->filename);
-				break;
-			case OP_MERGE_ACL:
-				local_error += merge_acl(entry->acl, &acl,
-				    file->filename);
-				need_mask = 1;
-				break;
-			case OP_REMOVE_EXT:
-				/*
-				 * Don't try to call remove_ext() for empty
-				 * default ACL.
-				 */
-				if (acl_type == ACL_TYPE_DEFAULT &&
-				    acl_get_entry(acl, ACL_FIRST_ENTRY,
-				    &unused_entry) == 0) {
-					local_error += remove_default(&acl,
-					    file->filename);
-					break;
-				}
-				remove_ext(&acl, file->filename);
-				need_mask = 0;
-				break;
-			case OP_REMOVE_DEF:
-				if (acl_type == ACL_TYPE_NFS4) {
-					warnx("%s: there are no default entries in NFSv4 ACLs; "
-					    "cannot remove", file->filename);
-					local_error++;
-					break;
-				}
-				if (acl_delete_def_file(file->filename) == -1) {
-					warn("%s: acl_delete_def_file() failed",
-					    file->filename);
-					local_error++;
-				}
-				if (acl_type == ACL_TYPE_DEFAULT)
-					local_error += remove_default(&acl,
-					    file->filename);
-				need_mask = 0;
-				break;
-			case OP_REMOVE_ACL:
-				local_error += remove_acl(entry->acl, &acl,
-				    file->filename);
-				need_mask = 1;
-				break;
-			case OP_REMOVE_BY_NUMBER:
-				local_error += remove_by_number(entry->entry_number,
-				    &acl, file->filename);
-				need_mask = 1;
-				break;
-			}
-		}
-
-		/*
-		 * Don't try to set an empty default ACL; it will always fail.
-		 * Use acl_delete_def_file(3) instead.
-		 */
-		if (acl_type == ACL_TYPE_DEFAULT &&
-		    acl_get_entry(acl, ACL_FIRST_ENTRY, &unused_entry) == 0) {
-			if (acl_delete_def_file(file->filename) == -1) {
-				warn("%s: acl_delete_def_file() failed",
-				    file->filename);
-				carried_error++;
-			}
-			continue;
-		}
-
-		/* don't bother setting the ACL if something is broken */
-		if (local_error) {
-			carried_error++;
-			continue;
-		}
-
-		if (acl_type != ACL_TYPE_NFS4 && need_mask &&
-		    set_acl_mask(&acl, file->filename) == -1) {
-			warnx("%s: failed to set ACL mask", file->filename);
-			carried_error++;
-		} else if (h_flag) {
-			if (acl_set_link_np(file->filename, acl_type,
-			    acl) == -1) {
-				carried_error++;
-				warn("%s: acl_set_link_np() failed",
-				    file->filename);
-			}
-		} else {
-			if (acl_set_file(file->filename, acl_type,
-			    acl) == -1) {
-				carried_error++;
-				warn("%s: acl_set_file() failed",
-				    file->filename);
-			}
-		}
-
-		acl_free(acl);
 	}
 
 	return (carried_error);

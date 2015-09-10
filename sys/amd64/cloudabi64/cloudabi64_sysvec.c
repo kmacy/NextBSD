@@ -64,7 +64,7 @@ cloudabi64_copyout_strings(struct image_params *imgp)
 
 	/* Copy out program arguments. */
 	len = imgp->args->begin_envv - imgp->args->begin_argv;
-	begin = rounddown2(USRSTACK - len, sizeof(register_t));
+	begin = rounddown2(imgp->proc->p_usrstack - len, sizeof(register_t));
 	copyout(imgp->args->begin_argv, (void *)begin, len);
 	return ((register_t *)begin);
 }

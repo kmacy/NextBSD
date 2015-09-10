@@ -20,6 +20,7 @@ SRCS=	rtadvd.c rrenum.c advcap.c if.c config.c timer.c timer_subr.c	\
 	control.c control_server.c
 
 LIBADD=	util
+WANTS_PIE=	yes
 
 CFLAGS+= -DHAVE_ARC4RANDOM
 

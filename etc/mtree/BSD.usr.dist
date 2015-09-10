@@ -16,8 +16,6 @@
         ..
     ..
     lib
-        aout
-        ..
         clang
             3.6.1
                 include
@@ -26,10 +24,6 @@
                     freebsd
                     ..
                 ..
-            ..
-        ..
-        compat
-            aout
             ..
         ..
         dtrace
@@ -340,8 +334,6 @@
             hast
             ..
             hostapd
-            ..
-            ibcs2
             ..
             indent
             ..
