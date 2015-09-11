@@ -19,7 +19,7 @@
 # $FreeBSD$
 
 cpu		HAMMER
-ident		HARDENEDBSD-11-CURRENT
+ident		NextBSD-CURRENT-HARDENED
 
 makeoptions	DEBUG=-g		# Build kernel with gdb(1) debug symbols
 makeoptions	WITH_CTF=1		# Run ctfconvert(1) for DTrace support
