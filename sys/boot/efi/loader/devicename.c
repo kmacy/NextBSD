@@ -32,13 +32,14 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <sys/disklabel.h>
 #include "bootstrap.h"
+#include "libzfs.h"
 
 #include <efi.h>
 #include <efilib.h>
 
 static int efi_parsedev(struct devdesc **, const char *, const char **);
 
-/* 
+/*
  * Point (dev) at an allocated device specifier for the device matching the
  * path in (devspec). If it contains an explicit device specification,
  * use that.  If not, use the default device.
@@ -48,7 +49,6 @@ efi_getdev(void **vdev, const char *devspec, const char **path)
 {
 	struct devdesc **dev = (struct devdesc **)vdev;
 	int rv;
-
 	/*
 	 * If it looks like this is just a path and no device, then
 	 * use the current device instead.
@@ -61,7 +61,8 @@ efi_getdev(void **vdev, const char *devspec, const char **path)
 	}
 
 	/* Parse the device name off the beginning of the devspec. */
-	return (efi_parsedev(dev, devspec, path));
+	const int out = efi_parsedev(dev, devspec, path);
+        return out;
 }
 
 /*
@@ -87,8 +88,9 @@ efi_parsedev(struct devdesc **dev, const char *devspec, const char **path)
 	int i, err;
 
 	/* minimum length check */
-	if (strlen(devspec) < 2)
+	if (strlen(devspec) < 2) {
 		return (EINVAL);
+        }
 
 	/* look for a device that matches */
 	for (i = 0; devsw[i] != NULL; i++) {
@@ -96,27 +98,39 @@ efi_parsedev(struct devdesc **dev, const char *devspec, const char **path)
 		if (!strncmp(devspec, dv->dv_name, strlen(dv->dv_name)))
 			break;
 	}
-	if (devsw[i] == NULL)
+	if (devsw[i] == NULL) {
 		return (ENOENT);
-
-	idev = malloc(sizeof(struct devdesc));
-	if (idev == NULL)
-		return (ENOMEM);
-
-	idev->d_dev = dv;
-	idev->d_type = dv->dv_type;
-	idev->d_unit = -1;
-
-	err = 0;
+        }
 	np = devspec + strlen(dv->dv_name);
-	if (*np != '\0' && *np != ':') {
-		idev->d_unit = strtol(np, &cp, 0);
-		if (cp == np) {
-			idev->d_unit = -1;
-			free(idev);
-			return (EUNIT);
-		}
-	}
+
+        if (DEVT_ZFS == dv->dv_type) {
+                idev = malloc(sizeof(struct zfs_devdesc));
+                int out = zfs_parsedev((struct zfs_devdesc*)idev, np, path);
+                if (0 == out) {
+                        *dev = idev;
+                        cp = strchr(np + 1, ':');
+                } else {
+                        free(idev);
+                        return out;
+                }
+        } else {
+                idev = malloc(sizeof(struct devdesc));
+                if (idev == NULL)
+                        return (ENOMEM);
+
+                idev->d_dev = dv;
+                idev->d_type = dv->dv_type;
+                idev->d_unit = -1;
+                if (*np != '\0' && *np != ':') {
+                        idev->d_unit = strtol(np, &cp, 0);
+                        if (cp == np) {
+                                idev->d_unit = -1;
+                                free(idev);
+                                return (EUNIT);
+                        }
+                }
+        }
+	err = 0;
 	if (*cp != '\0' && *cp != ':') {
 		free(idev);
 		return (EINVAL);
@@ -138,10 +152,11 @@ efi_fmtdev(void *vdev)
 	static char buf[32];	/* XXX device length constant? */
 
 	switch(dev->d_type) {
+        case DEVT_ZFS:
+                return zfs_fmtdev(dev);
 	case DEVT_NONE:
 		strcpy(buf, "(no device)");
 		break;
-
 	default:
 		sprintf(buf, "%s%d:", dev->d_dev->dv_name, dev->d_unit);
 		break;

@@ -13,13 +13,15 @@ PROG=		loader.sym
 INTERNALPROG=
 
 # architecture-specific loader code
-SRCS=	boot1.c self_reloc.c start.S
+SRCS=	boot1.c self_reloc.c start.S ufs_module.c zfs_module.c
 
 CFLAGS+=	-I.
 CFLAGS+=	-I${.CURDIR}/../include
 CFLAGS+=	-I${.CURDIR}/../include/${MACHINE}
 CFLAGS+=	-I${.CURDIR}/../../../contrib/dev/acpica/include
 CFLAGS+=	-I${.CURDIR}/../../..
+CFLAGS+=	-I${.CURDIR}/../../zfs/
+CFLAGS+=	-I${.CURDIR}/../../../cddl/boot/zfs/
 
 # Always add MI sources and REGULAR efi loader bits
 .PATH:		${.CURDIR}/../loader/arch/${MACHINE}
