@@ -19,7 +19,7 @@
 # $FreeBSD$
 
 cpu		HAMMER
-ident		GENERIC
+ident		HARDENEDBSD-11-CURRENT
 
 makeoptions	DEBUG=-g		# Build kernel with gdb(1) debug symbols
 makeoptions	WITH_CTF=1		# Run ctfconvert(1) for DTrace support
@@ -36,6 +36,8 @@ options 	SOFTUPDATES		# Enable FFS soft updates support
 options 	UFS_ACL			# Support for access control lists
 options 	UFS_DIRHASH		# Improve performance on big directories
 options 	UFS_GJOURNAL		# Enable gjournal-based UFS journaling
+options 	UFS_EXTATTR		# Extended attributes
+options 	UFS_EXTATTR_AUTOSTART	#
 options 	QUOTA			# Enable disk quotas for UFS
 options 	MD_ROOT			# MD is a potential root device
 options 	NFSCL			# Network Filesystem Client
@@ -49,11 +51,12 @@ options 	PSEUDOFS		# Pseudo-filesystem framework
 options 	GEOM_PART_GPT		# GUID Partition Tables.
 options 	GEOM_RAID		# Soft RAID functionality.
 options 	GEOM_LABEL		# Provides labelization
-options 	COMPAT_FREEBSD32	# Compatible with i386 binaries
-options 	COMPAT_FREEBSD4		# Compatible with FreeBSD4
-options 	COMPAT_FREEBSD5		# Compatible with FreeBSD5
-options 	COMPAT_FREEBSD6		# Compatible with FreeBSD6
-options 	COMPAT_FREEBSD7		# Compatible with FreeBSD7
+options 	GEOM_ELI		# Disk encryption.
+#options 	COMPAT_FREEBSD32	# Compatible with i386 binaries
+#options 	COMPAT_FREEBSD4		# Compatible with FreeBSD4
+#options 	COMPAT_FREEBSD5		# Compatible with FreeBSD5
+#options 	COMPAT_FREEBSD6		# Compatible with FreeBSD6
+#options 	COMPAT_FREEBSD7		# Compatible with FreeBSD7
 options 	COMPAT_FREEBSD9		# Compatible with FreeBSD9
 options 	COMPAT_FREEBSD10	# Compatible with FreeBSD10
 options 	SCSI_DELAY=5000		# Delay (in ms) before probing SCSI
@@ -78,7 +81,16 @@ options 	RACCT			# Resource accounting framework
 options 	RACCT_DEFAULT_TO_DISABLED # Set kern.racct.enable=0 by default
 options 	RCTL			# Resource limits
 
-options		THRWORKQ
+# HardenedBSD hardening options
+options 	PAX			# PaX framework
+options 	PAX_SYSCTLS		# sysctls for run-time options
+options 	PAX_ASLR		# Address Space Layout Randomization
+options 	PAX_NOEXEC		# Remove WX pages from user-space and enforce W^X
+options 	PAX_HARDENING		# Various hardening options
+options 	PAX_SEGVGUARD		# prevent brute-force attacks
+#options 	PAX_PTRACE_HARDENING
+#options 	PAX_PTRACE_HARDENING_GRP=50000
+
 
 # Debugging support.  Always need this:
 options 	KDB			# Enable kernel debugger support.
@@ -92,16 +104,9 @@ options 	INVARIANT_SUPPORT	# Extra sanity checks of internal structures, require
 options 	WITNESS			# Enable checks to detect deadlocks and cycles
 options 	WITNESS_SKIPSPIN	# Don't run witness on spinlocks for speed
 options 	MALLOC_DEBUG_MAXZONES=8	# Separate malloc(9) zones
-options 	DEBUG_REDZONE
-
-options		ALT_BREAK_TO_DEBUGGER
 
 # Make an SMP-capable kernel by default
 options 	SMP			# Symmetric MultiProcessor Kernel
-
-options		RSS
-options		PCBGROUP
-
 
 # CPU frequency control
 device		cpufreq
@@ -179,7 +184,6 @@ device		ida			# Compaq Smart RAID
 device		mfi			# LSI MegaRAID SAS
 device		mlx			# Mylex DAC960 family
 device		mrsas			# LSI/Avago MegaRAID SAS/SATA, 6Gb/s and 12Gb/s
-device		pmspcv			# PMC-Sierra SAS/SATA Controller driver
 #XXX pointer/int warnings
 #device		pst			# Promise Supertrak SX6000
 device		twe			# 3ware ATA RAID
@@ -234,10 +238,9 @@ device		bxe			# Broadcom NetXtreme II BCM5771X/BCM578XX 10GbE
 device		de			# DEC/Intel DC21x4x (``Tulip'')
 device		em			# Intel PRO/1000 Gigabit Ethernet Family
 device		igb			# Intel PRO/1000 PCIE Server Gigabit Family
-# disable ixgbe until conversion complete
 #device		ix			# Intel PRO/10GbE PCIE PF Ethernet
 #device		ixv			# Intel PRO/10GbE PCIE VF Ethernet
-device		ixl			# Intel XL710 40Gbe PCIE Ethernet
+#device		ixl			# Intel XL710 40Gbe PCIE Ethernet
 #device		ixlv			# Intel XL710 40Gbe VF PCIE Ethernet
 device		le			# AMD Am7900 LANCE and Am79C9xx PCnet
 device		ti			# Alteon Networks Tigon I/II gigabit Ethernet
@@ -375,5 +378,9 @@ device		vmx			# VMware VMXNET3 Ethernet
 # Netmap provides direct access to TX/RX rings on supported NICs
 device		netmap			# netmap(4) support
 
-# The crypto framework is required by IPSEC
-device		crypto			# Required by IPSEC
+# Additonal devices
+device		coretemp
+device		cpuctl
+device		crypto			# core crypto support
+device		cryptodev		# /dev/crypto for access to h/w
+device		aesni
