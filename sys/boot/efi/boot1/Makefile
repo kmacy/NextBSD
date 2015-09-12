@@ -87,7 +87,7 @@ boot1.efifat: boot1.efi
 	/usr/bin/uudecode ${.CURDIR}/fat-${MACHINE}.tmpl.bz2.uu
 	mv fat-${MACHINE}.tmpl.bz2 ${.TARGET}.bz2
 	/usr/bin/bzip2 -f -d ${.TARGET}.bz2
-	/usr/bin/dd if=boot1.efi of=${.TARGET} seek=${BOOT1_OFFSET} conv=notrunc
+	/bin/dd if=boot1.efi of=${.TARGET} seek=${BOOT1_OFFSET} conv=notrunc
 
 CLEANFILES= boot1.efi boot1.efifat
 
