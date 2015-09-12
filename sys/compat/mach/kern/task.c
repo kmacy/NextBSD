@@ -1,3 +1,29 @@
+/*-
+ * Copyright (c) 2014-2015, Matthew Macy <mmacy@nextbsd.org>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *  1. Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *
+ *  2. Neither the name of Matthew Macy nor the names of its
+ *     contributors may be used to endorse or promote products derived from
+ *     this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 /*
  * Copyright 1991-1998 by Open Software Foundation, Inc. 
  *              All Rights Reserved 
@@ -18,270 +44,6 @@
  * NEGLIGENCE, OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION 
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
  */
-/*
- * MkLinux
- */
-/* CMU_HIST */
-/*
- * Revision 2.16.5.3  92/09/15  17:22:54  jeffreyh
- * 	Deadlock fix: Don't hold task lock across pset lock in task_create.
- * 	[92/09/03            dlb]
- * 	Cleanup for profiling.
- * 	[92/07/24            bernadat]
- * 
- * Revision 2.16.5.2  92/05/27  00:46:20  jeffreyh
- * 	Added system calls within MCMSG ifdefs
- * 	[regnier@ssd.intel.com]
- * 
- * Revision 2.16.5.1  92/02/18  19:11:19  jeffreyh
- * 	Fixed Profiling code. [emcmanus@gr.osf.org]
- * 
- * Revision 2.14.2.1  91/09/26  04:48:26  bernadat
- * 	Task profiling fields initialization
- * 	(Bernard Tabib & Andrei Danes @ gr.osf.org)
- * 	[91/09/16            bernadat]
- * 
- * Revision 2.16  91/12/11  08:42:30  jsb
- * 	Fixed assert_wait/thread_wakeup rendezvous in task_assign.
- * 	[91/11/26            rpd]
- * 
- * Revision 2.15  91/11/15  14:11:59  rpd
- * 	NORMA_TASK: initialize new child_node field in task upon creation.
- * 	[91/09/23  09:20:23  jsb]
- * 
- * Revision 2.14  91/06/25  10:29:32  rpd
- * 	Updated convert_thread_to_port usage.
- * 	[91/05/27            rpd]
- * 
- * Revision 2.13  91/06/17  15:47:19  jsb
- * 	Added norma_task hooks. See norma/kern_task.c for code.
- * 	[91/06/17  10:53:30  jsb]
- * 
- * Revision 2.12  91/05/14  16:48:05  mrt
- * 	Correcting copyright
- * 
- * Revision 2.11  91/03/16  14:52:24  rpd
- * 	Can't use thread_dowait on the current thread now.
- * 	[91/01/20            rpd]
- * 
- * Revision 2.10  91/02/05  17:29:55  mrt
- * 	Changed to new Mach copyright
- * 	[91/02/01  16:19:00  mrt]
- * 
- * Revision 2.9  91/01/08  15:17:44  rpd
- * 	Added consider_task_collect, task_collect_scan.
- * 	[91/01/03            rpd]
- * 	Added continuation argument to thread_block.
- * 	[90/12/08            rpd]
- * 
- * Revision 2.8  90/10/25  14:45:26  rwd
- * 	From OSF: Add thread_block() to loop that forcibly terminates
- * 	threads in task_terminate() to fix livelock.  Also hold
- * 	reference to thread when calling thread_force_terminate().
- * 	[90/10/19            rpd]
- * 
- * Revision 2.7  90/06/19  22:59:41  rpd
- * 	Fixed task_info to return the correct base_priority.
- * 	[90/06/18            rpd]
- * 
- * Revision 2.6  90/06/02  14:56:40  rpd
- * 	Moved trap versions of kernel calls to kern/ipc_mig.c.
- * 	[90/05/31            rpd]
- * 
- * 	Removed references to kernel_vm_space, keep_wired_memory.
- * 	[90/04/29            rpd]
- * 	Converted to new IPC and scheduling technology.
- * 	[90/03/26  22:22:19  rpd]
- * 
- * Revision 2.5  90/05/29  18:36:51  rwd
- * 	Added trap versions of task routines from rfr.
- * 	[90/04/20            rwd]
- * 	Add TASK_THREAD_TIMES_INFO flavor to task_info, to get times for
- * 	all live threads.
- * 	[90/04/03            dbg]
- * 
- * 	Use kmem_alloc_wired instead of vm_allocate in task_threads.
- * 	[90/03/28            dbg]
- * 
- * Revision 2.4  90/05/03  15:46:58  dbg
- * 	Add TASK_THREAD_TIMES_INFO flavor to task_info, to get times for
- * 	all live threads.
- * 	[90/04/03            dbg]
- * 
- * 	Use kmem_alloc_wired instead of vm_allocate in task_threads.
- * 	[90/03/28            dbg]
- * 
- * Revision 2.3  90/01/11  11:44:17  dbg
- * 	Removed task_halt (unused).  De-linted.
- * 	[89/12/12            dbg]
- * 
- * Revision 2.2  89/09/08  11:26:37  dbg
- * 	Initialize keep_wired_memory in task_create.
- * 	[89/07/17            dbg]
- * 
- * 19-May-89  David Golub (dbg) at Carnegie-Mellon University
- *	Changed task_info to check for kernel_task, not first_task.
- *
- * 19-Oct-88  David Golub (dbg) at Carnegie-Mellon University
- *	Moved all syscall_emulation routine calls here.  Removed
- *	all non-MACH data structures.  Added routine to create
- *	new tasks running in the kernel.  Changed kernel_task
- *	creation to create it as a normal task.
- *
- * Revision 2.6  88/10/11  10:21:38  rpd
- * 	Changed includes to the new style.
- * 	Rewrote task_threads; the old version could return
- * 	an inconsistent picture of the task.
- * 	[88/10/05  10:28:13  rpd]
- * 
- * Revision 2.5  88/08/06  18:25:53  rpd
- * Changed to use ipc_task_lock/ipc_task_unlock macros.
- * Eliminated use of kern/mach_ipc_defs.h.
- * Enable kernel_task for IPC access.  (See hack in task_by_unix_pid to
- * allow a user to get the kernel_task's port.)
- * Made kernel_task's ref_count > 0, so that task_reference/task_deallocate
- * works on it.  (Previously the task_deallocate would try to destroy it.)
- * 
- * Revision 2.4  88/07/20  16:40:17  rpd
- * Removed task_ports (replaced by port_names).
- * Didn't leave xxx form, because it wasn't implemented.
- * 
- * Revision 2.3  88/07/17  17:55:52  mwyoung
- * Split up uses of task.kernel_only field.  Condensed history.
- * 
- * Revision 2.2.1.1  88/06/28  20:46:20  mwyoung
- * Split up uses of task.kernel_only field.  Condensed history.
- * 
- * 21-Jun-88  Michael Young (mwyoung) at Carnegie-Mellon University.
- *	Split up uses of task.kernel_only field.
- *
- * 21-Jun-88  David Golub (dbg) at Carnegie-Mellon University
- *	Loop in task_terminate to terminate threads was incorrect; if
- *	another component of the system had a reference to the thread,
- *	the thread would remain in the thread_list for the task, and the
- *	loop would never terminate.  Rewrote it to run down the list
- *	like task_hold.  Thread_create terminates new thread if
- *	task_terminate occurs simultaneously.
- *
- * 27-Jan-88  Douglas Orr (dorr) at Carnegie-Mellon University
- *	Init user space library structures.
- *
- * 21-Jan-88  David Golub (dbg) at Carnegie-Mellon University
- *	Task_create no longer returns the data port.  Task_status and
- *	task_set_notify are obsolete (use task_{get,set}_special_port).
- *
- * 21-Jan-88  Karl Hauth (hauth) at Carnegie-Mellon University
- *	task_info(kernel_task, ...) now looks explicitly in the
- *	kernel_map, so it actually returns useful numbers.
- *
- * 17-Jan-88  David Golub (dbg) at Carnegie-Mellon University
- *	Added new task interfaces: task_suspend, task_resume,
- *	task_info, task_get_special_port, task_set_special_port.
- *	Old interfaces remain (temporarily) for binary
- *	compatibility, prefixed with 'xxx_'.
- *
- * 29-Dec-87  David Golub (dbg) at Carnegie-Mellon University
- *	Delinted.
- *
- * 23-Dec-87  David Golub (dbg) at Carnegie-Mellon University
- *	Added task_halt to halt all threads in a task.
- *
- * 15-Dec-87  David Golub (dbg) at Carnegie-Mellon University
- *	Check for null task pointer in task_reference and
- *	task_deallocate.
- *
- *  9-Dec-87  David Golub (dbg) at Carnegie-Mellon University
- *	Removed extra thread reference from task_terminate for new thread
- *	termination code.
- *
- *  8-Dec-87  David Black (dlb) at Carnegie-Mellon University
- *	Added call to ipc_task_disable.
- *
- *  3-Dec-87  David Black (dlb) at Carnegie-Mellon University
- *	Implemented better task termination base on task active field:
- *		1.  task_terminate sets active field to false.
- *		2.  All but the most simple task operations check the
- *			active field and abort if it is false.
- *		3.  task_{hold, dowait, release} now return kern_return_t's.
- *		4.  task_dowait has a second parameter to ignore active
- *			field if called from task_terminate.
- *	Task terminate acquires extra reference to current thread before
- *	terminating it (see thread_terminate()).
- *
- * 19-Nov-87  Avadis Tevanian (avie) at Carnegie-Mellon University
- *	Eliminated TT conditionals.
- *
- * 13-Oct-87  David Black (dlb) at Carnegie-Mellon University
- *	Use counts for suspend and resume primitives.
- *
- * 13-Oct-87  David Golub (dbg) at Carnegie-Mellon University
- *	Added port reference counting to task_set_notify.
- *
- *  5-Oct-87  David Golub (dbg) at Carnegie-Mellon University
- *	Completely replaced old scheduling state machine.
- *
- * 14-Sep-87  Michael Young (mwyoung) at Carnegie-Mellon University
- *	De-linted.
- *
- * 25-Aug-87  Robert Baron (rvb) at Carnegie-Mellon University
- *	Must initialize the kernel_task->lock (at least on the Sequent)
- *
- *  6-Aug-87  David Golub (dbg) at Carnegie-Mellon University
- *	Moved ipc_task_terminate to task_terminate, to shut down other
- *	threads that are manipulating the task via its task_port.
- *	Changed task_terminate to terminate all threads in the task.
- *
- * 29-Jul-87  David Golub (dbg) at Carnegie-Mellon University
- *	Fix task_suspend not to hold the task if the task has been
- *	resumed.  Change task_hold/task_wait so that if the current
- *	thread is in the task, it is not held until after all of the
- *	other threads in the task have stopped.  Make task_terminate be
- *	able to terminate the current task.
- *
- *  9-Jul-87  Karl Hauth (hauth) at Carnegie-Mellon University
- *	Modified task_statistics to reflect changes in the structure.
- *
- * 10-Jun-87  Karl Hauth (hauth) at Carnegie-Mellon University
- *	Added code to fill in the task_statistics structure with
- *	zeros and to make mig happier by returning something.
- *
- *  1-Jun-87  Avadis Tevanian (avie) at Carnegie-Mellon University
- *	Added task_statistics stub.
- *
- * 27-Apr-87  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Move ipc_task_init into task_create; it *should* return
- *	the data port (with a reference) at some point.
- *
- * 20-Apr-87  David Black (dlb) at Carnegie-Mellon University
- *	Fixed task_suspend to ignore multiple suspends.
- *	Fixed task_dowait to work if current thread is in the affected task.
- *
- * 24-Feb-87  Avadis Tevanian (avie) at Carnegie-Mellon University
- *	Rewrote task_suspend/task_hold and added task_wait for new user
- *	synchronization paradigm.
- *
- * 10-Feb-87  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Add task.kernel_only initialization.
- *
- * 31-Jan-87  Avadis Tevanian (avie) at Carnegie-Mellon University
- *	Merged in my changes for real thread implementation.
- *
- *  7-Nov-86  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Fixed up stubs for eventual task calls.
- *
- * 30-Sep-86  Avadis Tevanian (avie) at Carnegie-Mellon University
- *	Make floating u-area work, add all_task list management.
- *
- * 26-Sep-86  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Added argument to ipc_task_init to get parent.
- *
- *  1-Aug-86  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Added initialization for Mach IPC.
- *
- * 20-Jul-86  Michael Young (mwyoung) at Carnegie-Mellon University
- *	Added kernel_task.
- */
-/* CMU_ENDHIST */
 /* 
  * Mach Operating System
  * Copyright (c) 1991,1990,1989,1988 Carnegie Mellon University

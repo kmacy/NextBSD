@@ -21,6 +21,7 @@
 #            (by default, the directory above this one)
 #  PORTSDIR: location of ports tree to distribute (default: /usr/ports)
 #  DOCDIR:   location of doc tree (default: /usr/doc)
+#  XTRADIR:  xtra-bits-dir argument for <arch>/mkisoimages.sh
 #  NOPKG:    if set, do not distribute third-party packages
 #  NOPORTS:  if set, do not distribute ports tree
 #  NOSRC:    if set, do not distribute source tree
@@ -41,6 +42,9 @@ DOCDIR?=	/usr/doc
 RELNOTES_LANG?= en_US.ISO8859-1
 KERNCONF?=	GENERIC
 
+.if ${TARGET_ARCH} == "amd64"
+XTRADIR= ${.CURDIR}/xtra
+.endif
 .if !defined(TARGET) || empty(TARGET)
 TARGET=		${MACHINE}
 .endif
@@ -249,19 +253,14 @@ dvd: packagesystem
 	touch ${.TARGET}
 
 release.iso: disc1.iso
-.if ${TARGET_ARCH} == "amd64"
 disc1.iso: disc1
-	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_CD ${.TARGET} disc1 ${.CURDIR}/xtra
+	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_CD ${.TARGET} disc1 ${XTRADIR}
 
-.else
-disc1.iso: disc1
-	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_CD ${.TARGET} disc1
-.endif
 dvd1.iso: dvd pkg-stage
-	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_DVD ${.TARGET} dvd
+	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_DVD ${.TARGET} dvd ${XTRADIR}
 
 bootonly.iso: bootonly
-	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_BO ${.TARGET} bootonly
+	sh ${.CURDIR}/${TARGET}/mkisoimages.sh -b ${VOLUME_LABEL}_BO ${.TARGET} bootonly ${XTRADIR}
 
 memstick: memstick.img
 memstick.img: disc1

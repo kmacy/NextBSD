@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014 Matthew Macy <kmacy@freebsd.org>
+ * Copyright (c) 2014 Matthew Macy <mmacy@netxbsd.org>
  * Copyright (c) 2002-2003 The NetBSD Foundation, Inc.
  * All rights reserved.
  *

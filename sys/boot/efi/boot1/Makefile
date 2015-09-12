@@ -84,10 +84,10 @@ boot1.o: ${.CURDIR}/../../common/ufsread.c
 
 boot1.efifat: boot1.efi
 	echo ${.OBJDIR}
-	uudecode ${.CURDIR}/fat-${MACHINE}.tmpl.bz2.uu
+	/usr/bin/uudecode ${.CURDIR}/fat-${MACHINE}.tmpl.bz2.uu
 	mv fat-${MACHINE}.tmpl.bz2 ${.TARGET}.bz2
-	bzip2 -f -d ${.TARGET}.bz2
-	dd if=boot1.efi of=${.TARGET} seek=${BOOT1_OFFSET} conv=notrunc
+	/usr/bin/bzip2 -f -d ${.TARGET}.bz2
+	/usr/bin/dd if=boot1.efi of=${.TARGET} seek=${BOOT1_OFFSET} conv=notrunc
 
 CLEANFILES= boot1.efi boot1.efifat
 

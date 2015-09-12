@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014-2015, Matthew Macy (kmacy@freebsd.org)
+ * Copyright (c) 2014-2015, Matthew Macy <mmacy@nextbsd.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
