@@ -888,7 +888,7 @@ rsu_fw_cmd(struct rsu_softc *sc, uint8_t code, void *buf, int len)
 	/* Copy command payload. */
 	memcpy(&cmd[1], buf, len);
 
-	RSU_DPRINTF(sc, RSU_DEBUG_TX,
+	RSU_DPRINTF(sc, RSU_DEBUG_TX | RSU_DEBUG_FWCMD,
 	    "%s: Tx cmd code=0x%x len=0x%x\n",
 	    __func__, code, cmdsz);
 	data->buflen = xferlen;
@@ -1156,11 +1156,12 @@ rsu_event_survey(struct rsu_softc *sc, uint8_t *buf, int len)
 
 	RSU_DPRINTF(sc, RSU_DEBUG_SCAN,
 	    "%s: found BSS %s: len=%d chan=%d inframode=%d "
-	    "networktype=%d privacy=%d\n",
+	    "networktype=%d privacy=%d, RSSI=%d\n",
 	    __func__,
 	    ether_sprintf(bss->macaddr), le32toh(bss->len),
 	    le32toh(bss->config.dsconfig), le32toh(bss->inframode),
-	    le32toh(bss->networktype), le32toh(bss->privacy));
+	    le32toh(bss->networktype), le32toh(bss->privacy),
+	    le32toh(bss->rssi));
 
 	/* Build a fake beacon frame to let net80211 do all the parsing. */
 	/* XXX TODO: just call the new scan API methods! */
@@ -1212,7 +1213,9 @@ rsu_event_join_bss(struct rsu_softc *sc, uint8_t *buf, int len)
 	rsp = (struct r92s_event_join_bss *)buf;
 	res = (int)le32toh(rsp->join_res);
 
-	DPRINTF("Rx join BSS event len=%d res=%d\n", len, res);
+	RSU_DPRINTF(sc, RSU_DEBUG_STATE | RSU_DEBUG_FWCMD,
+	    "%s: Rx join BSS event len=%d res=%d\n",
+	    __func__, len, res);
 	if (res <= 0) {
 		RSU_UNLOCK(sc);
 		ieee80211_new_state(vap, IEEE80211_S_SCAN, -1);
@@ -1224,8 +1227,10 @@ rsu_event_join_bss(struct rsu_softc *sc, uint8_t *buf, int len)
 		DPRINTF("Assoc ID overflow\n");
 		tmp = 1;
 	}
-	DPRINTF("associated with %s associd=%d\n",
-	    ether_sprintf(rsp->bss.macaddr), tmp);
+	RSU_DPRINTF(sc, RSU_DEBUG_STATE | RSU_DEBUG_FWCMD,
+	    "%s: associated with %s associd=%d\n",
+	    __func__, ether_sprintf(rsp->bss.macaddr), tmp);
+	/* XXX is this required? What's the top two bits for again? */
 	ni->ni_associd = tmp | 0xc000;
 	RSU_UNLOCK(sc);
 	ieee80211_new_state(vap, IEEE80211_S_RUN,
@@ -1239,7 +1244,7 @@ rsu_rx_event(struct rsu_softc *sc, uint8_t code, uint8_t *buf, int len)
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct ieee80211vap *vap = TAILQ_FIRST(&ic->ic_vaps);
 
-	RSU_DPRINTF(sc, RSU_DEBUG_RX,
+	RSU_DPRINTF(sc, RSU_DEBUG_RX | RSU_DEBUG_FWCMD,
 	    "%s: Rx event code=%d len=%d\n", __func__, code, len);
 	switch (code) {
 	case R92S_EVT_SURVEY:
@@ -1266,11 +1271,10 @@ rsu_rx_event(struct rsu_softc *sc, uint8_t code, uint8_t *buf, int len)
 		if (vap->iv_state == IEEE80211_S_AUTH)
 			rsu_event_join_bss(sc, buf, len);
 		break;
-#if 0
-XXX This event is occurring regularly, possibly due to some power saving event
-XXX and disrupts the WLAN traffic. Disable for now.
 	case R92S_EVT_DEL_STA:
-		DPRINTF("disassociated from %s\n", ether_sprintf(buf));
+		RSU_DPRINTF(sc, RSU_DEBUG_FWCMD | RSU_DEBUG_STATE,
+		    "%s: disassociated from %s\n", __func__,
+		    ether_sprintf(buf));
 		if (vap->iv_state == IEEE80211_S_RUN &&
 		    IEEE80211_ADDR_EQ(vap->iv_bss->ni_bssid, buf)) {
 			RSU_UNLOCK(sc);
@@ -1278,7 +1282,6 @@ XXX and disrupts the WLAN traffic. Disable for now.
 			RSU_LOCK(sc);
 		}
 		break;
-#endif
 	case R92S_EVT_WPS_PBC:
 		RSU_DPRINTF(sc, RSU_DEBUG_RX | RSU_DEBUG_FWCMD,
 		    "%s: WPS PBC pushed.\n", __func__);
@@ -2399,7 +2402,7 @@ rsu_init(struct rsu_softc *sc)
 	rsu_write_1(sc, R92S_USB_HRPWM,
 	    R92S_USB_HRPWM_PS_ST_ACTIVE | R92S_USB_HRPWM_PS_ALL_ON);
 
-	/* XXX non-configurable psmode? */
+	/* Set PS mode fully active */
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.mode = R92S_PS_MODE_ACTIVE;
 	RSU_DPRINTF(sc, RSU_DEBUG_RESET, "%s: setting ps mode to %d\n",
