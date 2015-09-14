@@ -2870,10 +2870,14 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 	ctx->ifc_txrx = *sctx->isc_txrx;
 	ctx->ifc_softc = sc;
 
-	if ((err = iflib_register(ctx)) != 0)
+	if ((err = iflib_register(ctx)) != 0) {
+		device_printf(dev, "iflib_register failed %d\n", err);
 		return (err);
-	if ((err = IFDI_ATTACH_PRE(ctx)) != 0)
+	}
+	if ((err = IFDI_ATTACH_PRE(ctx)) != 0) {
+		device_printf(dev, "IFDI_ATTACH_PRE failed %d\n", err);
 		return (err);
+	}
 
 	scctx = &ctx->ifc_softc_ctx;
 	msix_bar = scctx->isc_msix_bar;
@@ -2901,19 +2905,25 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 		goto fail_queues;
 	}
 
-	if (msix > 1 && (err = IFDI_MSIX_INTR_ASSIGN(ctx, msix)) != 0)
+	if (msix > 1 && (err = IFDI_MSIX_INTR_ASSIGN(ctx, msix)) != 0) {
+		device_printf(dev, "IFDI_MSIX_INTR_ASSIGN failed %d\n", err);
 		goto fail_intr_free;
+	}
 	if (msix <= 1) {
 		if (scctx->isc_intr == IFLIB_INTR_MSI) {
 			MPASS(msix == 1);
 			rid = 1;
 		}
-		if ((err = iflib_legacy_setup(ctx, ctx->isc_legacy_intr, ctx, &rid, "irq0")) != 0)
+		if ((err = iflib_legacy_setup(ctx, ctx->isc_legacy_intr, ctx, &rid, "irq0")) != 0) {
+			device_printf(dev, "iflib_legacy_setup failed %d\n", err);
 			goto fail_intr_free;
+		}
 	}
 	ether_ifattach(ctx->ifc_ifp, ctx->ifc_mac);
-	if ((err = IFDI_ATTACH_POST(ctx)) != 0)
+	if ((err = IFDI_ATTACH_POST(ctx)) != 0) {
+		device_printf(dev, "IFDI_ATTACH_POST failed %d\n", err);
 		goto fail_detach;
+	}
 	if ((err = iflib_netmap_attach(ctx))) {
 		device_printf(ctx->ifc_dev, "netmap attach failed: %d\n", err);
 		goto fail_detach;

@@ -80,7 +80,7 @@ static int ixgbe_if_resume(if_ctx_t ctx);
 
 static void ixgbe_if_stop(if_ctx_t ctx);
 static void ixgbe_if_init(if_ctx_t ctx);
-static void ixgbe_if_enable_intr(if_ctx_t ctx);
+void ixgbe_if_enable_intr(if_ctx_t ctx);
 static void ixgbe_if_disable_intr(if_ctx_t ctx);
 static void ixgbe_if_queue_intr_enable(if_ctx_t ctx, uint16_t qid);
 static void ixgbe_if_media_status(if_ctx_t ctx, struct ifmediareq * ifmr);
@@ -733,23 +733,11 @@ ixgbe_interface_setup(if_ctx_t ctx)
 	adapter->max_frame_size =
 	    ifp->if_mtu + ETHER_HDR_LEN + ETHER_CRC_LEN;
 
-#if __FreeBSD_version >= 1100036
-	if_setgetcounterfn(ifp, ixgbe_get_counter);
-#endif
 #if __FreeBSD_version >= 1100045
 	/* TSO parameters */
 	ifp->if_hw_tsomax = 65518;
 	ifp->if_hw_tsomaxsegcount = IXGBE_82599_SCATTER;
 	ifp->if_hw_tsomaxsegsize = 2048;
-#endif
-#ifndef IXGBE_LEGACY_TX
-	ifp->if_transmit = ixgbe_mq_start;
-	ifp->if_qflush = ixgbe_qflush;
-#else
-	ifp->if_start = ixgbe_start;
-	IFQ_SET_MAXLEN(&ifp->if_snd, adapter->num_tx_desc - 2);
-	ifp->if_snd.ifq_drv_maxlen = adapter->num_tx_desc - 2;
-	IFQ_SET_READY(&ifp->if_snd);
 #endif
 
 	/*
@@ -3044,7 +3032,7 @@ ixgbe_config_dmac(struct adapter *adapter)
 	}
 }
 
-static void
+void
 ixgbe_if_enable_intr(if_ctx_t ctx)
 {
 	struct adapter *adapter = iflib_get_softc(ctx);
@@ -4123,7 +4111,6 @@ ixgbe_handle_mbx(void *context, int pending)
 	adapter = context;
 	hw = &adapter->hw;
 
-
 	for (i = 0; i < adapter->num_vfs; i++) {
 		vf = &adapter->vfs[i];
 
@@ -4140,7 +4127,6 @@ ixgbe_handle_mbx(void *context, int pending)
 	}
 
 }
-
 
 static int
 ixgbe_init_iov(device_t dev, u16 num_vfs, const nvlist_t *config)

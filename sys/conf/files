@@ -1893,11 +1893,15 @@ iwn6050.fw			optional iwn6050fw | iwnfw		\
 dev/ixgb/if_ixgb.c		optional ixgb
 dev/ixgb/ixgb_ee.c		optional ixgb
 dev/ixgb/ixgb_hw.c		optional ixgb
-dev/ixgbe/if_ix.c		optional ix inet \
+#dev/ixgbe/if_ix.c		optional ix inet \
+#	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
+dev/ixgbe/if_ixgbe.c		optional ix inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
 dev/ixgbe/if_ixv.c		optional ixv inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe -DSMP"
-dev/ixgbe/ix_txrx.c		optional ix inet | ixv inet \
+#dev/ixgbe/ix_txrx.c		optional ix inet | ixv inet \
+#	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
+dev/ixgbe/ixgbe_txrx.c		optional ix inet | ixv inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
 dev/ixgbe/ixgbe_phy.c		optional ix inet | ixv inet \
 	compile-with "${NORMAL_C} -I$S/dev/ixgbe"
