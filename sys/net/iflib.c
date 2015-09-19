@@ -2976,7 +2976,6 @@ iflib_device_deregister(if_ctx_t ctx)
 	ctx->ifc_in_detach = 1;
 	iflib_stop(ctx);
 	CTX_UNLOCK(ctx);
-	CTX_LOCK_DESTROY(ctx);
 
 	/* Unregister VLAN events */
 	if (ctx->ifc_vlan_attach_event != NULL)
@@ -2986,6 +2985,8 @@ iflib_device_deregister(if_ctx_t ctx)
 
 	iflib_netmap_detach(ifp);
 	ether_ifdetach(ifp);
+	/* ether_ifdetach calls if_qflush - lock must be destroy afterwards*/
+	CTX_LOCK_DESTROY(ctx);
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
