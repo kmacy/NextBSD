@@ -611,6 +611,8 @@ ctl_isc_announce_port(struct ctl_port *port)
 		i += port->port_devid->len;
 	if (port->target_devid)
 		i += port->target_devid->len;
+	if (port->init_devid)
+		i += port->init_devid->len;
 	msg = malloc(i, M_CTL, M_WAITOK);
 	bzero(&msg->port, sizeof(msg->port));
 	msg->hdr.msg_type = CTL_MSG_PORT_SYNC;
@@ -641,8 +643,50 @@ ctl_isc_announce_port(struct ctl_port *port)
 		    msg->port.target_devid_len);
 		i += msg->port.target_devid_len;
 	}
+	if (port->init_devid) {
+		msg->port.init_devid_len = port->init_devid->len;
+		memcpy(&msg->port.data[i], port->init_devid->data,
+		    msg->port.init_devid_len);
+		i += msg->port.init_devid_len;
+	}
 	ctl_ha_msg_send(CTL_HA_CHAN_CTL, &msg->port, sizeof(msg->port) + i,
 	    M_WAITOK);
+	free(msg, M_CTL);
+}
+
+void
+ctl_isc_announce_iid(struct ctl_port *port, int iid)
+{
+	struct ctl_softc *softc = control_softc;
+	union ctl_ha_msg *msg;
+	int i, l;
+
+	if (port->targ_port < softc->port_min ||
+	    port->targ_port >= softc->port_max ||
+	    softc->ha_link != CTL_HA_LINK_ONLINE)
+		return;
+	mtx_lock(&softc->ctl_lock);
+	i = sizeof(msg->iid);
+	l = 0;
+	if (port->wwpn_iid[iid].name)
+		l = strlen(port->wwpn_iid[iid].name) + 1;
+	i += l;
+	msg = malloc(i, M_CTL, M_NOWAIT);
+	if (msg == NULL) {
+		mtx_unlock(&softc->ctl_lock);
+		return;
+	}
+	bzero(&msg->iid, sizeof(msg->iid));
+	msg->hdr.msg_type = CTL_MSG_IID_SYNC;
+	msg->hdr.nexus.targ_port = port->targ_port;
+	msg->hdr.nexus.initid = iid;
+	msg->iid.in_use = port->wwpn_iid[iid].in_use;
+	msg->iid.name_len = l;
+	msg->iid.wwpn = port->wwpn_iid[iid].wwpn;
+	if (port->wwpn_iid[iid].name)
+		strlcpy(msg->iid.data, port->wwpn_iid[iid].name, l);
+	mtx_unlock(&softc->ctl_lock);
+	ctl_ha_msg_send(CTL_HA_CHAN_CTL, &msg->iid, i, M_NOWAIT);
 	free(msg, M_CTL);
 }
 
@@ -651,9 +695,15 @@ ctl_isc_ha_link_up(struct ctl_softc *softc)
 {
 	struct ctl_port *port;
 	struct ctl_lun *lun;
+	int i;
 
-	STAILQ_FOREACH(port, &softc->port_list, links)
+	STAILQ_FOREACH(port, &softc->port_list, links) {
 		ctl_isc_announce_port(port);
+		for (i = 0; i < CTL_MAX_INIT_PER_PORT; i++) {
+			if (port->wwpn_iid[i].in_use)
+				ctl_isc_announce_iid(port, i);
+		}
+	}
 	STAILQ_FOREACH(lun, &softc->lun_list, links)
 		ctl_isc_announce_lun(lun);
 }
@@ -664,6 +714,7 @@ ctl_isc_ha_link_down(struct ctl_softc *softc)
 	struct ctl_port *port;
 	struct ctl_lun *lun;
 	union ctl_io *io;
+	int i;
 
 	mtx_lock(&softc->ctl_lock);
 	STAILQ_FOREACH(lun, &softc->lun_list, links) {
@@ -688,6 +739,11 @@ ctl_isc_ha_link_down(struct ctl_softc *softc)
 		    port->targ_port < softc->port_max)
 			continue;
 		port->status &= ~CTL_PORT_STATUS_ONLINE;
+		for (i = 0; i < CTL_MAX_INIT_PER_PORT; i++) {
+			port->wwpn_iid[i].in_use = 0;
+			free(port->wwpn_iid[i].name, M_CTL);
+			port->wwpn_iid[i].name = NULL;
+		}
 	}
 	mtx_unlock(&softc->ctl_lock);
 }
@@ -703,6 +759,9 @@ ctl_isc_ua(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 	    (lun = softc->ctl_luns[msg->hdr.nexus.targ_mapped_lun]) != NULL) {
 		mtx_lock(&lun->lun_lock);
 		mtx_unlock(&softc->ctl_lock);
+		if (msg->ua.ua_type == CTL_UA_THIN_PROV_THRES &&
+		    msg->ua.ua_set)
+			memcpy(lun->ua_tpt_info, msg->ua.ua_info, 8);
 		if (msg->ua.ua_all) {
 			if (msg->ua.ua_set)
 				ctl_est_ua_all(lun, iid, msg->ua.ua_type);
@@ -862,8 +921,23 @@ ctl_isc_port_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 		port->target_devid->len = msg->port.target_devid_len;
 		i += msg->port.target_devid_len;
 	} else {
-		free(port->port_devid, M_CTL);
-		port->port_devid = NULL;
+		free(port->target_devid, M_CTL);
+		port->target_devid = NULL;
+	}
+	if (msg->port.init_devid_len != 0) {
+		if (port->init_devid == NULL ||
+		    port->init_devid->len != msg->port.init_devid_len) {
+			free(port->init_devid, M_CTL);
+			port->init_devid = malloc(sizeof(struct ctl_devid) +
+			    msg->port.init_devid_len, M_CTL, M_WAITOK);
+		}
+		memcpy(port->init_devid->data, &msg->port.data[i],
+		    msg->port.init_devid_len);
+		port->init_devid->len = msg->port.init_devid_len;
+		i += msg->port.init_devid_len;
+	} else {
+		free(port->init_devid, M_CTL);
+		port->init_devid = NULL;
 	}
 	if (new) {
 		if (ctl_port_register(port) != 0) {
@@ -880,6 +954,29 @@ ctl_isc_port_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 		mtx_unlock(&lun->lun_lock);
 	}
 	mtx_unlock(&softc->ctl_lock);
+}
+
+static void
+ctl_isc_iid_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
+{
+	struct ctl_port *port;
+	int iid;
+
+	port = softc->ctl_ports[msg->hdr.nexus.targ_port];
+	if (port == NULL) {
+		printf("%s: Received IID for unknown port %d\n",
+		    __func__, msg->hdr.nexus.targ_port);
+		return;
+	}
+	iid = msg->hdr.nexus.initid;
+	port->wwpn_iid[iid].in_use = msg->iid.in_use;
+	port->wwpn_iid[iid].wwpn = msg->iid.wwpn;
+	free(port->wwpn_iid[iid].name, M_CTL);
+	if (msg->iid.name_len) {
+		port->wwpn_iid[iid].name = strndup(&msg->iid.data[0],
+		    msg->iid.name_len, M_CTL);
+	} else
+		port->wwpn_iid[iid].name = NULL;
 }
 
 /*
@@ -978,6 +1075,8 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 			 * when the datamove is complete.
 			 */
 			io->io_hdr.serializing_sc = msg->hdr.serializing_sc;
+			if (msg->hdr.status == CTL_SUCCESS)
+				io->io_hdr.status = msg->hdr.status;
 
 			if (msg->dt.sg_sequence == 0) {
 				i = msg->dt.kern_sg_entries +
@@ -1049,6 +1148,7 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 			 */
 			io = msg->hdr.serializing_sc;
 			io->io_hdr.msg_type = CTL_MSG_DATAMOVE_DONE;
+			io->io_hdr.flags &= ~CTL_FLAG_DMA_INPROG;
 			io->io_hdr.flags |= CTL_FLAG_IO_ACTIVE;
 			io->io_hdr.port_status = msg->scsi.fetd_status;
 			io->scsiio.residual = msg->scsi.residual;
@@ -1060,6 +1160,8 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 				memcpy(&io->scsiio.sense_data,
 				    &msg->scsi.sense_data,
 				    msg->scsi.sense_len);
+				if (msg->hdr.status == CTL_SUCCESS)
+					io->io_hdr.flags |= CTL_FLAG_STATUS_SENT;
 			}
 			ctl_enqueue_isc(io);
 			break;
@@ -1152,6 +1254,9 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 			break;
 		case CTL_MSG_LUN_SYNC:
 			ctl_isc_lun_sync(softc, msg, param);
+			break;
+		case CTL_MSG_IID_SYNC:
+			ctl_isc_iid_sync(softc, msg, param);
 			break;
 		default:
 			printf("Received HA message of unknown type %d\n",
@@ -1477,13 +1582,12 @@ ctl_shutdown(void)
 	softc = (struct ctl_softc *)control_softc;
 
 	if (softc->is_single == 0) {
+		ctl_ha_msg_shutdown(softc);
 		if (ctl_ha_msg_deregister(CTL_HA_CHAN_CTL)
-		    != CTL_HA_STATUS_SUCCESS) {
-			printf("ctl_shutdown: ctl_ha_msg_deregister failed.\n");
-		}
-		if (ctl_ha_msg_shutdown(softc) != CTL_HA_STATUS_SUCCESS) {
-			printf("ctl_shutdown: ctl_ha_msg_shutdown failed.\n");
-		}
+		    != CTL_HA_STATUS_SUCCESS)
+			printf("%s: ctl_ha_msg_deregister failed.\n", __func__);
+		if (ctl_ha_msg_destroy(softc) != CTL_HA_STATUS_SUCCESS)
+			printf("%s: ctl_ha_msg_destroy failed.\n", __func__);
 		ctl_frontend_deregister(&ha_frontend);
 	}
 
@@ -1567,6 +1671,7 @@ ctl_remove_initiator(struct ctl_port *port, int iid)
 	port->wwpn_iid[iid].in_use--;
 	port->wwpn_iid[iid].last_use = time_uptime;
 	mtx_unlock(&softc->ctl_lock);
+	ctl_isc_announce_iid(port, iid);
 
 	return (0);
 }
@@ -1682,6 +1787,7 @@ take:
 	port->wwpn_iid[iid].wwpn = wwpn;
 	port->wwpn_iid[iid].in_use++;
 	mtx_unlock(&softc->ctl_lock);
+	ctl_isc_announce_iid(port, iid);
 
 	return (iid);
 }
@@ -10487,6 +10593,8 @@ ctl_extent_check(union ctl_io *io1, union ctl_io *io2, bool seq)
 	if (ctl_get_lba_len(io1, &lba1, &len1) != 0)
 		return (CTL_ACTION_ERROR);
 
+	if (io1->io_hdr.flags & CTL_FLAG_SERSEQ_DONE)
+		seq = FALSE;
 	return (ctl_extent_check_lba(lba1, len1, lba2, len2, seq));
 }
 
@@ -10496,6 +10604,8 @@ ctl_extent_check_seq(union ctl_io *io1, union ctl_io *io2)
 	uint64_t lba1, lba2;
 	uint64_t len1, len2;
 
+	if (io1->io_hdr.flags & CTL_FLAG_SERSEQ_DONE)
+		return (CTL_ACTION_PASS);
 	if (ctl_get_lba_len(io1, &lba1, &len1) != 0)
 		return (CTL_ACTION_ERROR);
 	if (ctl_get_lba_len(io2, &lba2, &len2) != 0)
@@ -10946,8 +11056,10 @@ ctl_failover_lun(struct ctl_lun *lun)
 			if (io->flags & CTL_FLAG_FROM_OTHER_SC) {
 				if (io->flags & CTL_FLAG_IO_ACTIVE) {
 					io->flags |= CTL_FLAG_ABORT;
+					io->flags |= CTL_FLAG_FAILOVER;
 				} else { /* This can be only due to DATAMOVE */
 					io->msg_type = CTL_MSG_DATAMOVE_DONE;
+					io->flags &= ~CTL_FLAG_DMA_INPROG;
 					io->flags |= CTL_FLAG_IO_ACTIVE;
 					io->port_status = 31340;
 					ctl_enqueue_isc((union ctl_io *)io);
@@ -11126,15 +11238,9 @@ ctl_scsiio_precheck(struct ctl_softc *softc, struct ctl_scsiio *ctsio)
 	 */
 	if ((entry->flags & CTL_CMD_FLAG_NO_SENSE) == 0) {
 		ctl_ua_type ua_type;
-		scsi_sense_data_type sense_format;
-
-		if (lun->flags & CTL_LUN_SENSE_DESC)
-			sense_format = SSD_TYPE_DESC;
-		else
-			sense_format = SSD_TYPE_FIXED;
 
 		ua_type = ctl_build_ua(lun, initidx, &ctsio->sense_data,
-		    sense_format);
+		    SSD_TYPE_NONE);
 		if (ua_type != CTL_UA_NONE) {
 			mtx_unlock(&lun->lun_lock);
 			ctsio->scsi_status = SCSI_STATUS_CHECK_COND;
@@ -12041,7 +12147,9 @@ ctl_inject_error(struct ctl_lun *lun, union ctl_io *io)
 			ctl_set_aborted(&io->scsiio);
 			break;
 		case CTL_LUN_INJ_MEDIUM_ERR:
-			ctl_set_medium_error(&io->scsiio);
+			ctl_set_medium_error(&io->scsiio,
+			    (io->io_hdr.flags & CTL_FLAG_DATA_MASK) !=
+			     CTL_FLAG_DATA_OUT);
 			break;
 		case CTL_LUN_INJ_UA:
 			/* 29h/00h  POWER ON, RESET, OR BUS DEVICE RESET
@@ -12098,12 +12206,14 @@ ctl_datamove_timer_wakeup(void *arg)
 void
 ctl_datamove(union ctl_io *io)
 {
+	struct ctl_lun *lun;
 	void (*fe_datamove)(union ctl_io *io);
 
 	mtx_assert(&control_softc->ctl_lock, MA_NOTOWNED);
 
 	CTL_DEBUG_PRINT(("ctl_datamove\n"));
 
+	lun = (struct ctl_lun *)io->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
 #ifdef CTL_TIME_IO
 	if ((time_uptime - io->io_hdr.start_time) > ctl_time_io_secs) {
 		char str[256];
@@ -12144,9 +12254,6 @@ ctl_datamove(union ctl_io *io)
 	if (io->io_hdr.flags & CTL_FLAG_DELAY_DONE) {
 		io->io_hdr.flags &= ~CTL_FLAG_DELAY_DONE;
 	} else {
-		struct ctl_lun *lun;
-
-		lun =(struct ctl_lun *)io->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
 		if ((lun != NULL)
 		 && (lun->delay_info.datamove_delay > 0)) {
 
@@ -12207,6 +12314,7 @@ ctl_datamove(union ctl_io *io)
 		msg.hdr.original_sc = io->io_hdr.original_sc;
 		msg.hdr.serializing_sc = io;
 		msg.hdr.nexus = io->io_hdr.nexus;
+		msg.hdr.status = io->io_hdr.status;
 		msg.dt.flags = io->io_hdr.flags;
 		/*
 		 * We convert everything into a S/G list here.  We can't
@@ -12321,7 +12429,25 @@ ctl_datamove(union ctl_io *io)
 
 			msg.dt.sent_sg_entries = sg_entries_sent;
 		}
+
+		/*
+		 * Officially handover the request from us to peer.
+		 * If failover has just happened, then we must return error.
+		 * If failover happen just after, then it is not our problem.
+		 */
+		if (lun)
+			mtx_lock(&lun->lun_lock);
+		if (io->io_hdr.flags & CTL_FLAG_FAILOVER) {
+			if (lun)
+				mtx_unlock(&lun->lun_lock);
+			io->io_hdr.port_status = 31342;
+			io->scsiio.be_move_done(io);
+			return;
+		}
 		io->io_hdr.flags &= ~CTL_FLAG_IO_ACTIVE;
+		io->io_hdr.flags |= CTL_FLAG_DMA_INPROG;
+		if (lun)
+			mtx_unlock(&lun->lun_lock);
 	} else {
 
 		/*
@@ -12590,10 +12716,12 @@ ctl_datamove_remote_xfer(union ctl_io *io, unsigned command,
 	 * failure.
 	 */
 	if ((rq == NULL)
-	 && ((io->io_hdr.status & CTL_STATUS_MASK) != CTL_STATUS_NONE))
+	 && ((io->io_hdr.status & CTL_STATUS_MASK) != CTL_STATUS_NONE &&
+	     (io->io_hdr.status & CTL_STATUS_MASK) != CTL_SUCCESS))
 		ctl_set_busy(&io->scsiio);
 
-	if ((io->io_hdr.status & CTL_STATUS_MASK) != CTL_STATUS_NONE) {
+	if ((io->io_hdr.status & CTL_STATUS_MASK) != CTL_STATUS_NONE &&
+	    (io->io_hdr.status & CTL_STATUS_MASK) != CTL_SUCCESS) {
 
 		if (rq != NULL)
 			ctl_dt_req_free(rq);
@@ -13097,6 +13225,21 @@ ctl_done_timer_wakeup(void *arg)
 #endif /* CTL_IO_DELAY */
 
 void
+ctl_serseq_done(union ctl_io *io)
+{
+	struct ctl_lun *lun;
+
+	lun = (struct ctl_lun *)io->io_hdr.ctl_private[CTL_PRIV_LUN].ptr;
+	if (lun->be_lun == NULL ||
+	    lun->be_lun->serseq == CTL_LUN_SERSEQ_OFF)
+		return;
+	mtx_lock(&lun->lun_lock);
+	io->io_hdr.flags |= CTL_FLAG_SERSEQ_DONE;
+	ctl_check_blocked(lun);
+	mtx_unlock(&lun->lun_lock);
+}
+
+void
 ctl_done(union ctl_io *io)
 {
 
@@ -13312,12 +13455,16 @@ ctl_thresh_thread(void *arg)
 					continue;
 				if ((page->descr[i].flags & SLBPPD_ARMING_MASK)
 				    == SLBPPD_ARMING_INC)
-					e |= (val >= thres);
+					e = (val >= thres);
 				else
-					e |= (val <= thres);
+					e = (val <= thres);
+				if (e)
+					break;
 			}
 			mtx_lock(&lun->lun_lock);
 			if (e) {
+				scsi_u64to8b((uint8_t *)&page->descr[i] -
+				    (uint8_t *)page, lun->ua_tpt_info);
 				if (lun->lasttpt == 0 ||
 				    time_uptime - lun->lasttpt >= CTL_LBP_UA_PERIOD) {
 					lun->lasttpt = time_uptime;
@@ -13343,6 +13490,7 @@ ctl_thresh_thread(void *arg)
 				msg.ua.ua_all = 1;
 				msg.ua.ua_set = (set > 0);
 				msg.ua.ua_type = CTL_UA_THIN_PROV_THRES;
+				memcpy(msg.ua.ua_info, lun->ua_tpt_info, 8);
 				mtx_unlock(&softc->ctl_lock); // XXX
 				ctl_ha_msg_send(CTL_HA_CHAN_CTL, &msg,
 				    sizeof(msg.ua), M_WAITOK);

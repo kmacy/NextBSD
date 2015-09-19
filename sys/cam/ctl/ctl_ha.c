@@ -155,6 +155,8 @@ struct ha_softc {
 	int		 ha_receiving;
 	int		 ha_wakeup;
 	int		 ha_disconnect;
+	int		 ha_shutdown;
+	eventhandler_tag ha_shutdown_eh;
 	TAILQ_HEAD(, ctl_ha_dt_req) ha_dts;
 } ha_softc;
 
@@ -568,10 +570,12 @@ ctl_ha_conn_thread(void *arg)
 	int error;
 
 	while (1) {
-		if (softc->ha_disconnect) {
+		if (softc->ha_disconnect || softc->ha_shutdown) {
 			ctl_ha_close(softc);
 			ctl_ha_lclose(softc);
 			softc->ha_disconnect = 0;
+			if (softc->ha_shutdown)
+				break;
 		} else if (softc->ha_so != NULL &&
 		    (softc->ha_so->so_error ||
 		     softc->ha_so->so_rcv.sb_state & SBS_CANTRCVMORE))
@@ -614,6 +618,11 @@ ctl_ha_conn_thread(void *arg)
 		softc->ha_wakeup = 0;
 		mtx_unlock(&softc->ha_lock);
 	}
+	mtx_lock(&softc->ha_lock);
+	softc->ha_shutdown = 2;
+	wakeup(&softc->ha_wakeup);
+	mtx_unlock(&softc->ha_lock);
+	kthread_exit();
 }
 
 static int
@@ -622,28 +631,33 @@ ctl_ha_peer_sysctl(SYSCTL_HANDLER_ARGS)
 	struct ha_softc *softc = (struct ha_softc *)arg1;
 	struct sockaddr_in *sa;
 	int error, b1, b2, b3, b4, p, num;
+	char buf[128];
 
-	error = sysctl_handle_string(oidp, softc->ha_peer,
-	    sizeof(softc->ha_peer), req);
-	if ((error != 0) || (req->newptr == NULL))
+	strlcpy(buf, softc->ha_peer, sizeof(buf));
+	error = sysctl_handle_string(oidp, buf, sizeof(buf), req);
+	if ((error != 0) || (req->newptr == NULL) ||
+	    strncmp(buf, softc->ha_peer, sizeof(buf)) == 0)
 		return (error);
 
 	sa = &softc->ha_peer_in;
 	mtx_lock(&softc->ha_lock);
-	if ((num = sscanf(softc->ha_peer, "connect %d.%d.%d.%d:%d",
+	if ((num = sscanf(buf, "connect %d.%d.%d.%d:%d",
 	    &b1, &b2, &b3, &b4, &p)) >= 4) {
 		softc->ha_connect = 1;
 		softc->ha_listen = 0;
-	} else if ((num = sscanf(softc->ha_peer, "listen %d.%d.%d.%d:%d",
+	} else if ((num = sscanf(buf, "listen %d.%d.%d.%d:%d",
 	    &b1, &b2, &b3, &b4, &p)) >= 4) {
 		softc->ha_connect = 0;
 		softc->ha_listen = 1;
 	} else {
 		softc->ha_connect = 0;
 		softc->ha_listen = 0;
-		if (softc->ha_peer[0] != 0)
+		if (buf[0] != 0) {
+			buf[0] = 0;
 			error = EINVAL;
+		}
 	}
+	strlcpy(softc->ha_peer, buf, sizeof(softc->ha_peer));
 	if (softc->ha_connect || softc->ha_listen) {
 		memset(sa, 0, sizeof(*sa));
 		sa->sin_len = sizeof(struct sockaddr_in);
@@ -931,6 +945,8 @@ ctl_ha_msg_init(struct ctl_softc *ctl_softc)
 		mtx_destroy(&softc->ha_lock);
 		return (CTL_HA_STATUS_ERROR);
 	}
+	softc->ha_shutdown_eh = EVENTHANDLER_REGISTER(shutdown_pre_sync,
+	    ctl_ha_msg_shutdown, ctl_softc, SHUTDOWN_PRI_FIRST);
 	SYSCTL_ADD_PROC(&ctl_softc->sysctl_ctx,
 	    SYSCTL_CHILDREN(ctl_softc->sysctl_tree),
 	    OID_AUTO, "ha_peer", CTLTYPE_STRING | CTLFLAG_RWTUN,
@@ -944,14 +960,40 @@ ctl_ha_msg_init(struct ctl_softc *ctl_softc)
 	return (CTL_HA_STATUS_SUCCESS);
 };
 
-ctl_ha_status
+void
 ctl_ha_msg_shutdown(struct ctl_softc *ctl_softc)
 {
 	struct ha_softc *softc = &ha_softc;
 
-	if (ctl_ha_msg_deregister(CTL_HA_CHAN_DATA) != CTL_HA_STATUS_SUCCESS) {
-		printf("%s: ctl_ha_msg_deregister failed.\n", __func__);
+	/* Disconnect and shutdown threads. */
+	mtx_lock(&softc->ha_lock);
+	if (softc->ha_shutdown < 2) {
+		softc->ha_shutdown = 1;
+		softc->ha_wakeup = 1;
+		wakeup(&softc->ha_wakeup);
+		while (softc->ha_shutdown < 2) {
+			msleep(&softc->ha_wakeup, &softc->ha_lock, 0,
+			    "shutdown", hz);
+		}
 	}
+	mtx_unlock(&softc->ha_lock);
+};
+
+ctl_ha_status
+ctl_ha_msg_destroy(struct ctl_softc *ctl_softc)
+{
+	struct ha_softc *softc = &ha_softc;
+
+	if (softc->ha_shutdown_eh != NULL) {
+		EVENTHANDLER_DEREGISTER(shutdown_pre_sync,
+		    softc->ha_shutdown_eh);
+		softc->ha_shutdown_eh = NULL;
+	}
+
+	ctl_ha_msg_shutdown(ctl_softc);	/* Just in case. */
+
+	if (ctl_ha_msg_deregister(CTL_HA_CHAN_DATA) != CTL_HA_STATUS_SUCCESS)
+		printf("%s: ctl_ha_msg_deregister failed.\n", __func__);
 
 	mtx_destroy(&softc->ha_lock);
 	return (CTL_HA_STATUS_SUCCESS);
