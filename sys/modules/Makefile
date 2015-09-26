@@ -268,6 +268,8 @@ SUBDIR=	\
 	${_nxge} \
 	${_opensolaris} \
 	oce \
+	otus \
+	otusfw \
 	ow \
 	${_padlock} \
 	${_padlock_rng} \
