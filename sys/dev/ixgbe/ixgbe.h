@@ -526,17 +526,6 @@ struct adapter {
 	**   with it.
 	*/
 	struct ix_queue		*queues;
-
-	/*
-	 * Transmit rings:
-	 *	Allocated at run time, an array of rings.
-	 */
-	struct tx_ring		*tx_rings;
-	/*
-	 * Receive rings:
-	 *	Allocated at run time, an array of rings.
-	 */
-	struct rx_ring		*rx_rings;
 	u64			active_queues;
 
 	/* Multicast array memory */

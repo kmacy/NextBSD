@@ -403,12 +403,6 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	}
 	eh = mtod(m, struct ether_header *);
 	etype = ntohs(eh->ether_type);
-	if (m->m_pkthdr.rcvif == NULL) {
-		if_printf(ifp, "discard frame w/o interface pointer\n");
-		if_inc_counter(ifp, IFCOUNTER_IERRORS, 1);
-		m_freem(m);
-		return;
-	}
 #ifdef DIAGNOSTIC
 	if (m->m_pkthdr.rcvif != ifp) {
 		if_printf(ifp, "Warning, frame marked as received on %s\n",

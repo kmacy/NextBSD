@@ -261,6 +261,26 @@ const static struct scsi_control_page control_page_changeable = {
 	/*extended_selftest_completion_time*/{0, 0}
 };
 
+#define CTL_CEM_LEN	(sizeof(struct scsi_control_ext_page) - 4)
+
+const static struct scsi_control_ext_page control_ext_page_default = {
+	/*page_code*/SMS_CONTROL_MODE_PAGE | SMPH_SPF,
+	/*subpage_code*/0x01,
+	/*page_length*/{CTL_CEM_LEN >> 8, CTL_CEM_LEN},
+	/*flags*/0,
+	/*prio*/0,
+	/*max_sense*/0
+};
+
+const static struct scsi_control_ext_page control_ext_page_changeable = {
+	/*page_code*/SMS_CONTROL_MODE_PAGE | SMPH_SPF,
+	/*subpage_code*/0x01,
+	/*page_length*/{CTL_CEM_LEN >> 8, CTL_CEM_LEN},
+	/*flags*/0,
+	/*prio*/0,
+	/*max_sense*/0
+};
+
 const static struct scsi_info_exceptions_page ie_page_default = {
 	/*page_code*/SMS_INFO_EXCEPTIONS_PAGE,
 	/*page_length*/sizeof(struct scsi_info_exceptions_page) - 2,
@@ -591,6 +611,14 @@ alloc:
 	ctl_ha_msg_send(CTL_HA_CHAN_CTL, &msg->port, sizeof(msg->port) + i,
 	    M_WAITOK);
 	free(msg, M_CTL);
+
+	if (lun->flags & CTL_LUN_PRIMARY_SC) {
+		for (i = 0; i < CTL_NUM_MODE_PAGES; i++) {
+			ctl_isc_announce_mode(lun, -1,
+			    lun->mode_pages.index[i].page_code & SMPH_PC_MASK,
+			    lun->mode_pages.index[i].subpage);
+		}
+	}
 }
 
 void
@@ -690,12 +718,56 @@ ctl_isc_announce_iid(struct ctl_port *port, int iid)
 	free(msg, M_CTL);
 }
 
+void
+ctl_isc_announce_mode(struct ctl_lun *lun, uint32_t initidx,
+    uint8_t page, uint8_t subpage)
+{
+	struct ctl_softc *softc = lun->ctl_softc;
+	union ctl_ha_msg msg;
+	int i;
+
+	if (softc->ha_link != CTL_HA_LINK_ONLINE)
+		return;
+	for (i = 0; i < CTL_NUM_MODE_PAGES; i++) {
+		if ((lun->mode_pages.index[i].page_code & SMPH_PC_MASK) ==
+		    page && lun->mode_pages.index[i].subpage == subpage)
+			break;
+	}
+	if (i == CTL_NUM_MODE_PAGES)
+		return;
+	bzero(&msg.mode, sizeof(msg.mode));
+	msg.hdr.msg_type = CTL_MSG_MODE_SYNC;
+	msg.hdr.nexus.targ_port = initidx / CTL_MAX_INIT_PER_PORT;
+	msg.hdr.nexus.initid = initidx % CTL_MAX_INIT_PER_PORT;
+	msg.hdr.nexus.targ_lun = lun->lun;
+	msg.hdr.nexus.targ_mapped_lun = lun->lun;
+	msg.mode.page_code = page;
+	msg.mode.subpage = subpage;
+	msg.mode.page_len = lun->mode_pages.index[i].page_len;
+	memcpy(msg.mode.data, lun->mode_pages.index[i].page_data,
+	    msg.mode.page_len);
+	ctl_ha_msg_send(CTL_HA_CHAN_CTL, &msg.mode, sizeof(msg.mode),
+	    M_WAITOK);
+}
+
 static void
 ctl_isc_ha_link_up(struct ctl_softc *softc)
 {
 	struct ctl_port *port;
 	struct ctl_lun *lun;
+	union ctl_ha_msg msg;
 	int i;
+
+	/* Announce this node parameters to peer for validation. */
+	msg.login.msg_type = CTL_MSG_LOGIN;
+	msg.login.version = CTL_HA_VERSION;
+	msg.login.ha_mode = softc->ha_mode;
+	msg.login.ha_id = softc->ha_id;
+	msg.login.max_luns = CTL_MAX_LUNS;
+	msg.login.max_ports = CTL_MAX_PORTS;
+	msg.login.max_init_per_port = CTL_MAX_INIT_PER_PORT;
+	ctl_ha_msg_send(CTL_HA_CHAN_CTL, &msg.login, sizeof(msg.login),
+	    M_WAITOK);
 
 	STAILQ_FOREACH(port, &softc->port_list, links) {
 		ctl_isc_announce_port(port);
@@ -979,6 +1051,74 @@ ctl_isc_iid_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
 		port->wwpn_iid[iid].name = NULL;
 }
 
+static void
+ctl_isc_login(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
+{
+
+	if (msg->login.version != CTL_HA_VERSION) {
+		printf("CTL HA peers have different versions %d != %d\n",
+		    msg->login.version, CTL_HA_VERSION);
+		ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
+		return;
+	}
+	if (msg->login.ha_mode != softc->ha_mode) {
+		printf("CTL HA peers have different ha_mode %d != %d\n",
+		    msg->login.ha_mode, softc->ha_mode);
+		ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
+		return;
+	}
+	if (msg->login.ha_id == softc->ha_id) {
+		printf("CTL HA peers have same ha_id %d\n", msg->login.ha_id);
+		ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
+		return;
+	}
+	if (msg->login.max_luns != CTL_MAX_LUNS ||
+	    msg->login.max_ports != CTL_MAX_PORTS ||
+	    msg->login.max_init_per_port != CTL_MAX_INIT_PER_PORT) {
+		printf("CTL HA peers have different limits\n");
+		ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
+		return;
+	}
+}
+
+static void
+ctl_isc_mode_sync(struct ctl_softc *softc, union ctl_ha_msg *msg, int len)
+{
+	struct ctl_lun *lun;
+	int i;
+	uint32_t initidx, targ_lun;
+
+	targ_lun = msg->hdr.nexus.targ_mapped_lun;
+	mtx_lock(&softc->ctl_lock);
+	if ((targ_lun >= CTL_MAX_LUNS) ||
+	    ((lun = softc->ctl_luns[targ_lun]) == NULL)) {
+		mtx_unlock(&softc->ctl_lock);
+		return;
+	}
+	mtx_lock(&lun->lun_lock);
+	mtx_unlock(&softc->ctl_lock);
+	if (lun->flags & CTL_LUN_DISABLED) {
+		mtx_unlock(&lun->lun_lock);
+		return;
+	}
+	for (i = 0; i < CTL_NUM_MODE_PAGES; i++) {
+		if ((lun->mode_pages.index[i].page_code & SMPH_PC_MASK) ==
+		    msg->mode.page_code &&
+		    lun->mode_pages.index[i].subpage == msg->mode.subpage)
+			break;
+	}
+	if (i == CTL_NUM_MODE_PAGES) {
+		mtx_unlock(&lun->lun_lock);
+		return;
+	}
+	memcpy(lun->mode_pages.index[i].page_data, msg->mode.data,
+	    lun->mode_pages.index[i].page_len);
+	initidx = ctl_get_initindex(&msg->hdr.nexus);
+	if (initidx != -1)
+		ctl_est_ua_all(lun, initidx, CTL_UA_MODE_CHANGE);
+	mtx_unlock(&lun->lun_lock);
+}
+
 /*
  * ISC (Inter Shelf Communication) event handler.  Events from the HA
  * subsystem come in here.
@@ -1255,9 +1395,16 @@ ctl_isc_event_handler(ctl_ha_channel channel, ctl_ha_event event, int param)
 		case CTL_MSG_IID_SYNC:
 			ctl_isc_iid_sync(softc, msg, param);
 			break;
+		case CTL_MSG_LOGIN:
+			ctl_isc_login(softc, msg, param);
+			break;
+		case CTL_MSG_MODE_SYNC:
+			ctl_isc_mode_sync(softc, msg, param);
+			break;
 		default:
 			printf("Received HA message of unknown type %d\n",
 			    msg->hdr.msg_type);
+			ctl_ha_msg_abort(CTL_HA_CHAN_CTL);
 			break;
 		}
 		if (msg != &msgbuf)
@@ -3956,35 +4103,65 @@ ctl_init_page_index(struct ctl_lun *lun)
 			break;
 		}
 		case SMS_CONTROL_MODE_PAGE: {
-			struct scsi_control_page *control_page;
+			switch (page_index->subpage) {
+			case SMS_SUBPAGE_PAGE_0: {
+				struct scsi_control_page *control_page;
 
-			if (page_index->subpage != SMS_SUBPAGE_PAGE_0)
-				panic("invalid subpage value %d",
-				      page_index->subpage);
-
-			memcpy(&lun->mode_pages.control_page[CTL_PAGE_DEFAULT],
-			       &control_page_default,
-			       sizeof(control_page_default));
-			memcpy(&lun->mode_pages.control_page[
-			       CTL_PAGE_CHANGEABLE], &control_page_changeable,
-			       sizeof(control_page_changeable));
-			memcpy(&lun->mode_pages.control_page[CTL_PAGE_SAVED],
-			       &control_page_default,
-			       sizeof(control_page_default));
-			control_page = &lun->mode_pages.control_page[
-			    CTL_PAGE_SAVED];
-			value = ctl_get_opt(&lun->be_lun->options, "reordering");
-			if (value != NULL && strcmp(value, "unrestricted") == 0) {
-				control_page->queue_flags &= ~SCP_QUEUE_ALG_MASK;
-				control_page->queue_flags |= SCP_QUEUE_ALG_UNRESTRICTED;
+				memcpy(&lun->mode_pages.control_page[
+				    CTL_PAGE_DEFAULT],
+				       &control_page_default,
+				       sizeof(control_page_default));
+				memcpy(&lun->mode_pages.control_page[
+				    CTL_PAGE_CHANGEABLE],
+				       &control_page_changeable,
+				       sizeof(control_page_changeable));
+				memcpy(&lun->mode_pages.control_page[
+				    CTL_PAGE_SAVED],
+				       &control_page_default,
+				       sizeof(control_page_default));
+				control_page = &lun->mode_pages.control_page[
+				    CTL_PAGE_SAVED];
+				value = ctl_get_opt(&lun->be_lun->options,
+				    "reordering");
+				if (value != NULL &&
+				    strcmp(value, "unrestricted") == 0) {
+					control_page->queue_flags &=
+					    ~SCP_QUEUE_ALG_MASK;
+					control_page->queue_flags |=
+					    SCP_QUEUE_ALG_UNRESTRICTED;
+				}
+				memcpy(&lun->mode_pages.control_page[
+				    CTL_PAGE_CURRENT],
+				       &lun->mode_pages.control_page[
+				    CTL_PAGE_SAVED],
+				       sizeof(control_page_default));
+				page_index->page_data =
+				    (uint8_t *)lun->mode_pages.control_page;
+				break;
 			}
-			memcpy(&lun->mode_pages.control_page[CTL_PAGE_CURRENT],
-			       &lun->mode_pages.control_page[CTL_PAGE_SAVED],
-			       sizeof(control_page_default));
-			page_index->page_data =
-				(uint8_t *)lun->mode_pages.control_page;
+			case 0x01:
+				memcpy(&lun->mode_pages.control_ext_page[
+				    CTL_PAGE_DEFAULT],
+				       &control_ext_page_default,
+				       sizeof(control_ext_page_default));
+				memcpy(&lun->mode_pages.control_ext_page[
+				    CTL_PAGE_CHANGEABLE],
+				       &control_ext_page_changeable,
+				       sizeof(control_ext_page_changeable));
+				memcpy(&lun->mode_pages.control_ext_page[
+				    CTL_PAGE_SAVED],
+				       &control_ext_page_default,
+				       sizeof(control_ext_page_default));
+				memcpy(&lun->mode_pages.control_ext_page[
+				    CTL_PAGE_CURRENT],
+				       &lun->mode_pages.control_ext_page[
+				    CTL_PAGE_SAVED],
+				       sizeof(control_ext_page_default));
+				page_index->page_data =
+				    (uint8_t *)lun->mode_pages.control_ext_page;
+				break;
+			}
 			break;
-
 		}
 		case SMS_INFO_EXCEPTIONS_PAGE: {
 			switch (page_index->subpage) {
@@ -5856,7 +6033,11 @@ ctl_control_page_handler(struct ctl_scsiio *ctsio,
 	if (set_ua != 0)
 		ctl_est_ua_all(lun, initidx, CTL_UA_MODE_CHANGE);
 	mtx_unlock(&lun->lun_lock);
-
+	if (set_ua) {
+		ctl_isc_announce_mode(lun,
+		    ctl_get_initindex(&ctsio->io_hdr.nexus),
+		    page_index->page_code, page_index->subpage);
+	}
 	return (0);
 }
 
@@ -5893,7 +6074,11 @@ ctl_caching_sp_handler(struct ctl_scsiio *ctsio,
 	if (set_ua != 0)
 		ctl_est_ua_all(lun, initidx, CTL_UA_MODE_CHANGE);
 	mtx_unlock(&lun->lun_lock);
-
+	if (set_ua) {
+		ctl_isc_announce_mode(lun,
+		    ctl_get_initindex(&ctsio->io_hdr.nexus),
+		    page_index->page_code, page_index->subpage);
+	}
 	return (0);
 }
 
