@@ -405,11 +405,11 @@ ctl_be_block_move_done(union ctl_io *io)
 	DPRINTF("entered\n");
 
 #ifdef CTL_TIME_IO
-	getbintime(&cur_bt);
+	getbinuptime(&cur_bt);
 	bintime_sub(&cur_bt, &io->io_hdr.dma_start_bt);
 	bintime_add(&io->io_hdr.dma_bt, &cur_bt);
+#endif
 	io->io_hdr.num_dmas++;
-#endif  
 	io->scsiio.kern_rel_offset += io->scsiio.kern_data_len;
 
 	/*
@@ -463,14 +463,8 @@ ctl_be_block_move_done(union ctl_io *io)
 	 * interrupt context, and therefore we cannot block.
 	 */
 	mtx_lock(&be_lun->queue_lock);
-	/*
-	 * XXX KDM make sure that links is okay to use at this point.
-	 * Otherwise, we either need to add another field to ctl_io_hdr,
-	 * or deal with resource allocation here.
-	 */
 	STAILQ_INSERT_TAIL(&be_lun->datamove_queue, &io->io_hdr, links);
 	mtx_unlock(&be_lun->queue_lock);
-
 	taskqueue_enqueue(be_lun->io_taskqueue, &be_lun->io_task);
 
 	return (0);
@@ -563,8 +557,8 @@ ctl_be_block_biodone(struct bio *bio)
 			ctl_serseq_done(io);
 		}
 #ifdef CTL_TIME_IO
-        	getbintime(&io->io_hdr.dma_start_bt);
-#endif  
+		getbinuptime(&io->io_hdr.dma_start_bt);
+#endif
 		ctl_datamove(io);
 	}
 }
@@ -586,15 +580,12 @@ ctl_be_block_flush_file(struct ctl_be_block_lun *be_lun,
 
 	(void) vn_start_write(be_lun->vn, &mountpoint, V_WAIT);
 
-	if (MNT_SHARED_WRITES(mountpoint)
-	 || ((mountpoint == NULL)
-	  && MNT_SHARED_WRITES(be_lun->vn->v_mount)))
+	if (MNT_SHARED_WRITES(mountpoint) ||
+	    ((mountpoint == NULL) && MNT_SHARED_WRITES(be_lun->vn->v_mount)))
 		lock_flags = LK_SHARED;
 	else
 		lock_flags = LK_EXCLUSIVE;
-
 	vn_lock(be_lun->vn, lock_flags | LK_RETRY);
-
 	error = VOP_FSYNC(be_lun->vn, beio->io_arg ? MNT_NOWAIT : MNT_WAIT,
 	    curthread);
 	VOP_UNLOCK(be_lun->vn, 0);
@@ -716,13 +707,11 @@ ctl_be_block_dispatch_file(struct ctl_be_block_lun *be_lun,
 
 		(void)vn_start_write(be_lun->vn, &mountpoint, V_WAIT);
 
-		if (MNT_SHARED_WRITES(mountpoint)
-		 || ((mountpoint == NULL)
+		if (MNT_SHARED_WRITES(mountpoint) || ((mountpoint == NULL)
 		  && MNT_SHARED_WRITES(be_lun->vn->v_mount)))
 			lock_flags = LK_SHARED;
 		else
 			lock_flags = LK_EXCLUSIVE;
-
 		vn_lock(be_lun->vn, lock_flags | LK_RETRY);
 
 		/*
@@ -785,8 +774,8 @@ ctl_be_block_dispatch_file(struct ctl_be_block_lun *be_lun,
 			ctl_serseq_done(io);
 		}
 #ifdef CTL_TIME_IO
-        	getbintime(&io->io_hdr.dma_start_bt);
-#endif  
+		getbinuptime(&io->io_hdr.dma_start_bt);
+#endif
 		ctl_datamove(io);
 	}
 }
@@ -956,8 +945,8 @@ ctl_be_block_dispatch_zvol(struct ctl_be_block_lun *be_lun,
 			ctl_serseq_done(io);
 		}
 #ifdef CTL_TIME_IO
-        	getbintime(&io->io_hdr.dma_start_bt);
-#endif  
+		getbinuptime(&io->io_hdr.dma_start_bt);
+#endif
 		ctl_datamove(io);
 	}
 }
@@ -1014,12 +1003,9 @@ ctl_be_block_flush_dev(struct ctl_be_block_lun *be_lun,
 		       struct ctl_be_block_io *beio)
 {
 	struct bio *bio;
-	union ctl_io *io;
 	struct cdevsw *csw;
 	struct cdev *dev;
 	int ref;
-
-	io = beio->io;
 
 	DPRINTF("entered\n");
 
@@ -1357,7 +1343,12 @@ ctl_be_block_cw_dispatch_ws(struct ctl_be_block_lun *be_lun,
 		buf = beio->sg_segs[i].addr;
 		end = buf + seglen;
 		for (; buf < end; buf += cbe_lun->blocksize) {
-			memcpy(buf, io->scsiio.kern_data_ptr, cbe_lun->blocksize);
+			if (lbalen->flags & SWS_NDOB) {
+				memset(buf, 0, cbe_lun->blocksize);
+			} else {
+				memcpy(buf, io->scsiio.kern_data_ptr,
+				    cbe_lun->blocksize);
+			}
 			if (lbalen->flags & SWS_LBDATA)
 				scsi_ulto4b(lbalen->lba + lba, buf);
 			lba++;
@@ -1535,14 +1526,8 @@ ctl_be_block_next(struct ctl_be_block_io *beio)
 	io->io_hdr.status |= CTL_STATUS_NONE;
 
 	mtx_lock(&be_lun->queue_lock);
-	/*
-	 * XXX KDM make sure that links is okay to use at this point.
-	 * Otherwise, we either need to add another field to ctl_io_hdr,
-	 * or deal with resource allocation here.
-	 */
 	STAILQ_INSERT_TAIL(&be_lun->input_queue, &io->io_hdr, links);
 	mtx_unlock(&be_lun->queue_lock);
-
 	taskqueue_enqueue(be_lun->io_taskqueue, &be_lun->io_task);
 }
 
@@ -1658,8 +1643,8 @@ ctl_be_block_dispatch(struct ctl_be_block_lun *be_lun,
 	} else {
 		SDT_PROBE(cbb, kernel, write, alloc_done, 0, 0, 0, 0, 0);
 #ifdef CTL_TIME_IO
-        	getbintime(&io->io_hdr.dma_start_bt);
-#endif  
+		getbinuptime(&io->io_hdr.dma_start_bt);
+#endif
 		ctl_datamove(io);
 	}
 }
@@ -1773,11 +1758,6 @@ ctl_be_block_submit(union ctl_io *io)
 	PRIV(io)->len = 0;
 
 	mtx_lock(&be_lun->queue_lock);
-	/*
-	 * XXX KDM make sure that links is okay to use at this point.
-	 * Otherwise, we either need to add another field to ctl_io_hdr,
-	 * or deal with resource allocation here.
-	 */
 	STAILQ_INSERT_TAIL(&be_lun->input_queue, &io->io_hdr, links);
 	mtx_unlock(&be_lun->queue_lock);
 	taskqueue_enqueue(be_lun->io_taskqueue, &be_lun->io_task);
@@ -1840,7 +1820,6 @@ ctl_be_block_open_file(struct ctl_be_block_lun *be_lun, struct ctl_lun_req *req)
 	off_t			      ps, pss, po, pos, us, uss, uo, uos;
 	int			      error;
 
-	error = 0;
 	cbe_lun = &be_lun->cbe_lun;
 	file_data = &be_lun->backend.file;
 	params = &be_lun->params;
@@ -2317,10 +2296,6 @@ ctl_be_block_create(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 		num_threads = 1;
 	}
 
-	/*
-	 * XXX This searching loop might be refactored to be combined with
-	 * the loop above,
-	 */
 	value = ctl_get_opt(&cbe_lun->options, "num_threads");
 	if (value != NULL) {
 		tmp_num_threads = strtol(value, NULL, 0);
@@ -2510,7 +2485,6 @@ ctl_be_block_rm(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 			break;
 	}
 	mtx_unlock(&softc->lock);
-
 	if (be_lun == NULL) {
 		snprintf(req->error_str, sizeof(req->error_str),
 			 "LUN %u is not managed by the block backend",
@@ -2578,13 +2552,10 @@ ctl_be_block_rm(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 	free(be_lun, M_CTLBLK);
 
 	req->status = CTL_LUN_OK;
-
 	return (0);
 
 bailout_error:
-
 	req->status = CTL_LUN_ERROR;
-
 	return (0);
 }
 
@@ -2606,7 +2577,6 @@ ctl_be_block_modify(struct ctl_be_block_softc *softc, struct ctl_lun_req *req)
 			break;
 	}
 	mtx_unlock(&softc->lock);
-
 	if (be_lun == NULL) {
 		snprintf(req->error_str, sizeof(req->error_str),
 			 "LUN %u is not managed by the block backend",
@@ -2683,7 +2653,6 @@ ctl_be_block_lun_shutdown(void *be_lun)
 	struct ctl_be_block_softc *softc;
 
 	lun = (struct ctl_be_block_lun *)be_lun;
-
 	softc = lun->softc;
 
 	mtx_lock(&softc->lock);
@@ -2691,7 +2660,6 @@ ctl_be_block_lun_shutdown(void *be_lun)
 	if (lun->flags & CTL_BE_BLOCK_LUN_WAITING)
 		wakeup(lun);
 	mtx_unlock(&softc->lock);
-
 }
 
 static void
@@ -2740,14 +2708,13 @@ ctl_be_block_config_write(union ctl_io *io)
 	struct ctl_be_lun *cbe_lun;
 	int retval;
 
-	retval = 0;
-
 	DPRINTF("entered\n");
 
 	cbe_lun = (struct ctl_be_lun *)io->io_hdr.ctl_private[
 		CTL_PRIV_BACKEND_LUN].ptr;
 	be_lun = (struct ctl_be_block_lun *)cbe_lun->be_lun;
 
+	retval = 0;
 	switch (io->scsiio.cdb[0]) {
 	case SYNCHRONIZE_CACHE:
 	case SYNCHRONIZE_CACHE_16:
@@ -2865,22 +2832,16 @@ ctl_be_block_lun_info(void *be_lun, struct sbuf *sb)
 	int retval;
 
 	lun = (struct ctl_be_block_lun *)be_lun;
-	retval = 0;
 
 	retval = sbuf_printf(sb, "\t<num_threads>");
-
 	if (retval != 0)
 		goto bailout;
-
 	retval = sbuf_printf(sb, "%d", lun->num_threads);
-
 	if (retval != 0)
 		goto bailout;
-
 	retval = sbuf_printf(sb, "</num_threads>\n");
 
 bailout:
-
 	return (retval);
 }
 
