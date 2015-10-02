@@ -322,7 +322,6 @@ SYSCTL_INT(_hw_ix, OID_AUTO, txd, CTLFLAG_RDTUN, &ixgbe_txd, 0,
 static int ixgbe_rxd = PERFORM_RXD;
 SYSCTL_INT(_hw_ix, OID_AUTO, rxd, CTLFLAG_RDTUN, &ixgbe_rxd, 0,
     "Number of receive descriptors per queue");
-
 /*
 ** Defining this on will allow the use
 ** of unsupported SFP+ modules, note that
@@ -407,7 +406,7 @@ ixgbe_if_queues_alloc(if_ctx_t ctx, caddr_t *vaddrs, uint64_t *paddrs, int nqs)
 		struct rx_ring 		*rxr = &que->rxr;
 
 		que->me = i;
-		que->adapter = adapter;
+		txr->adapter = rxr->adapter = que->adapter = adapter;
 		adapter->active_queues |= (u64)1 << que->me;
 
 		/* get the virtual and physical address of the hardware queues */
@@ -488,7 +487,7 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
 	adapter->shared = iflib_get_softc_ctx(ctx);
 	adapter->media = iflib_get_media(ctx);
 	hw = &adapter->hw;
-  
+
 	/* Sysctls */
 	ixgbe_add_device_sysctls(adapter);
 
@@ -571,6 +570,7 @@ ixgbe_if_attach_pre(if_ctx_t ctx)
 	}
 
 	error = ixgbe_init_hw(hw);
+
 	switch (error) {
 	case IXGBE_ERR_EEPROM_VERSION:
 		device_printf(dev, "This device is a pre-production adapter/"
@@ -1552,7 +1552,7 @@ ixgbe_if_msix_intr_assign(if_ctx_t ctx, int msix)
 	/* Admin Que is vector 0*/
 	rid = vector + 1;
 	error = iflib_irq_alloc_generic(ctx, &adapter->irq, rid, IFLIB_INTR_ADMIN,
-									ixgbe_msix_link, que, 0, "aq");
+									ixgbe_msix_link, adapter, 0, "aq");
 	if (error) {
 		device_printf(iflib_get_dev(ctx), "Failed to register Admin que handler");
 		return (error);
@@ -1912,6 +1912,7 @@ ixgbe_msix_link(void *arg)
 
 	++adapter->link_irq;
 
+	MPASS(hw->back != NULL);
 	/* First get the cause */
 	reg_eicr = IXGBE_READ_REG(hw, IXGBE_EICS);
 	/* Be sure the queue bits are not cleared */
@@ -2211,7 +2212,6 @@ ixgbe_allocate_pci_resources(struct adapter *adapter)
 
 	/* Legacy defaults */
 	adapter->hw.back = &adapter->osdep;
-
 	return (0);
 }
 
@@ -2410,7 +2410,8 @@ ixgbe_if_init(if_ctx_t ctx)
 #ifdef PCI_IOV
 	enum ixgbe_iov_mode mode;
 #endif
-	
+
+	device_printf(dev, "IXGBE_IF_INIT - hw.back value %p\n", hw->back);
 	INIT_DEBUGOUT("ixgbe_if_init: begin");
 
 #ifdef PCI_IOV
@@ -2567,6 +2568,7 @@ ixgbe_if_init(if_ctx_t ctx)
 		IXGBE_WRITE_REG(hw, IXGBE_CTRL_EXT, reg);
 	}
 #endif
+	device_printf(dev, "END HW INIT hw.back value %p\n", adapter->hw.back);
 }
 
 /*
@@ -2932,7 +2934,6 @@ ixgbe_if_stop(if_ctx_t ctx)
 static void
 ixgbe_update_link_status(struct adapter *adapter)
 {
-	struct ifnet	*ifp = adapter->ifp;
 	device_t	dev = adapter->dev;
   
 	if (adapter->link_up){ 
@@ -2946,7 +2947,8 @@ ixgbe_update_link_status(struct adapter *adapter)
 			ixgbe_fc_enable(&adapter->hw);
 			/* Update DMA coalescing config */
 			ixgbe_config_dmac(adapter);
-			if_link_state_change(ifp, LINK_STATE_UP);
+			iflib_link_state_change(adapter->ctx, LINK_STATE_UP);
+
 #ifdef PCI_IOV
 			ixgbe_ping_all_vfs(adapter);
 #endif
@@ -2956,7 +2958,7 @@ ixgbe_update_link_status(struct adapter *adapter)
 		if (adapter->link_active == TRUE) {
 			if (bootverbose)
 				device_printf(dev,"Link is Down\n");
-			if_link_state_change(ifp, LINK_STATE_DOWN);
+			iflib_link_state_change(adapter->ctx, LINK_STATE_DOWN);
 			adapter->link_active = FALSE;
 #ifdef PCI_IOV
 			ixgbe_ping_all_vfs(adapter);

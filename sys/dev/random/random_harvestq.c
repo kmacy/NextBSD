@@ -211,6 +211,8 @@ random_sources_feed(void)
 	LIST_FOREACH(rrs, &source_list, rrs_entries) {
 		for (i = 0; i < p_random_alg_context->ra_poolcount*(local_read_rate + 1); i++) {
 			n = rrs->rrs_source->rs_read(entropy, sizeof(entropy));
+			if (!n)
+				continue;
 			KASSERT((n > 0 && n <= sizeof(entropy)), ("very bad return from rs_read (= %d) in %s", n, __func__));
 			random_harvest_direct(entropy, n, (n*8)/2, rrs->rrs_source->rs_source);
 		}

@@ -47,18 +47,6 @@
 #define	CTL_PROCESSOR_PRODUCT	"CTLPROCESSOR    "
 #define	CTL_UNKNOWN_PRODUCT	"CTLDEVICE       "
 
-typedef enum {
-	CTL_IOCTL_INPROG,
-	CTL_IOCTL_DATAMOVE,
-	CTL_IOCTL_DONE
-} ctl_fe_ioctl_state;
-
-struct ctl_fe_ioctl_params {
-	struct cv		sem;
-	struct mtx		ioctl_mtx;
-	ctl_fe_ioctl_state	state;
-};
-
 #define CTL_POOL_ENTRIES_OTHER_SC   200
 
 struct ctl_io_pool {
@@ -318,7 +306,7 @@ static const struct ctl_page_index log_page_index_template[] = {
 	{SLS_SUPPORTED_PAGES_PAGE, SLS_SUPPORTED_SUBPAGES_SUBPAGE, 0, NULL,
 	 CTL_PAGE_FLAG_NONE, NULL, NULL},
 	{SLS_LOGICAL_BLOCK_PROVISIONING, 0, 0, NULL,
-	 CTL_PAGE_FLAG_NONE, ctl_lbp_log_sense_handler, NULL},
+	 CTL_PAGE_FLAG_DISK_ONLY, ctl_lbp_log_sense_handler, NULL},
 	{SLS_STAT_AND_PERF, 0, 0, NULL,
 	 CTL_PAGE_FLAG_NONE, ctl_sap_log_sense_handler, NULL},
 };
@@ -345,17 +333,6 @@ struct ctl_lun_delay_info {
 	uint32_t		done_delay;
 };
 
-typedef enum {
-	CTL_ERR_INJ_NONE	= 0x00,
-	CTL_ERR_INJ_ABORTED	= 0x01
-} ctl_err_inject_flags;
-
-typedef enum {
-	CTL_PR_FLAG_NONE	= 0x00,
-	CTL_PR_FLAG_REGISTERED	= 0x01,
-	CTL_PR_FLAG_ACTIVE_RES	= 0x02
-} ctl_per_res_flags;
-
 #define CTL_PR_ALL_REGISTRANTS  0xFFFFFFFF
 #define CTL_PR_NO_RESERVATION   0xFFFFFFF0
 
@@ -381,10 +358,7 @@ struct ctl_lun {
 	struct ctl_softc		*ctl_softc;
 	struct ctl_be_lun		*be_lun;
 	struct ctl_backend_driver	*backend;
-	int				io_count;
 	struct ctl_lun_delay_info	delay_info;
-	int				sync_interval;
-	int				sync_count;
 #ifdef CTL_TIME_IO
 	sbintime_t			idle_time;
 	sbintime_t			last_busy;
@@ -392,7 +366,6 @@ struct ctl_lun {
 	TAILQ_HEAD(ctl_ooaq, ctl_io_hdr)  ooa_queue;
 	TAILQ_HEAD(ctl_blockq,ctl_io_hdr) blocked_queue;
 	STAILQ_ENTRY(ctl_lun)		links;
-	STAILQ_ENTRY(ctl_lun)		run_links;
 #ifdef CTL_WITH_CA
 	uint32_t			have_ca[CTL_MAX_INITIATORS >> 5];
 	struct scsi_sense_data		pending_sense[CTL_MAX_INITIATORS];
@@ -415,7 +388,6 @@ struct ctl_lun {
 };
 
 typedef enum {
-	CTL_FLAG_REAL_SYNC	= 0x02,
 	CTL_FLAG_ACTIVE_SHELF	= 0x04
 } ctl_gen_flags;
 
@@ -435,8 +407,6 @@ struct tpc_token;
 struct ctl_softc {
 	struct mtx ctl_lock;
 	struct cdev *dev;
-	int open_count;
-	int num_disks;
 	int num_luns;
 	ctl_gen_flags flags;
 	ctl_ha_mode ha_mode;
@@ -452,7 +422,6 @@ struct ctl_softc {
 	struct sysctl_oid *sysctl_tree;
 	void *othersc_pool;
 	struct proc *ctl_proc;
-	int targ_online;
 	uint32_t ctl_lun_mask[(CTL_MAX_LUNS + 31) / 32];
 	struct ctl_lun *ctl_luns[CTL_MAX_LUNS];
 	uint32_t ctl_port_mask[(CTL_MAX_PORTS + 31) / 32];

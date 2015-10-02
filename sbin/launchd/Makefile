@@ -7,8 +7,6 @@ PROG= launchd
 .PATH: ${.CURDIR}/init
 
 
-MAN1=
-
 BASE_INCLUDE=  -I. -I${.CURDIR} -I${.CURDIR}/init -I${.CURDIR}/../../include/apple
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys -I${MACHINE_INCLUDES}
 DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
@@ -51,6 +49,8 @@ SRCS+= internalUser.c
 SRCS+= launchd.c core.c kill2.c ktrace.c ipc.c log.c runtime.c
 SRCS+= init.c
 LDADD+= -lutil -lauditd -lbsm -ldispatch -lmach -lBlocksRuntime -llaunch -losxsupport -lxpc -lnv -lsbuf
+
+MAN=	launchd.conf.5 launchd.plist.5 launchd.8
 
 launchd.1:
 	@echo No man page for you

@@ -1,7 +1,7 @@
 .include <bsd.own.mk>
 
 PROG= launchctl
-MAN=
+MAN= launchctl.1
 
 BASE_INCLUDE= -I${.CURDIR}/../../include/apple
 
