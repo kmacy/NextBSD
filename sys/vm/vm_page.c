@@ -2644,6 +2644,40 @@ vm_page_deactivate(vm_page_t m)
 }
 
 /*
+ * Move the specified page to the inactive queue with the expectation
+ * that it is unlikely to be reused.
+ *
+ * The page must be locked.
+ */
+void
+vm_page_deactivate_noreuse(vm_page_t m)
+{
+
+	_vm_page_deactivate(m, 1);
+}
+
+/*
+ * vm_page_try_to_cache:
+ *
+ * Returns 0 on failure, 1 on success
+ */
+int
+vm_page_try_to_cache(vm_page_t m)
+{
+
+	vm_page_lock_assert(m, MA_OWNED);
+	VM_OBJECT_ASSERT_WLOCKED(m->object);
+	if (m->dirty || m->hold_count || m->wire_count ||
+	    (m->oflags & VPO_UNMANAGED) != 0 || vm_page_busied(m))
+		return (0);
+	pmap_remove_all(m);
+	if (m->dirty)
+		return (0);
+	vm_page_cache(m);
+	return (1);
+}
+
+/*
  * vm_page_try_to_free()
  *
  *	Attempt to free the page.  If we cannot free it, we do nothing.
@@ -2669,8 +2703,7 @@ vm_page_try_to_free(vm_page_t m)
 /*
  * vm_page_advise
  *
- * 	Deactivate or do nothing, as appropriate.  This routine is used
- * 	by madvise() and vop_stdadvise().
+ * 	Deactivate or do nothing, as appropriate.
  *
  *	The object and page must be locked.
  */

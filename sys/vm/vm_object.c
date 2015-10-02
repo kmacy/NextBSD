@@ -1925,6 +1925,62 @@ next:
 		vm_page_unlock(p);
 	}
 	vm_object_pip_wakeup(object);
+skipmemq:
+	if (__predict_false(!vm_object_cache_is_empty(object)))
+		vm_page_cache_free(object, start, end);
+}
+
+/*
+ *	vm_object_page_noreuse:
+ *
+ *	For the given object, attempt to move the specified pages to
+ *	the head of the inactive queue.  This bypasses regular LRU
+ *	operation and allows the pages to be reused quickly under memory
+ *	pressure.  If a page is wired for any reason, then it will not
+ *	be queued.  Pages are specified by the range ["start", "end").
+ *	As a special case, if "end" is zero, then the range extends from
+ *	"start" to the end of the object.
+ *
+ *	This operation should only be performed on objects that
+ *	contain non-fictitious, managed pages.
+ *
+ *	The object must be locked.
+ */
+void
+vm_object_page_noreuse(vm_object_t object, vm_pindex_t start, vm_pindex_t end)
+{
+	struct mtx *mtx, *new_mtx;
+	vm_page_t p, next;
+
+	VM_OBJECT_ASSERT_WLOCKED(object);
+	KASSERT((object->flags & (OBJ_FICTITIOUS | OBJ_UNMANAGED)) == 0,
+	    ("vm_object_page_noreuse: illegal object %p", object));
+	if (object->resident_page_count == 0)
+		return;
+	p = vm_page_find_least(object, start);
+
+	/*
+	 * Here, the variable "p" is either (1) the page with the least pindex
+	 * greater than or equal to the parameter "start" or (2) NULL. 
+	 */
+	mtx = NULL;
+	for (; p != NULL && (p->pindex < end || end == 0); p = next) {
+		next = TAILQ_NEXT(p, listq);
+
+		/*
+		 * Avoid releasing and reacquiring the same page lock.
+		 */
+		new_mtx = vm_page_lockptr(p);
+		if (mtx != new_mtx) {
+			if (mtx != NULL)
+				mtx_unlock(mtx);
+			mtx = new_mtx;
+			mtx_lock(mtx);
+		}
+		vm_page_deactivate_noreuse(p);
+	}
+	if (mtx != NULL)
+		mtx_unlock(mtx);
 }
 
 /*
