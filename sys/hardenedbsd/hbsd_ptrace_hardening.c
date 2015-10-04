@@ -215,7 +215,7 @@ pax_ptrace_allowed(struct prison *pr, struct ucred *cred)
 	uid_t uid;
 	gid_t allowed_gid;
 
-	// XXXOP: convert the uid chech to priv_check(...)
+	// XXXOP: convert the uid check to priv_check(...)
 	uid = cred->cr_ruid;
 	allowed_gid = pr->pr_hardening.hr_pax_ptrace_hardening_gid;
 #ifdef PAX_PTRACE_HARDENING_GRP

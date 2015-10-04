@@ -216,7 +216,9 @@ pax_elf(struct image_params *imgp, uint32_t mode)
 
 #ifdef PAX_ASLR
 	flags |= pax_aslr_setup_flags(imgp, mode);
+#ifdef MAP_32BIT
 	flags |= pax_disallow_map32bit_setup_flags(imgp, mode);
+#endif
 #endif
 
 #ifdef PAX_NOEXEC

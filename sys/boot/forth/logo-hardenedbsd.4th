@@ -1,4 +1,5 @@
 \ Copyright (c) 2006-2015 Devin Teske <dteske@FreeBSD.org>
+\ Copyright (c) 2015 Oliver Pinter <op@HardenedBSD.org>
 \ All rights reserved.
 \ 
 \ Redistribution and use in source and binary forms, with or without
@@ -24,51 +25,32 @@
 \ 
 \ $FreeBSD$
 
-marker task-brand.4th
+46 logoX ! 7 logoY ! \ Initialize logo placement defaults
 
-variable brandX
-variable brandY
+: logo+ ( x y c-addr/u -- x y' )
+	2swap 2dup at-xy 2swap \ position the cursor
+	[char] @ escc! \ replace @ with Esc
+	type \ print to the screen
+	1+ \ increase y for next time we're called
+;
 
-\ Initialize brand placement to defaults
-2 brandX !
-1 brandY !
+: logo ( x y -- ) \ color HardenedBSD mascot (15 rows x 33 columns)
 
-\ This function draws any number of company brands at (loader_brand_x,
-\ loader_brand_y) if defined, or (2,1) (top-left). To choose your brand, set
-\ the variable `loader_brand' to the respective brand name.
-\ 
-\ NOTE: Each is defined as a brand function in /boot/brand-${loader_brand}.4th
-\ NOTE: If `/boot/brand-${loader_brand}.4th' does not exist or does not define
-\       a `brand' function, no brand is drawn.
-\ 
-: draw-brand ( -- ) \ at (loader_brand_x,loader_brand_y), else (2,1)
+	s" uKOS2qsmkfe38kEuXLimP+7XoBiuIt5k" logo+
+	s" BM@[36mHardened@[34mBSD@[mxfOL9QwvfA6yxGHkNMG" logo+
+	s" 2I7ADmw7Mp/P8Y4wjnBFDNKvNzdZa/uu" logo+
+	s" iTwpnHhcIEKkmuxHmd4Ffmz/lTXRTknl" logo+
+	s" 7jx0/j28DcHs1oTUiFxDezXj0+bYBAjk" logo+
+	s" M/WeI4vOFPUZQcUiqAhCItlLY/1/YsdU" logo+
+	s" bYCu3JOWsOA/Ctw0oVmHA+jY6Z8RJnsT" logo+
+	s" NTm3YVdJVYQ+O2ltoSw@[36mHardened@[34mBSD@[mVD" logo+
+	s" vji9p89gQvsPgS9hh9ekUCw/0TnSeQ1W" logo+
+	s" NHcmBLfiNO7mU9D4rCxiSQfifcIZzC78" logo+
+	s" mTTg+jGB8NJcpmZ6eMQ9iYmAVsOTZlq+" logo+
+	s" uwaNYp+XGq+qEt7pQ+aX2nsJ2juBCGai" logo+
+	s" fTclPrFDFBNSqyrmOEI3Lrkn3eudPbJU" logo+
+	s" Nl@[36mHardened@[34mBSD@[mvCOXT59dcSRw9mB3bOl" logo+
+	s" gEcyCwdlh1xWKOu9qGWcmsAhOVReHec4" logo+
 
-	s" loader_brand_x" getenv dup -1 <> if
-		?number 1 = if brandX ! then
-	else drop then
- 	s" loader_brand_y" getenv dup -1 <> if
- 		?number 1 = if brandY ! then
- 	else drop then
-
-	\ If `brand' is defined, execute it
-	s" brand" sfind ( -- xt|0 bool ) if
-		brandX @ brandY @ rot execute
-	else
-		\ Not defined; try-include desired brand file
-		drop ( xt = 0 ) \ cruft
-		s" loader_brand" getenv dup -1 = over 0= or if
-			dup 0= if 2drop else drop then \ getenv result unused
-			s" try-include /boot/brand-hbsd.4th"
-		else
-			2drop ( c-addr/u -- ) \ getenv result unused
-			s" try-include /boot/brand-${loader_brand}.4th"
-		then
-		evaluate
-		1 spaces
-
-		\ Execute `brand' if defined now
-		s" brand" sfind if
-			brandX @ brandY @ rot execute
-		else drop then
-	then
+	2drop
 ;

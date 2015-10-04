@@ -236,6 +236,18 @@ SUBDIR+=	finger
 SUBDIR+=	ftp
 .endif
 
+.if ${MK_GAMES} != "no"
+SUBDIR+=	caesar
+SUBDIR+=	factor
+SUBDIR+=	fortune
+SUBDIR+=	grdc
+SUBDIR+=	morse
+SUBDIR+=	number
+SUBDIR+=	pom
+SUBDIR+=	primes
+SUBDIR+=	random
+.endif
+
 .if ${MK_GPL_DTC} != "yes"
 SUBDIR+=	dtc
 .endif
@@ -260,9 +272,7 @@ SUBDIR+=	iscsictl
 
 .if ${MK_KDUMP} != "no"
 SUBDIR+=        kdump
-.if ${MACHINE_ARCH} != "aarch64" # ARM64TODO truss does not build
 SUBDIR+=        truss
-.endif
 .endif
 
 .if ${MK_KERBEROS_SUPPORT} != "no"

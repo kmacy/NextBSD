@@ -14,6 +14,7 @@ desc_kernel="Kernel (MANDATORY)"
 desc_doc="Additional documentation"
 doc_default=off
 desc_lib32="32-bit compatibility libraries"
+lib32_default=off
 desc_ports="Ports tree"
 desc_src="System source code"
 desc_tests="Test suite"

@@ -187,7 +187,7 @@ compat:
 	    -f ${.CURDIR}/../etc/mtree/BSD.include.dist \
 	    -p ${DESTDIR}${INCLUDEDIR} > /dev/null
 .if ${MK_META_MODE} == "yes"
-	touch ${.TARGET}
+	@touch ${.TARGET}
 .endif
 
 copies:
@@ -304,8 +304,7 @@ copies:
 		${DESTDIR}${INCLUDEDIR}/sys/mach/device
 .endif
 .if ${MK_META_MODE} == "yes"
-	cd ${.OBJDIR}
-	touch ${.TARGET}
+	@touch ${.OBJDIR}/${.TARGET}
 .endif
 
 symlinks:
@@ -424,8 +423,7 @@ symlinks:
 		    ${DESTDIR}${INCLUDEDIR}/rpc; \
 	done
 .if ${MK_META_MODE} == "yes"
-	cd ${.OBJDIR}
-	touch ${.TARGET}
+	@touch ${.OBJDIR}/${.TARGET}
 .endif
 
 .if ${MACHINE} == "host"
