@@ -100,10 +100,10 @@
 #define HAVE_PTHREAD_NP_H 1
 
 /* Define if pthread work queues are present */
-/* #undef HAVE_PTHREAD_WORKQUEUES */
+#define HAVE_PTHREAD_WORKQUEUES 1
 
 /* Define to 1 if you have the `pthread_workqueue_setdispatch_np' function. */
-/* #undef HAVE_PTHREAD_WORKQUEUE_SETDISPATCH_NP */
+#define HAVE_PTHREAD_WORKQUEUE_SETDISPATCH_NP 1
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1

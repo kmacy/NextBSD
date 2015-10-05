@@ -21,16 +21,16 @@
 .\"
 .Dd Sept 19, 2008
 .Dt asl.conf 5
-.Os "Mac OS X"
+.Os
 .Sh NAME
 .Nm asl.conf
 .Nd configuration file for
-.Xr syslogd 8
+.Xr asld 8
 and
 .Xr aslmanager 8
 .Sh DESCRIPTION
 The
-.Xr syslogd 8
+.Xr asld 8
 server reads the /etc/asl.conf file at startup, and re-reads the file when it receives a HUP signal.
 The
 .Xr aslmanager 8
@@ -38,7 +38,7 @@ daemon reads the file when it starts.
 See the ASLMANAGER PARAMETER SETTINGS section for details on aslmanager-specific parameters.
 .Pp
 If the /etc/asl directory exists, then
-.Nm syslogd
+.Nm asld
 and
 .Nm aslmanager
 will read each file it contains.
@@ -75,7 +75,7 @@ Query-action rules in the file generally have the form:
 .Dl ? query action ...
 .Pp
 This directs
-.Nm syslogd
+.Nm asld
 to perform the specified action when a received message matches the given query.
 Actions may be followed by optional arguments.
 See the QUERY-ACTION RULES section for details.
@@ -95,7 +95,7 @@ See the OUTPUT CONFIGURATION SETTINGS section for details.
 Comment lines are ignored.
 .Ss PARAMETER SETTINGS
 The following parameter-settings are recognized by
-.Nm syslogd .
+.Nm asld .
 .Pp
 .Bl -tag -width "bsd_max_dup_time" -compact -offset indent
 .It debug
@@ -132,11 +132,11 @@ User processes are limited to 36000 messages per hour.
 The limit for a user process is not enforced if a remote-control ASL filter is in
 place for the process.
 See the
-.Xr syslog 1
+.Xr aslutil 1
 manual for enabling a remote-control filter using the 
 .Fl c
 option with the
-.Nm syslog
+.Nm aslutil
 command.
 .Pp
 .It max_file_size
@@ -153,7 +153,7 @@ This matters because some actions can affect further processing.
 For example, an 
 .Dq ignore 
 action causes
-.Nm syslogd
+.Nm asld
 to stop processing the rules in a file for messages that match a given query pattern.
 .Pp
 Query-action rules contain three components: a query, an action, and optional parameters specific to that action.
@@ -161,7 +161,7 @@ For example, the following rule matches log messages sent by the
 .Dq example
 process which have log priority levels in the range emergency to error.
 If a received message matches, 
-.Nm syslogd
+.Nm asld
 posts a BSD notification for the key 
 .Dq com.example.log_message .
 .Pp
@@ -280,12 +280,12 @@ The following actions are available.
 .Bl -tag -width "directory" -compact -offset indent
 .It store
 Causes
-.Nm syslogd
+.Nm asld
 to save matching messages in the ASL database.
 Note that if /etc/asl.conf contains no 
 .Dq store 
 action rules, then
-.Nm syslogd
+.Nm asld
 will save all messages it receives in the ASL database.
 .Pp
 .It file
@@ -294,7 +294,7 @@ The file's path name must follow as the first parameter.
 If the path already exists, it must be a plain file.
 If the file does not exist, it will be created when the first message is written.
 If the pathname specified is not an absolute path,
-.Nm syslogd
+.Nm asld
 will treat the given path as relative to /var/log (for /etc/asl.conf), 
 or for other output modules relative to /var/log/module/NAME where NAME is the module name.
 .Pp
@@ -327,7 +327,7 @@ See the OUTPUT CONFIGURATION SETTINGS section for a list of options that may be 
 .Pp
 .It notify
 Causes
-.Nm syslogd
+.Nm asld
 to post a notification with
 .Fn notify_post .
 The notification key must appear as a single parameter following the
@@ -359,7 +359,7 @@ query will be processed by subsequent rules in the module.
 .Pp
 .It access
 Sets read access controls for messages that match the associated query pattern.
-.Nm syslogd
+.Nm asld
 will restrict read access to matching messages to a specific user and group.
 The user ID number and group ID number must follow the
 .Dq access
@@ -431,7 +431,7 @@ Several pre-defined formats are available:
 .Bl -tag -width "abcd"
 .It bsd
 Format used by the
-.Nm syslogd
+.Nm asld
 daemon for system log files, e.g. /var/log/system.log.
 .It std
 Standard (default) format.
@@ -451,7 +451,7 @@ Dictionary values are strings.
 .It asl
 The output file is written as an ASL-format data store file.
 Files in this format may be read and searched using the
-.Nm syslog
+.Nm aslutil
 command line utility with the use of the
 .Fl f Ar path
 option.
@@ -463,7 +463,7 @@ the entire string may be enclosed in single or double quote characters,
 or each white-space character may be preceded by a backslash escape character.
 Escaped characters are not interpreted.
 Custom format strings are described in detail in the READING MESSAGES section of the
-.Xr syslog 1
+.Xr alsutil 1
 manual.
 .Pp
 .It mode=MMM
@@ -479,7 +479,7 @@ If more than one
 option is given, the first will be used to set ownership,
 and subsequent user IDs will be given read access to in the files POSIX.1e ACLs.
 Note that UIDs should be defined in the local Open Directory database, since
-.Nm syslogd
+.Nm asld
 starts and may create the log file before network directory services are available.
 Unknown UIDs and GIDs will be ignored when setting access controls.
 .Pp
@@ -594,10 +594,10 @@ will move files to the directory given by PATH.
 .Pp
 .It soft
 Makes
-.Nm syslogd
+.Nm asld
 ignore write errors when saving messages.
 Normally,
-.Nm syslogd
+.Nm sld
 will stop saving to a file or ASL directory after 5 consecutive write errors.
 .Pp
 .It compress
@@ -631,7 +631,7 @@ will delete rotated files, oldest first, to reduce the total below the limit.
 SIZE may be specified in the same format as the file_max option.
 .El
 .Ss FILE ROTATION
-.Nm syslogd
+.Nm asld
 and
 .Nm aslmanager
 work together to automatically provide all the features of file rotation.
@@ -641,18 +641,18 @@ or an ASL Output Module configuration file,
 together with a description of how the system works to support those features.
 .Pp
 If a file is marked for rotation,
-.Nm syslogd
+.Nm asld
 will close the file at the start of a new day or when the file exceeds its 
 .Dq file_max
 size limit.
 At that point,
-.Nm syslogd
+.Nm asld
 renames the file and starts a new file to continue logging.
 The old file is renamed with the file's creation time included in its name.
 This operation is called checkpointing the file.
 .Pp
 For example,
-.Nm syslogd
+.Nm asld
 might close
 .Dq example.log
 and rename it
@@ -667,7 +667,7 @@ If the system is sleeping or powered off, then files are checkpointed when
 the the first message of a new day (local time) is received.
 Files are also checkpointed if they exceed a size limit specified by a file_max option,
 and they may be checkpointed manually through options provided by the
-.Xr syslog 1
+.Xr aslutil 1
 and
 .Xr aslmanager 8
 utilities.
@@ -679,7 +679,7 @@ then the timestamp will be a UTC date and time string.
 causes the timestamp to be the date and time in the current local timezone.
 Otherwise, the timestamp will be in seconds since the epoch.
 .Pp
-.Nm syslogd
+.Nm asld
 only performs the checkpointing operation.
 It closes old files, moves them out of the way, and starts writing new files.
 Most of the work of file rotation is done by the
@@ -693,19 +693,19 @@ and checking file space usage.
 .Nm aslmanager
 normally runs once during system start-up, and once a day just after midnight.
 It may also be triggered occasionally by
-.Nm syslogd ,
+.Nm asld ,
 and it may be run manually.
 .Pp
 .Nm aslmanager
 scans for any checkpointed files created by
-.Nm syslogd 
+.Nm asld
 and will rename the files (if required) to match the naming style specified by the
 .Dq rotate=NAME_STYLE
 option.
 If 
 .Dq rotate=seq
 is specified for a file, checkpointed files created by
-.Nm syslogd
+.Nm asld
 contain a timestamp in seconds.
 These files are renamed so that the file names
 contain a sequence number.
@@ -738,22 +738,24 @@ option, older versions of the rotated file will be deleted to keep the total bel
 Although checkpoint and file rotation operations are normally done automatically,
 .Nm aslmanager
 supports an option that will trigger 
-.Nm syslogd
+.Nm asld
 to checkpoint files before
 .Nm aslmanager
 starts its scan.
-.Nm syslog
+.Nm aslutil 
 also supports an option to force files to be checkpointed without running
 .Nm aslmanager .
 See the
 .Xr aslmanager 8
 and
-.Xr syslog 1
+.Xr aslutil 1
 manuals for details.
 .Pp
 Programmatically, an
 .Xr asl 3
-message may be sent to syslogd to force it to checkpoint either a single file,
+message may be sent to 
+.Nm asld
+to force it to checkpoint either a single file,
 or to checkpoint all files for a particular ASL module.
 To checkpoint all files:
 .Pp
@@ -791,10 +793,10 @@ nor may they include
 query-action rules.
 .Pp
 Module configuration files are read by
-.Nm syslogd
+.Nm asld 
 when it starts, and whenever it gets a HUP signal.
 Messages received by
-.Nm syslogd
+.Nm asld
 are first processed according the the rules found in /etc/asl.conf
 (also known as the 
 .Dq com.apple.asl
@@ -810,7 +812,7 @@ ASL output modules are enabled by default, but a module may include a parameter 
 .Dl = enable 0
 .Pp
 The module is still loaded by
-.Nm syslogd ,
+.Nm asld ,
 but the module will not save messages to files or directories, and will not post BSD notifications.
 .Pp
 Several mechanisms allow modules to be enabled or disabled dynamically.
@@ -858,9 +860,9 @@ The profile name is the value of its DefaultsDomainName key.
 The test will evaluate to zero if the profile is not installed.
 .Pp
 A module may be also enabled or disabled using
-.Nm syslog
+.Nm aslutil
 or by sending
-.Nm syslogd
+.Nm asld
 a special
 .Xr asl 3
 control message.
@@ -883,11 +885,11 @@ message as shown in this example:
     asl_release(ctl);
 .Pp
 A control message may also be sent using
-.Nm syslog
+.Nm aslutil
 as the following example shows to disable a module named
 .Dq com.apple.example :
 .Pp
-.Dl sudo syslog -module com.apple.example enable 0
+.Dl sudo aslutil -module com.apple.example enable 0
 .Pp
 A module may also enable or disable itself.
 Although a module that is not enabled will not write or post notifications,
@@ -948,7 +950,7 @@ The ASL database path used by
 .Nm aslmanager .
 The default is /var/log/asl.
 Note that this parameter is ignored by
-.Nm syslogd .
+.Nm asld .
 .Pp
 .It archive_mode
 Files copied to the ASL database archive will be given the specified access mode.
@@ -958,6 +960,6 @@ The default is 0400, so archive files will only be readable by root.
 .Sh SEE ALSO
 .Xr asl 3 ,
 .Xr notify 3 ,
-.Xr syslog 1 ,
+.Xr aslutil 1 ,
 .Xr aslmanager 8 ,
-.Xr syslogd 8 .
+.Xr asld 8 .
