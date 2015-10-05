@@ -39,6 +39,8 @@
 #define RT2573_AIFSN_CSR	0x0400
 #define RT2573_CWMIN_CSR	0x0404
 #define RT2573_CWMAX_CSR	0x0408
+#define RT2573_TXOP01_CSR	0x040C
+#define RT2573_TXOP23_CSR	0x0410
 #define RT2573_MCU_CODE_BASE	0x0800
 
 /*
@@ -153,6 +155,10 @@
 #define RT2573_SHORT_PREAMBLE	(1 << 18)
 #define RT2573_MRR_ENABLED	(1 << 19)
 #define RT2573_MRR_CCK_FALLBACK	(1 << 22)
+#define RT2573_LONG_RETRY(max)	((max) << 24)
+#define RT2573_LONG_RETRY_MASK	(0xf << 24)
+#define RT2573_SHORT_RETRY(max)	((max) << 28)
+#define RT2573_SHORT_RETRY_MASK	(0xf << 28)
 
 /* possible flags for register TXRX_CSR9 */
 #define RT2573_TSF_TIMER_EN		(1 << 16)

@@ -134,6 +134,7 @@ static int regen_tmpaddr(struct in6_ifaddr *);
 static void nd6_free(struct llentry *, int);
 static void nd6_free_redirect(const struct llentry *);
 static void nd6_llinfo_timer(void *);
+static void nd6_llinfo_settimer_locked(struct llentry *, long);
 static void clear_llinfo_pqueue(struct llentry *);
 static void nd6_rtrequest(int, struct rtentry *, struct rt_addrinfo *);
 static int nd6_resolve_slow(struct ifnet *, struct mbuf *,
@@ -483,7 +484,7 @@ skip1:
 /*
  * ND6 timer routine to handle ND6 entries
  */
-void
+static void
 nd6_llinfo_settimer_locked(struct llentry *ln, long tick)
 {
 	int canceled;
@@ -512,12 +513,13 @@ nd6_llinfo_settimer_locked(struct llentry *ln, long tick)
 }
 
 /*
-* Gets source address of the first packet in hold queue
-* and stores it in @src.
-* Returns pointer to @src (if hold queue is not empty) or NULL.
-*
-*/
-static struct in6_addr *
+ * Gets source address of the first packet in hold queue
+ * and stores it in @src.
+ * Returns pointer to @src (if hold queue is not empty) or NULL.
+ *
+ * Set noinline to be dtrace-friendly
+ */
+static __noinline struct in6_addr *
 nd6_llinfo_get_holdsrc(struct llentry *ln, struct in6_addr *src)
 {
 	struct ip6_hdr hdr;
@@ -530,7 +532,7 @@ nd6_llinfo_get_holdsrc(struct llentry *ln, struct in6_addr *src)
 	 * assume every packet in la_hold has the same IP header
 	 */
 	m = ln->la_hold;
-	if (sizeof(hdr) < m->m_len)
+	if (sizeof(hdr) > m->m_len)
 		return (NULL);
 
 	m_copydata(m, 0, sizeof(hdr), (caddr_t)&hdr);
@@ -541,8 +543,10 @@ nd6_llinfo_get_holdsrc(struct llentry *ln, struct in6_addr *src)
 
 /*
  * Switch @lle state to new state optionally arming timers.
+ *
+ * Set noinline to be dtrace-friendly
  */
-void
+__noinline void
 nd6_llinfo_setstate(struct llentry *lle, int newstate)
 {
 	struct ifnet *ifp;
@@ -576,17 +580,12 @@ nd6_llinfo_setstate(struct llentry *lle, int newstate)
 	lle->ln_state = newstate;
 }
 
-
-void
-nd6_llinfo_settimer(struct llentry *ln, long tick)
-{
-
-	LLE_WLOCK(ln);
-	nd6_llinfo_settimer_locked(ln, tick);
-	LLE_WUNLOCK(ln);
-}
-
-static void
+/*
+ * Timer-dependent part of nd state machine.
+ *
+ * Set noinline to be dtrace-friendly
+ */
+static __noinline void
 nd6_llinfo_timer(void *arg)
 {
 	struct llentry *ln;
@@ -1179,8 +1178,10 @@ nd6_is_addr_neighbor(const struct sockaddr_in6 *addr, struct ifnet *ifp)
  * Since the function would cause significant changes in the kernel, DO NOT
  * make it global, unless you have a strong reason for the change, and are sure
  * that the change is safe.
+ *
+ * Set noinline to be dtrace-friendly
  */
-static void
+static __noinline void
 nd6_free(struct llentry *ln, int gc)
 {
 	struct nd_defrouter *dr;
@@ -1749,9 +1750,12 @@ nd6_cache_lladdr(struct ifnet *ifp, struct in6_addr *from, char *lladdr,
 			lltable_link_entry(LLTABLE6(ifp), ln);
 		IF_AFDATA_WUNLOCK(ifp);
 		if (ln_tmp == NULL) {
-			/* No existing lle, mark as new entry */
+			/* No existing lle, mark as new entry (6,7) */
 			is_newentry = 1;
 			nd6_llinfo_setstate(ln, ND6_LLINFO_STALE);
+			if (lladdr != NULL)	/* (7) */
+				EVENTHANDLER_INVOKE(lle_event, ln,
+				    LLENTRY_RESOLVED);
 		} else {
 			lltable_free_entry(LLTABLE6(ifp), ln);
 			ln = ln_tmp;
@@ -1788,10 +1792,9 @@ nd6_cache_lladdr(struct ifnet *ifp, struct in6_addr *from, char *lladdr,
 	 */
 
 	do_update = 0;
-	if (!is_newentry && llchange != 0)
+	if (is_newentry == 0 && llchange != 0) {
 		do_update = 1;	/* (3,5) */
 
-	if (lladdr) {		/* (3-5) and (7) */
 		/*
 		 * Record source link-layer address
 		 * XXX is it dependent to ifp->if_type?
@@ -1802,10 +1805,8 @@ nd6_cache_lladdr(struct ifnet *ifp, struct in6_addr *from, char *lladdr,
 
 		EVENTHANDLER_INVOKE(lle_event, ln, LLENTRY_RESOLVED);
 
-		if (do_update) {
-			if (ln->la_hold != NULL)
-				nd6_grab_holdchain(ln, &chain, &sin6);
-		}
+		if (ln->la_hold != NULL)
+			nd6_grab_holdchain(ln, &chain, &sin6);
 	}
 
 	/* Calculates new router status */
@@ -2035,8 +2036,10 @@ nd6_resolve(struct ifnet *ifp, int is_gw, struct mbuf *m,
  * Heavy version.
  * Function assume that destination LLE does not exist,
  * is invalid or stale, so LLE_EXCLUSIVE lock needs to be acquired.
+ *
+ * Set noinline to be dtrace-friendly
  */
-static int
+static __noinline int
 nd6_resolve_slow(struct ifnet *ifp, struct mbuf *m,
     const struct sockaddr_in6 *dst, u_char *desten, uint32_t *pflags)
 {
