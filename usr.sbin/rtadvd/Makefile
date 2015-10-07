@@ -22,8 +22,6 @@ SRCS=	rtadvd.c rrenum.c advcap.c if.c config.c timer.c timer_subr.c	\
 LIBADD=	util
 WANTS_PIE=	yes
 
-CFLAGS+= -DHAVE_ARC4RANDOM
-
 WARNS?=	1
 
 .include <bsd.prog.mk>
