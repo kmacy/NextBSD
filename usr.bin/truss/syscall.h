@@ -27,6 +27,7 @@
  * Sigprocmask -- the first argument to sigprocmask().  Prints the name.
  * Kevent -- a pointer to an array of struct kevents.  Prints all elements.
  * Pathconf -- the 2nd argument of pathconf().
+ * Utrace -- utrace(2) buffer.
  *
  * In addition, the pointer types (String, Ptr) may have OUT masked in --
  * this means that the data is set on *return* from the system call -- or
@@ -43,7 +44,7 @@ enum Argtype { None = 1, Hex, Octal, Int, LongHex, Name, Ptr, Stat, Ioctl, Quad,
 	Fcntlflag, Rusage, BinString, Shutdown, Resource, Rlimit, Timeval2,
 	Pathconf, Rforkflags, ExitStatus, Waitoptions, Idtype, Procctl,
 	LinuxSockArgs, Umtxop, Atfd, Atflags, Timespec2, Accessmode, Long,
-	Sysarch, ExecArgs, ExecEnv, PipeFds, QuadHex };
+	Sysarch, ExecArgs, ExecEnv, PipeFds, QuadHex, Utrace };
 
 #define	ARG_MASK	0xff
 #define	OUT	0x100
@@ -55,6 +56,7 @@ struct syscall_args {
 };
 
 struct syscall {
+	STAILQ_ENTRY(syscall) entries;
 	const char *name;
 	u_int ret_type;	/* 0, 1, or 2 return values */
 	u_int nargs;	/* actual number of meaningful arguments */
@@ -65,7 +67,7 @@ struct syscall {
 	int nerror;	/* Number of calls that returned with error */
 };
 
-struct syscall *get_syscall(const char*);
+struct syscall *get_syscall(const char *, int nargs);
 char *print_arg(struct syscall_args *, unsigned long*, long *, struct trussinfo *);
 
 /*
@@ -108,6 +110,7 @@ struct linux_socketcall_args {
     char args_l_[PADL_(l_ulong)]; l_ulong args; char args_r_[PADR_(l_ulong)];
 };
 
+void init_syscalls(void);
 void print_syscall(struct trussinfo *, const char *, int, char **);
 void print_syscall_ret(struct trussinfo *, const char *, int, char **, int,
     long *, struct syscall *);

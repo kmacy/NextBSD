@@ -196,98 +196,38 @@ SUBDIR=	alias \
 
 # NB: keep these sorted by MK_* knobs
 
-.if ${MK_AT} != "no"
-SUBDIR+=	at
-.endif
-
-.if ${MK_ATM} != "no"
-SUBDIR+=	atm
-.endif
-
-.if ${MK_BLUETOOTH} != "no"
-SUBDIR+=	bluetooth
-.endif
-
-.if ${MK_BSD_CPIO} != "no"
-SUBDIR+=	cpio
-.endif
-
-.if ${MK_CALENDAR} != "no"
-SUBDIR+=	calendar
-.endif
-
-.if ${MK_CLANG} != "no"
-SUBDIR+=	clang
-.endif
-
-.if ${MK_EE} != "no"
-SUBDIR+=	ee
-.endif
-
-.if ${MK_FILE} != "no"
-SUBDIR+=	file
-.endif
-
-.if ${MK_FINGER} != "no"
-SUBDIR+=	finger
-.endif
-
-.if ${MK_FTP} != "no"
-SUBDIR+=	ftp
-.endif
-
-.if ${MK_GAMES} != "no"
-SUBDIR+=	caesar
-SUBDIR+=	factor
-SUBDIR+=	fortune
-SUBDIR+=	grdc
-SUBDIR+=	morse
-SUBDIR+=	number
-SUBDIR+=	pom
-SUBDIR+=	primes
-SUBDIR+=	random
-.endif
-
-.if ${MK_GPL_DTC} != "yes"
-SUBDIR+=	dtc
-.endif
-
-.if ${MK_GROFF} != "no"
-SUBDIR+=	vgrind
-.endif
-
-.if ${MK_HESIOD} != "no"
-SUBDIR+=	hesinfo
-.endif
-
-.if ${MK_ICONV} != "no"
-SUBDIR+=	iconv
-SUBDIR+=	mkcsmapper
-SUBDIR+=	mkesdb
-.endif
-
-.if ${MK_ISCSI} != "no"
-SUBDIR+=	iscsictl
-.endif
-
-.if ${MK_KDUMP} != "no"
-SUBDIR+=        kdump
-SUBDIR+=        truss
-.endif
-
-.if ${MK_KERBEROS_SUPPORT} != "no"
-SUBDIR+=	compile_et
-.endif
-
-.if ${MK_LDNS_UTILS} != "no"
-SUBDIR+=	drill
-SUBDIR+=	host
-.endif
-
-.if ${MK_LOCATE} != "no"
-SUBDIR+=	locate
-.endif
-
+SUBDIR.${MK_AT}+=	at
+SUBDIR.${MK_ATM}+=	atm
+SUBDIR.${MK_BLUETOOTH}+=	bluetooth
+SUBDIR.${MK_BSD_CPIO}+=	cpio
+SUBDIR.${MK_CALENDAR}+=	calendar
+SUBDIR.${MK_CLANG}+=	clang
+SUBDIR.${MK_EE}+=	ee
+SUBDIR.${MK_FILE}+=	file
+SUBDIR.${MK_FINGER}+=	finger
+SUBDIR.${MK_FTP}+=	ftp
+SUBDIR.${MK_GAMES}+=	caesar
+SUBDIR.${MK_GAMES}+=	factor
+SUBDIR.${MK_GAMES}+=	fortune
+SUBDIR.${MK_GAMES}+=	grdc
+SUBDIR.${MK_GAMES}+=	morse
+SUBDIR.${MK_GAMES}+=	number
+SUBDIR.${MK_GAMES}+=	pom
+SUBDIR.${MK_GAMES}+=	primes
+SUBDIR.${MK_GAMES}+=	random
+SUBDIR.${MK_GPL_DTC}+=	dtc
+SUBDIR.${MK_GROFF}+=	vgrind
+SUBDIR.${MK_HESIOD}+=	hesinfo
+SUBDIR.${MK_ICONV}+=	iconv
+SUBDIR.${MK_ICONV}+=	mkcsmapper
+SUBDIR.${MK_ICONV}+=	mkesdb
+SUBDIR.${MK_ISCSI}+=	iscsictl
+SUBDIR.${MK_KDUMP}+=	kdump
+SUBDIR.${MK_KDUMP}+=	truss
+SUBDIR.${MK_KERBEROS_SUPPORT}+=	compile_et
+SUBDIR.${MK_LDNS_UTILS}+=	drill
+SUBDIR.${MK_LDNS_UTILS}+=	host
+SUBDIR.${MK_LOCATE}+=	locate
 # XXX msgs?
 .if ${MK_MAIL} != "no"
 SUBDIR+=	biff
@@ -377,50 +317,35 @@ SUBDIR+=	cxxfilt
 SUBDIR+=	elfcopy
 SUBDIR+=	file2c
 .if ${MACHINE_ARCH} != "aarch64" # ARM64TODO gprof does not build
-SUBDIR+=	gprof
+SUBDIR.${MK_TOOLCHAIN}+=	gprof
 .endif
-SUBDIR+=	indent
-SUBDIR+=	lex
-SUBDIR+=	mkstr
-SUBDIR+=	nm
-SUBDIR+=	readelf
-SUBDIR+=	rpcgen
-SUBDIR+=	unifdef
-SUBDIR+=	size
-SUBDIR+=	strings
+SUBDIR.${MK_TOOLCHAIN}+=	indent
+SUBDIR.${MK_TOOLCHAIN}+=	lex
+SUBDIR.${MK_TOOLCHAIN}+=	mkstr
+SUBDIR.${MK_TOOLCHAIN}+=	nm
+SUBDIR.${MK_TOOLCHAIN}+=	readelf
+SUBDIR.${MK_TOOLCHAIN}+=	rpcgen
+SUBDIR.${MK_TOOLCHAIN}+=	unifdef
+SUBDIR.${MK_TOOLCHAIN}+=	size
+SUBDIR.${MK_TOOLCHAIN}+=	strings
 .if ${MACHINE_ARCH} != "aarch64" # ARM64TODO xlint does not build
-SUBDIR+=	xlint
+SUBDIR.${MK_TOOLCHAIN}+=	xlint
 .endif
-SUBDIR+=	xstr
-SUBDIR+=	yacc
-.endif
-
-.if ${MK_VI} != "no"
-SUBDIR+=	vi
-.endif
-
-.if ${MK_VT} != "no"
-SUBDIR+=	vtfontcvt
-.endif
-
-.if ${MK_USB} != "no"
-SUBDIR+=	usbhidaction
-SUBDIR+=	usbhidctl
-.endif
-
-.if ${MK_UTMPX} != "no"
-SUBDIR+=	last
-SUBDIR+=	users
-SUBDIR+=	who
-.endif
-
-.if ${MK_SVN} == "yes" || ${MK_SVNLITE} == "yes"
-SUBDIR+=	svn
-.endif
+SUBDIR.${MK_TOOLCHAIN}+=	xstr
+SUBDIR.${MK_TOOLCHAIN}+=	yacc
+SUBDIR.${MK_VI}+=	vi
+SUBDIR.${MK_VT}+=	vtfontcvt
+SUBDIR.${MK_USB}+=	usbhidaction
+SUBDIR.${MK_USB}+=	usbhidctl
+SUBDIR.${MK_UTMPX}+=	last
+SUBDIR.${MK_UTMPX}+=	users
+SUBDIR.${MK_UTMPX}+=	who
+SUBDIR.${MK_SVN}+=	svn
+SUBDIR.${MK_SVNLITE}+=	svn
 
 .include <bsd.arch.inc.mk>
 
-SUBDIR:=	${SUBDIR:O}
+SUBDIR:=	${SUBDIR:O:u}
 
 SUBDIR_PARALLEL=
 
