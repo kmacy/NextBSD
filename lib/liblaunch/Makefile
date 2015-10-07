@@ -6,8 +6,10 @@ LIB=	launch
 .PATH: ../../sbin/launchd
 
 BASE_INCLUDE= -I${.CURDIR}/../../include/apple -I${MACHINE_INCLUDES}
-BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I.
+BASE_INCLUDE+= -I${.CURDIR} -I${.CURDIR}/../../sbin/launchd -I${.CURDIR}
 BASE_INCLUDE+= -I${.CURDIR}/../../include -I${.CURDIR}/../../sys
+BASE_INCLUDE+= -I${.OBJDIR}
+
 DEFINES= -D__APPLE__ -fblocks -DLIBC_NO_LIBCRASHREPORTERCLIENT -DPRIVATE
 MIG_FLAGS= ${BASE_INCLUDE} 	${DEFINES}
 CFLAGS+= ${MIG_FLAGS} -D__MigTypeCheck -g -O0

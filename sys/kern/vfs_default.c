@@ -1039,7 +1039,6 @@ vop_stdadvise(struct vop_advise_args *ap)
 	struct vnode *vp;
 	int error;
 	daddr_t bn, startn, endn;
-	off_t start, end;
 	int bsize, error;
 
 	vp = ap->a_vp;

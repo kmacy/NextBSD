@@ -476,9 +476,10 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 	int flags __unused)
 {
 	struct xpc_recv_message message;
+	struct xpc_recv_message rsp_message;
 	mach_msg_header_t *request;
 	kern_return_t kr;
-	mig_reply_error_t response;
+	mach_msg_header_t *response;
 	mach_msg_trailer_t *tr;
 	int data_size;
 	struct xpc_object *xo;
@@ -486,6 +487,7 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 	xpc_u val;
 
 	request = &message.header;
+	response = &rsp_message.header;
 	/* should be size - but what about arbitrary XPC data? */
 	request->msgh_size = MAX_RECV;
 	request->msgh_local_port = portset;
@@ -498,8 +500,8 @@ xpc_pipe_try_receive(mach_port_t portset, xpc_object_t *requestobj, mach_port_t 
 	if (kr != 0)
 		LOG("mach_msg_receive returned %d\n", kr);
 	*rcvport = request->msgh_remote_port;
-	if (demux(request, (mach_msg_header_t *)&response)) {
-		(void)mach_msg_send((mach_msg_header_t *)&response);
+	if (demux(request, response)) {
+		(void)mach_msg_send(response);
 		/*  can't do anything with the return code
 		* just tell the caller this has been handled
 		*/

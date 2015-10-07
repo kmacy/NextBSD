@@ -853,6 +853,7 @@ internal_log_message(const char *str)
 void
 trigger_aslmanager()
 {
+#if 0
 	dispatch_async(dispatch_get_main_queue(), ^{
 		if (aslmanager_triggered == 0)
 		{
@@ -876,6 +877,7 @@ trigger_aslmanager()
 			}
 		}
 	});
+#endif
 }
 
 int
