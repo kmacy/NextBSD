@@ -1925,9 +1925,6 @@ next:
 		vm_page_unlock(p);
 	}
 	vm_object_pip_wakeup(object);
-skipmemq:
-	if (__predict_false(!vm_object_cache_is_empty(object)))
-		vm_page_cache_free(object, start, end);
 }
 
 /*

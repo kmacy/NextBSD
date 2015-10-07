@@ -114,11 +114,8 @@ static const char *ufslike_filesystems[] = {
 	0
 };
 
-FTS *
-fts_open(char * const *argv, int options,
-    int (*compar)(const FTSENT * const *, const FTSENT * const *))
-{
-	struct _fts_private *priv;
+static FTS *
+_fts_open_common(char * const *argv, struct _fts_private *priv)
 {
 	FTS *sp = &priv->ftsp_fts;
 	FTSENT *p, *root;

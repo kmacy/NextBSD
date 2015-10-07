@@ -1037,7 +1037,6 @@ vop_stdadvise(struct vop_advise_args *ap)
 	struct buf *bp;
 	struct buflists *bl;
 	struct vnode *vp;
-	int error;
 	daddr_t bn, startn, endn;
 	int bsize, error;
 
@@ -1058,7 +1057,6 @@ vop_stdadvise(struct vop_advise_args *ap)
 			VOP_UNLOCK(vp, 0);
 			break;
 		}
-		vinvalbuf(vp, V_CLEANONLY, 0, 0);
 #ifdef VM_LEGACY
 
 		/*

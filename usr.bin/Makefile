@@ -229,93 +229,51 @@ SUBDIR.${MK_LDNS_UTILS}+=	drill
 SUBDIR.${MK_LDNS_UTILS}+=	host
 SUBDIR.${MK_LOCATE}+=	locate
 # XXX msgs?
-.if ${MK_MAIL} != "no"
-SUBDIR+=	biff
-SUBDIR+=	from
-SUBDIR+=	mail
-SUBDIR+=	msgs
-.endif
-
-.if ${MK_MAKE} != "no"
-SUBDIR+=	bmake
-.endif
-
-.if ${MK_MAN_UTILS} != "no"
-SUBDIR+=	catman
-.if ${MK_MANDOCDB} == "no"
-SUBDIR+=	makewhatis
-.endif
-SUBDIR+=	man
-.endif
-
-.if ${MK_NETCAT} != "no"
-SUBDIR+=	nc
-.endif
-
-.if ${MK_NIS} != "no"
-SUBDIR+=	ypcat
-SUBDIR+=	ypmatch
-SUBDIR+=	ypwhich
-.endif
-
-.if ${MK_OPENSSH} != "no"
-SUBDIR+=	ssh-copy-id
-.endif
-
-.if ${MK_OPENSSL} != "no"
-SUBDIR+=	bc
-SUBDIR+=	chkey
-SUBDIR+=	dc
-SUBDIR+=	newkey
-.endif
-
-.if ${MK_QUOTAS} != "no"
-SUBDIR+=	quota
-.endif
-
-.if ${MK_RCMDS} != "no"
-SUBDIR+=	rlogin
-SUBDIR+=	rsh
-SUBDIR+=	ruptime
-SUBDIR+=	rwho
-.endif
-
-.if ${MK_TALK} != "no"
-SUBDIR+=	talk
-.endif
-
-.if ${MK_TELNET} != "no"
-SUBDIR+=	telnet
-.endif
 
 .if ${MACHINE_CPUARCH} == "amd64"
 #_xpc_tests=     xpc-tests
 _mach_tests=	mach-tests
 .endif
 
-.if ${MK_TESTS} != "no"
-SUBDIR+=	tests
+SUBDIR.${MK_MAIL}+=	biff
+SUBDIR.${MK_MAIL}+=	from
+SUBDIR.${MK_MAIL}+=	mail
+SUBDIR.${MK_MAIL}+=	msgs
+SUBDIR.${MK_MAKE}+=	bmake
+SUBDIR.${MK_MAN_UTILS}+=	catman
+.if ${MK_MANDOCDB} == "no"	# AND
+SUBDIR.${MK_MAN_UTILS}+=	makewhatis
 .endif
-
-.if ${MK_TEXTPROC} != "no"
-SUBDIR+=	checknr
-SUBDIR+=	colcrt
-SUBDIR+=	ul
-.endif
-
-.if ${MK_TFTP} != "no"
-SUBDIR+=	tftp
-.endif
-
-.if ${MK_TOOLCHAIN} != "no"
-SUBDIR+=	addr2line
-SUBDIR+=	ar
-SUBDIR+=	c89
-SUBDIR+=	c99
-SUBDIR+=	ctags
-SUBDIR+=	cxxfilt
-SUBDIR+=	elfcopy
-SUBDIR+=	file2c
+SUBDIR.${MK_MAN_UTILS}+=	man
+SUBDIR.${MK_NETCAT}+=	nc
+SUBDIR.${MK_NIS}+=	ypcat
+SUBDIR.${MK_NIS}+=	ypmatch
+SUBDIR.${MK_NIS}+=	ypwhich
+SUBDIR.${MK_OPENSSH}+=	ssh-copy-id
+SUBDIR.${MK_OPENSSL}+=	bc
+SUBDIR.${MK_OPENSSL}+=	chkey
+SUBDIR.${MK_OPENSSL}+=	dc
+SUBDIR.${MK_OPENSSL}+=	newkey
+SUBDIR.${MK_QUOTAS}+=	quota
+SUBDIR.${MK_RCMDS}+=	rlogin
+SUBDIR.${MK_RCMDS}+=	rsh
+SUBDIR.${MK_RCMDS}+=	ruptime
+SUBDIR.${MK_RCMDS}+=	rwho
+SUBDIR.${MK_TALK}+=	talk
+SUBDIR.${MK_TELNET}+=	telnet
+SUBDIR.${MK_TESTS}+=	tests
+SUBDIR.${MK_TEXTPROC}+=	checknr
+SUBDIR.${MK_TEXTPROC}+=	colcrt
+SUBDIR.${MK_TEXTPROC}+=	ul
+SUBDIR.${MK_TFTP}+=	tftp
+SUBDIR.${MK_TOOLCHAIN}+=	addr2line
+SUBDIR.${MK_TOOLCHAIN}+=	ar
+SUBDIR.${MK_TOOLCHAIN}+=	c89
+SUBDIR.${MK_TOOLCHAIN}+=	c99
+SUBDIR.${MK_TOOLCHAIN}+=	ctags
+SUBDIR.${MK_TOOLCHAIN}+=	cxxfilt
+SUBDIR.${MK_TOOLCHAIN}+=	elfcopy
+SUBDIR.${MK_TOOLCHAIN}+=	file2c
 .if ${MACHINE_ARCH} != "aarch64" # ARM64TODO gprof does not build
 SUBDIR.${MK_TOOLCHAIN}+=	gprof
 .endif
