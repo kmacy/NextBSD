@@ -27,7 +27,7 @@
 # $FreeBSD$
 
 clear
-echo "HardenedBSD Installer"
+echo "NextBSD Installer"
 echo "========================"
 echo "Add Users"
 echo
