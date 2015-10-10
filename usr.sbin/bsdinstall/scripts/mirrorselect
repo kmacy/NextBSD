@@ -34,12 +34,12 @@
 : ${DIALOG_ESC=255}
 
 exec 3>&1
-MIRROR=`dialog --backtitle "HardenedBSD Installer" \
+MIRROR=`dialog --backtitle "NextBSD Installer" \
     --title "Mirror Selection - experimental and not all branch supported" --extra-button --extra-label "Other" \
     --menu "Please select the site closest to you or \"other\" if you'd like to specify a different choice.  Also note that not every site listed here carries more than the base distribution kits. Only Primary sites are guaranteed to carry the full range of possible distributions. Select a site that's close!" \
     0 0 0 \
-	http://jenkins.hardenedbsd.org	"Main Site"\
-	http://jenkins.hardenedbsd.org 	"IPv6 Main Site"\
+	http://jenkins.HardenedBSD.org	"Main Site"\
+	http://jenkins.HardenedBSD.org 	"IPv6 Main Site"\
     2>&1 1>&3`
 MIRROR_BUTTON=$?
 exec 3>&-
