@@ -8,7 +8,6 @@ SUBDIR=	${_atf} \
 	${_casper} \
 	${_comsat} \
 	${_dma} \
-	${_dma-mbox-create} \
 	getty \
 	${_hyperv} \
 	launchproxy \
@@ -56,7 +55,6 @@ _comsat=	comsat
 
 .if ${MK_DMAGENT} != "no"
 _dma=		dma
-_dma-mbox-create=	dma-mbox-create
 .endif
 
 .if ${MK_NIS} != "no"
