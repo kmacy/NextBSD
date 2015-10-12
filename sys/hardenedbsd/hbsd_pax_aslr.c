@@ -667,7 +667,7 @@ sysctl_pax_disallow_map32bit(SYSCTL_HANDLER_ARGS)
 	case PAX_FEATURE_OPTIN:
 	case PAX_FEATURE_OPTOUT:
 	case PAX_FEATURE_FORCE_ENABLED:
-		if ((pr == NULL) || (pr == &prison0))
+		if (pr == &prison0)
 			pax_disallow_map32bit_status_global = val;
 
 		pr->pr_hardening.hr_pax_disallow_map32bit_status = val;

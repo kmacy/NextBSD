@@ -112,6 +112,7 @@ sysctl_pax_pageexec_status(SYSCTL_HANDLER_ARGS)
 			pax_mprotect_status = val;
 
 		pr->pr_hardening.hr_pax_mprotect_status = val;
+		/* FALLTHROUGH */
 	case PAX_FEATURE_OPTIN:
 	case PAX_FEATURE_OPTOUT:
 	case PAX_FEATURE_FORCE_ENABLED:
