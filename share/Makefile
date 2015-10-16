@@ -93,4 +93,6 @@ _vt=		vt
 _zoneinfo=	zoneinfo
 .endif
 
+SUBDIR_PARALLEL=
+
 .include <bsd.subdir.mk>

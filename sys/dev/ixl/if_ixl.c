@@ -3491,7 +3491,6 @@ ixl_print_debug_info(struct ixl_pf *pf)
 }
 #endif
 
-
 /**
  * Update VSI-specific ethernet statistics counters.
  **/

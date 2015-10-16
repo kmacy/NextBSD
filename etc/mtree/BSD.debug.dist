@@ -17,6 +17,8 @@
             ..
         ..
         libexec
+            casper
+            ..
         ..
         sbin
         ..
@@ -56,6 +58,8 @@
                 ..
             ..
             sbin
+            ..
+            tests
             ..
         ..
     ..

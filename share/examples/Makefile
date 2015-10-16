@@ -258,4 +258,6 @@ SUBDIR+=pf
 SUBDIR+=tests
 .endif
 
+SUBDIR_PARALLEL=
+
 .include <bsd.subdir.mk>
