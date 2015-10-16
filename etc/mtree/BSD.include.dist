@@ -12,6 +12,8 @@
             _types
             ..
         ..
+        uuid
+        ..
     ..
     arpa
     ..
@@ -194,6 +196,8 @@
     gcc
         4.2
         ..
+    ..
+    gen
     ..
     geom
         cache

@@ -1057,7 +1057,6 @@ vop_stdadvise(struct vop_advise_args *ap)
 			VOP_UNLOCK(vp, 0);
 			break;
 		}
-#ifdef VM_LEGACY
 
 		/*
 		 * Deactivate pages in the specified range from the backing VM
@@ -1074,7 +1073,6 @@ vop_stdadvise(struct vop_advise_args *ap)
 			    OFF_TO_IDX(end));
 			VM_OBJECT_WUNLOCK(vp->v_object);
 		}
-#endif
 
 		BO_RLOCK(&vp->v_bufobj);
 		bsize = vp->v_bufobj.bo_bsize;
