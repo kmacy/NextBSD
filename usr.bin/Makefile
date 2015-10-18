@@ -229,7 +229,6 @@ SUBDIR.${MK_LDNS_UTILS}+=	drill
 SUBDIR.${MK_LDNS_UTILS}+=	host
 SUBDIR.${MK_LOCATE}+=	locate
 # XXX msgs?
-<<<<<<< HEAD
 
 .if ${MACHINE_CPUARCH} == "amd64"
 #_xpc_tests=     xpc-tests
@@ -237,7 +236,6 @@ _mach_tests=	mach-tests
 .endif
 
 =======
->>>>>>> NextBSD-CURRENT
 SUBDIR.${MK_MAIL}+=	biff
 SUBDIR.${MK_MAIL}+=	from
 SUBDIR.${MK_MAIL}+=	mail
