@@ -1,6 +1,7 @@
 
 #include "if_em.h"
 #include <sys/sbuf.h>
+#include <machine/_inttypes.h>
 
 /*********************************************************************
  *  Driver version:
@@ -427,7 +428,7 @@ static int em_get_regs(SYSCTL_HANDLER_ARGS)
 	for (j = 0; j < nrxd; j++) {
 		u32 staterr = le32toh(rxr->rx_base[j].wb.upper.status_error);
 		u32 length =  le32toh(rxr->rx_base[j].wb.upper.length);
-		sbuf_printf(sb, "\tReceive Descriptor Address %d: %08lx  Error:%d  Length:%d\n", j, rxr->rx_base[j].read.buffer_addr, staterr, length);
+		sbuf_printf(sb, "\tReceive Descriptor Address %d: %08" PRIx64 "  Error:%d  Length:%d\n", j, rxr->rx_base[j].read.buffer_addr, staterr, length);
 	}
 
 	for (j = 0; j < min(ntxd, 256); j++) {
