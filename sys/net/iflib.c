@@ -2257,7 +2257,7 @@ iflib_parse_header(iflib_txq_t txq, if_pkt_info_t pi, struct mbuf **mp)
 	struct ether_vlan_header *eh;
 	struct mbuf *m, *n;
 
-	m = *mp;
+	n = m = *mp;
 	/*
 	 * Determine where frame payload starts.
 	 * Jump over vlan headers if already present,
