@@ -1353,9 +1353,8 @@ static void
 iflib_txq_destroy(iflib_txq_t txq)
 {
 	if_ctx_t ctx = txq->ift_ctx;
-	if_softc_ctx_t scctx = &ctx->ifc_softc_ctx;
 
-	for (int i = 0; i < scctx->isc_ntxd[txq->ift_br_offset]; i++)
+	for (int i = 0; i < txq->ift_size; i++)
 		iflib_txsd_destroy(ctx, txq, i);
 	if (txq->ift_sds.ifsd_map != NULL) {
 		free(txq->ift_sds.ifsd_map, M_IFLIB);
@@ -1931,7 +1930,7 @@ iflib_stop(if_ctx_t ctx)
 		/* clean any enqueued buffers */
 		iflib_txq_check_drain(txq, 0);
 		/* Free any existing tx buffers. */
-		for (j = 0; j < scctx->isc_ntxd[txq->ift_br_offset]; j++) {
+		for (j = 0; j < txq->ift_size; j++) {
 			iflib_txsd_free(ctx, txq, j);
 		}
 		txq->ift_processed = txq->ift_cleaned = txq->ift_cidx_processed = 0;
@@ -2432,12 +2431,10 @@ iflib_remove_mbuf(iflib_txq_t txq)
 {
 	int ntxd, i, pidx;
 	struct mbuf *m, *mh, **ifsd_m;
-	if_softc_ctx_t		scctx;
 
 	pidx = txq->ift_pidx;
 	ifsd_m = txq->ift_sds.ifsd_m;
-	scctx = &txq->ift_ctx->ifc_softc_ctx;
-	ntxd = scctx->isc_ntxd[txq->ift_br_offset];
+	ntxd = txq->ift_size;
 	mh = m = ifsd_m[pidx];
 	ifsd_m[pidx] = NULL;
 #if MEMORY_LOGGING
@@ -2479,7 +2476,7 @@ iflib_busdma_load_mbuf_sg(iflib_txq_t txq, bus_dma_tag_t tag, bus_dmamap_t map,
 	sctx = ctx->ifc_sctx;
 	scctx = &ctx->ifc_softc_ctx;
 	ifsd_m = txq->ift_sds.ifsd_m;
-	ntxd = scctx->isc_ntxd[txq->ift_br_offset];
+	ntxd = txq->ift_size;
 	pidx = txq->ift_pidx;
 	if (map != NULL) {
 		uint8_t *ifsd_flags = txq->ift_sds.ifsd_flags;
@@ -2491,7 +2488,7 @@ iflib_busdma_load_mbuf_sg(iflib_txq_t txq, bus_dma_tag_t tag, bus_dmamap_t map,
 		ifsd_flags[pidx] |= TX_SW_DESC_MAPPED;
 		i = 0;
 		next = pidx;
-		mask = (scctx->isc_ntxd[txq->ift_br_offset]-1);
+		mask = (txq->ift_size-1);
 		m = *m0;
 		do {
 			mp = &ifsd_m[next];
@@ -2575,7 +2572,7 @@ iflib_encap(iflib_txq_t txq, struct mbuf **m_headp)
 	sctx = ctx->ifc_sctx;
 	scctx = &ctx->ifc_softc_ctx;
 	segs = txq->ift_segs;
-	ntxd = scctx->isc_ntxd[txq->ift_br_offset];
+	ntxd = txq->ift_size;
 	m_head = *m_headp;
 	map = NULL;
 
@@ -2669,7 +2666,7 @@ defrag:
 	pi.ipi_segs = segs;
 	pi.ipi_nsegs = nsegs;
 
-	MPASS(pidx >= 0 && pidx < scctx->isc_ntxd[txq->ift_br_offset]);
+	MPASS(pidx >= 0 && pidx < txq->ift_size);
 #ifdef PKT_DEBUG
 	print_pkt(&pi);
 #endif
@@ -2679,11 +2676,11 @@ defrag:
 
 		DBG_COUNTER_INC(tx_encap);
 		MPASS(pi.ipi_new_pidx >= 0 &&
-		    pi.ipi_new_pidx < scctx->isc_ntxd[txq->ift_br_offset]);
+		    pi.ipi_new_pidx < txq->ift_size);
 
 		ndesc = pi.ipi_new_pidx - pi.ipi_pidx;
 		if (pi.ipi_new_pidx < pi.ipi_pidx) {
-			ndesc += scctx->isc_ntxd[txq->ift_br_offset];
+			ndesc += txq->ift_size;
 			txq->ift_gen = 1;
 		}
 		MPASS(pi.ipi_new_pidx != pidx);
@@ -2754,7 +2751,7 @@ iflib_tx_desc_free(iflib_txq_t txq, int n)
 
 	cidx = txq->ift_cidx;
 	gen = txq->ift_gen;
-	qsize = txq->ift_ctx->ifc_softc_ctx.isc_ntxd[txq->ift_br_offset];
+	qsize = txq->ift_size;
 	mask = qsize-1;
 	hasmap = txq->ift_sds.ifsd_map != NULL;
 	ifsd_flags = txq->ift_sds.ifsd_flags;
