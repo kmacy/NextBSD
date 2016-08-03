@@ -26,7 +26,7 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+__FBSDID("$FreeBSD: head/sys/net/iflib.c 302439 2016-07-08 17:04:21Z cem $");
 
 #include "opt_inet.h"
 #include "opt_inet6.h"
@@ -2199,8 +2199,8 @@ iflib_rxeof(iflib_rxq_t rxq, int budget)
 
 #define M_CSUM_FLAGS(m) ((m)->m_pkthdr.csum_flags)
 #define M_HAS_VLANTAG(m) (m->m_flags & M_VLANTAG)
-#define TXQ_MAX_DB_DEFERRED(ctx, id) (ctx->ifc_softc_ctx.isc_ntxd[id] >> 5)
-#define TXQ_MAX_DB_CONSUMED(ctx, id) (ctx->ifc_softc_ctx.isc_ntxd[id] >> 4)
+#define TXQ_MAX_DB_DEFERRED(size) (size >> 5)
+#define TXQ_MAX_DB_CONSUMED(size) (size >> 4)
 
 static __inline void
 iflib_txd_db_check(if_ctx_t ctx, iflib_txq_t txq, int ring)
@@ -2208,7 +2208,7 @@ iflib_txd_db_check(if_ctx_t ctx, iflib_txq_t txq, int ring)
 	uint32_t dbval;
 
 	if (ring || txq->ift_db_pending >=
-	    TXQ_MAX_DB_DEFERRED(ctx, txq->ift_br_offset)) {
+	    TXQ_MAX_DB_DEFERRED(txq->ift_size)) {
 
 		/* the lock will only ever be contended in the !min_latency case */
 		if (!TXDB_TRYLOCK(txq))
@@ -2727,7 +2727,7 @@ defrag_failed:
  *
  * ORing with 2 assures that min occupancy is never less than 2 without any conditional logic
  */
-#define TXQ_MIN_OCCUPANCY(ctx, id) ((ctx->ifc_softc_ctx.isc_ntxd[id] >> 6)| 0x2)
+#define TXQ_MIN_OCCUPANCY(size) ((size >> 6)| 0x2)
 
 static inline int
 iflib_txq_min_occupancy(iflib_txq_t txq)
@@ -2736,7 +2736,7 @@ iflib_txq_min_occupancy(iflib_txq_t txq)
 
 	ctx = txq->ift_ctx;
 	return (get_inuse(txq->ift_size, txq->ift_cidx, txq->ift_pidx,
-	    txq->ift_gen) < TXQ_MIN_OCCUPANCY(ctx, txq->ift_br_offset) +
+	    txq->ift_gen) < TXQ_MIN_OCCUPANCY(txq->ift_size) +
 	    MAX_TX_DESC(ctx));
 }
 
@@ -2920,7 +2920,7 @@ iflib_txq_drain(struct ifmp_ring *r, uint32_t cidx, uint32_t pidx)
 		if (__predict_false(!(if_getdrvflags(ctx->ifc_ifp) & IFF_DRV_RUNNING)))
 			break;
 
-		if (desc_used > TXQ_MAX_DB_CONSUMED(ctx, txq->ift_br_offset))
+		if (desc_used > TXQ_MAX_DB_CONSUMED(txq->ift_size))
 			break;
 	}
 
@@ -4228,7 +4228,9 @@ iflib_rx_structures_setup(if_ctx_t ctx)
 	for (q = 0; q < ctx->ifc_softc_ctx.isc_nrxqsets; q++, rxq++) {
 #if defined(INET6) || defined(INET)
 		tcp_lro_free(&rxq->ifr_lc);
-		if ((err = tcp_lro_init_args(&rxq->ifr_lc, ctx->ifc_ifp, TCP_LRO_ENTRIES, 64)) != 0) {
+		if ((err = tcp_lro_init_args(&rxq->ifr_lc, ctx->ifc_ifp,
+		    TCP_LRO_ENTRIES, min(1024,
+		    ctx->ifc_softc_ctx.isc_nrxd[rxq->ifr_fl_offset]))) != 0) {
 			device_printf(ctx->ifc_dev, "LRO Initialization failed!\n");
 			goto fail;
 		}
