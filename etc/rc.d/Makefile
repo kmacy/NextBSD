@@ -280,6 +280,12 @@ RCMDSPACKAGE=	rcmds
 FILES+=		routed
 .endif
 
+.if ${MK_SENDMAIL} != "no"
+FILESGROUPS+=	SMRCD
+SMRCD=		sendmail
+SMRCDPACKAGE=	sendmail
+.endif
+
 .if ${MK_TIMED} != "no"
 FILES+=		timed
 .endif
