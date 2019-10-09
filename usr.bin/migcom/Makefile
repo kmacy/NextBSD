@@ -29,18 +29,18 @@ SRCS= ident.c error.c global.c header.c \
 	statement.c string.c type.c user.c utils.c
 
 
-CFLAGS+= -I${.CURDIR} -I${.CURDIR}/shims -I${.CURDIR}/../../include
+CFLAGS+= -I${.CURDIR} -I${.CURDIR}/shims -I${.CURDIR}/../../include -Iinclude
 CFLAGS+= -I${.CURDIR}/../../sys 
 CFLAGS+= -DYY_NO_UNPUT
 
 .if ${TARGET} == "amd64" || ${TARGET} == "i386"
-include/x86: ${.CURDIR}/Makefile
+include/machine: ${.CURDIR}/Makefile
 	mkdir -p include
-	ln -sf ${.CURDIR}/../../sys/x86/include include/x86
+	ln -sf ${.CURDIR}/../../sys/x86/include include/machine
 .endif
 
 .if ${TARGET} == "amd64" || ${TARGET} == "i386"
-ident.c: include/x86 
+ident.c: include/machine
 .else
 ident.c: 
 .endif
@@ -51,7 +51,7 @@ ident.c:
 
 CLEANFILES+= ident.c *.o *~ *.gz cscope.* 
 .if ${TARGET} == "amd64" || ${TARGET} == "i386"
-CLEANFILES+= include/x86
+CLEANFILES+= include/machine
 .endif
 
 .include <bsd.prog.mk>
